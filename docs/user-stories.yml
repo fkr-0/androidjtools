@@ -1,0 +1,115 @@
+schema: androidjtools.user-stories/v1
+project: androidjtools
+story_status: planned
+acceptance_rule: Every required story must map to at least one automated test before parity release.
+
+stories:
+  - {id: US-001, epic: EPIC-00-FOUNDATION, as: DJ, want: install and launch without a configured server, so_that: I can evaluate and debug the UI immediately, verify: fixture-first launch test}
+  - {id: US-002, epic: EPIC-00-FOUNDATION, as: DJ, want: navigate every major screen with fixture data, so_that: backend progress does not block UI dogfooding, verify: navigation UI test}
+  - {id: US-003, epic: EPIC-00-FOUNDATION, as: tester, want: deterministic fixture datasets, so_that: screenshots and bugs are reproducible, verify: fixture snapshot test}
+  - {id: US-004, epic: EPIC-00-FOUNDATION, as: developer, want: UI state separated from backend implementations, so_that: providers can be replaced without screen rewrites, verify: architecture dependency test}
+
+  - {id: US-010, epic: EPIC-01-LIBRARY, as: DJ, want: browse all tracks in a dense list, so_that: I can catalog quickly on a phone, verify: library list UI test}
+  - {id: US-011, epic: EPIC-01-LIBRARY, as: DJ, want: artwork and compact metadata on each row, so_that: I can recognize material at a glance, verify: screenshot test}
+  - {id: US-012, epic: EPIC-01-LIBRARY, as: DJ, want: open track detail and return to the same scroll position, so_that: long catalog sessions are efficient, verify: navigation restoration test}
+  - {id: US-013, epic: EPIC-01-LIBRARY, as: DJ, want: clear loading empty and error states, so_that: I know whether data is absent or unavailable, verify: injected-state tests}
+  - {id: US-014, epic: EPIC-01-LIBRARY, as: DJ, want: select multiple tracks, so_that: I can batch-edit and playlist them, verify: multiselect interaction test}
+
+  - {id: US-020, epic: EPIC-02-SEARCH-FILTER, as: DJ, want: incremental global search, so_that: I can find tracks while typing, verify: query debounce and result test}
+  - {id: US-021, epic: EPIC-02-SEARCH-FILTER, as: DJ, want: ascending and descending sort by useful fields, so_that: I can browse intentionally, verify: sort contract test}
+  - {id: US-022, epic: EPIC-02-SEARCH-FILTER, as: DJ, want: compound filters for tags BPM key rating energy and availability, so_that: I can prepare context-specific sets, verify: filter composition test}
+  - {id: US-023, epic: EPIC-02-SEARCH-FILTER, as: DJ, want: save a filtered view, so_that: recurring preparation workflows are one tap away, verify: saved-view persistence test}
+
+  - {id: US-030, epic: EPIC-03-PLAYBACK-QUEUE, as: DJ, want: tap a track to audition it, so_that: cataloging decisions are immediate, verify: playback interaction test}
+  - {id: US-031, epic: EPIC-03-PLAYBACK-QUEUE, as: DJ, want: a persistent mini player and detailed player, so_that: transport remains accessible while browsing, verify: player continuity test}
+  - {id: US-032, epic: EPIC-03-PLAYBACK-QUEUE, as: DJ, want: add play-next reorder and remove queue entries, so_that: I can audition sequences, verify: queue mutation test}
+  - {id: US-033, epic: EPIC-03-PLAYBACK-QUEUE, as: DJ, want: queue state to survive recreation, so_that: an interrupted session continues, verify: process recreation test}
+  - {id: US-034, epic: EPIC-03-PLAYBACK-QUEUE, as: DJ, want: precise seek controls, so_that: I can inspect transitions rapidly, verify: seek precision test}
+
+  - {id: US-040, epic: EPIC-04-WAVEFORM, as: DJ, want: overview and detailed waveform views, so_that: I can understand structure and edit precisely, verify: waveform screenshot test}
+  - {id: US-041, epic: EPIC-04-WAVEFORM, as: DJ, want: pinch zoom and pan, so_that: precise cue placement is practical on mobile, verify: gesture test}
+  - {id: US-042, epic: EPIC-04-WAVEFORM, as: DJ, want: scrub and seek from waveform, so_that: navigation is direct, verify: gesture-to-position test}
+  - {id: US-043, epic: EPIC-04-WAVEFORM, as: DJ, want: cue loop beatgrid and region overlays, so_that: preparation state is visible in context, verify: overlay rendering test}
+
+  - {id: US-050, epic: EPIC-05-CUES-LOOPS, as: DJ, want: create a cue at the playhead, so_that: I can mark important positions, verify: cue creation test}
+  - {id: US-051, epic: EPIC-05-CUES-LOOPS, as: DJ, want: move rename recolor and number cues, so_that: cue meaning is instantly recognizable, verify: cue edit test}
+  - {id: US-052, epic: EPIC-05-CUES-LOOPS, as: DJ, want: create and resize loops, so_that: useful repeating regions are prepared, verify: loop edit test}
+  - {id: US-053, epic: EPIC-05-CUES-LOOPS, as: DJ, want: named roles such as mix-in mix-out fade and drop, so_that: structural preparation is explicit, verify: role model test}
+  - {id: US-054, epic: EPIC-05-CUES-LOOPS, as: DJ, want: delete preparation markers safely, so_that: mistakes are recoverable, verify: delete confirmation and undo test}
+  - {id: US-055, epic: EPIC-05-CUES-LOOPS, as: DJ, want: cue and loop edits while offline, so_that: travel preparation does not require connectivity, verify: offline journal test}
+
+  - {id: US-060, epic: EPIC-06-BEATGRID, as: DJ, want: see a beatgrid aligned to the waveform, so_that: timing errors are obvious, verify: grid rendering test}
+  - {id: US-061, epic: EPIC-06-BEATGRID, as: DJ, want: set or move the grid anchor and BPM, so_that: analysis mistakes can be corrected, verify: grid edit test}
+  - {id: US-062, epic: EPIC-06-BEATGRID, as: DJ, want: half and double BPM actions, so_that: common analysis errors are fast to fix, verify: bpm transform test}
+  - {id: US-063, epic: EPIC-06-BEATGRID, as: DJ, want: beat jump and quantize, so_that: cue and loop placement can be musical, verify: quantize and jump tests}
+
+  - {id: US-070, epic: EPIC-07-METADATA, as: DJ, want: edit title artist album genre comments key BPM energy and rating, so_that: my library is useful for selection, verify: metadata edit test}
+  - {id: US-071, epic: EPIC-07-METADATA, as: DJ, want: quick star rating, so_that: I can rank tracks during audition, verify: one-tap rating test}
+  - {id: US-072, epic: EPIC-07-METADATA, as: DJ, want: namespaced tags, so_that: arbitrary catalog dimensions remain structured, verify: tag round-trip test}
+  - {id: US-073, epic: EPIC-07-METADATA, as: DJ, want: batch field and tag operations, so_that: catalog cleanup is efficient, verify: multiselect batch test}
+
+  - {id: US-080, epic: EPIC-08-PLAYLISTS, as: DJ, want: create rename and delete playlists, so_that: I can organize sets, verify: playlist CRUD test}
+  - {id: US-081, epic: EPIC-08-PLAYLISTS, as: DJ, want: reorder playlist tracks, so_that: set order can be prepared, verify: drag ordering test}
+  - {id: US-082, epic: EPIC-08-PLAYLISTS, as: DJ, want: nested crates, so_that: large collections remain organized, verify: hierarchy test}
+  - {id: US-083, epic: EPIC-08-PLAYLISTS, as: DJ, want: build smart playlists using compound rules, so_that: dynamic selections remain current, verify: rule engine test}
+  - {id: US-084, epic: EPIC-08-PLAYLISTS, as: DJ, want: preview a smart rule before saving, so_that: mistakes do not destroy my workflow, verify: preview test}
+
+  - {id: US-090, epic: EPIC-09-OFFLINE-DOWNLOADS, as: DJ, want: pin tracks and playlists offline, so_that: I can prepare without network access, verify: pin download test}
+  - {id: US-091, epic: EPIC-09-OFFLINE-DOWNLOADS, as: DJ, want: visible download progress and errors, so_that: I know what is actually available, verify: progress state test}
+  - {id: US-092, epic: EPIC-09-OFFLINE-DOWNLOADS, as: DJ, want: interrupted downloads to resume, so_that: unstable networks waste no work, verify: WorkManager resume test}
+  - {id: US-093, epic: EPIC-09-OFFLINE-DOWNLOADS, as: DJ, want: safe cache limits and pruning, so_that: storage remains manageable, verify: cache policy test}
+  - {id: US-094, epic: EPIC-09-OFFLINE-DOWNLOADS, as: DJ, want: cached tracks playable and editable offline, so_that: the app remains useful while traveling, verify: airplane-mode instrumentation test}
+
+  - {id: US-100, epic: EPIC-10-SYNC-CONTRACT, as: client, want: versioned pull and push contracts, so_that: Android and backend can evolve safely, verify: schema compatibility test}
+  - {id: US-101, epic: EPIC-10-SYNC-CONTRACT, as: client, want: stable mutation IDs, so_that: retries cannot duplicate effects, verify: idempotency test}
+  - {id: US-102, epic: EPIC-10-SYNC-CONTRACT, as: client, want: authoritative receipts, so_that: local state knows whether an edit committed, verify: receipt contract test}
+  - {id: US-103, epic: EPIC-10-SYNC-CONTRACT, as: tester, want: a fake backend for every sync state, so_that: UI and engine development proceed before Sample Lib changes, verify: fake server state matrix}
+  - {id: US-104, epic: EPIC-10-SYNC-CONTRACT, as: user, want: explicit incompatible-server errors, so_that: protocol drift never appears as silent corruption, verify: version mismatch test}
+
+  - {id: US-110, epic: EPIC-11-MUTATION-JOURNAL-CONFLICTS, as: DJ, want: edits persisted before success is shown, so_that: crashes cannot lose work, verify: durability test}
+  - {id: US-111, epic: EPIC-11-MUTATION-JOURNAL-CONFLICTS, as: client, want: deterministic replay after reconnect, so_that: offline work eventually converges, verify: replay test}
+  - {id: US-112, epic: EPIC-11-MUTATION-JOURNAL-CONFLICTS, as: client, want: receipts to compact acknowledged mutations, so_that: the journal remains bounded, verify: compaction test}
+  - {id: US-113, epic: EPIC-11-MUTATION-JOURNAL-CONFLICTS, as: DJ, want: safe conflicts merged automatically, so_that: routine reconnects require no attention, verify: merge matrix test}
+  - {id: US-114, epic: EPIC-11-MUTATION-JOURNAL-CONFLICTS, as: DJ, want: unsafe conflicts shown side by side, so_that: no work is silently discarded, verify: conflict resolution UI test}
+
+  - {id: US-120, epic: EPIC-12-SAMPLELIB-INTEGRATION, as: DJ, want: pair directly with my Sample Lib server, so_that: no commercial cloud is required, verify: pairing E2E}
+  - {id: US-121, epic: EPIC-12-SAMPLELIB-INTEGRATION, as: DJ, want: incremental library synchronization, so_that: large collections update efficiently, verify: delta pull E2E}
+  - {id: US-122, epic: EPIC-12-SAMPLELIB-INTEGRATION, as: DJ, want: preparation edits pushed with receipts, so_that: mobile changes become canonical, verify: mutation push E2E}
+  - {id: US-123, epic: EPIC-12-SAMPLELIB-INTEGRATION, as: DJ, want: disconnect reconnect without losing edits, so_that: mobile networking is safe, verify: reconnect E2E}
+
+  - {id: US-130, epic: EPIC-13-DJXML-INTEROP, as: DJ, want: Android preparation to survive DJXML export, so_that: other DJ tools can consume it, verify: Android-to-DJXML E2E}
+  - {id: US-131, epic: EPIC-13-DJXML-INTEROP, as: DJ, want: imported DJXML preparation to appear on Android, so_that: workflows remain bidirectional, verify: DJXML-to-Android E2E}
+  - {id: US-132, epic: EPIC-13-DJXML-INTEROP, as: DJ, want: crates and playlists preserved across DJXML, so_that: organization remains portable, verify: playlist round-trip E2E}
+
+  - {id: US-140, epic: EPIC-14-ANALYSIS-RELATED, as: DJ, want: BPM key energy and analysis freshness visible, so_that: I can judge preparation confidence, verify: analysis presentation test}
+  - {id: US-141, epic: EPIC-14-ANALYSIS-RELATED, as: DJ, want: related-track suggestions, so_that: I can discover compatible material, verify: related-track provider test}
+  - {id: US-142, epic: EPIC-14-ANALYSIS-RELATED, as: DJ, want: missing analysis handled gracefully, so_that: unanalyzed files remain usable, verify: missing-analysis state test}
+  - {id: US-143, epic: EPIC-14-ANALYSIS-RELATED, as: DJ, want: every suggestion to show its source model confidence freshness and input revision, so_that: I know why I should trust or distrust it, verify: suggestion provenance UI test}
+  - {id: US-144, epic: EPIC-14-ANALYSIS-RELATED, as: DJ, want: candidate BPM key cues loops regions and stems from backend intelligence, so_that: repetitive preparation work is accelerated without becoming automatic, verify: multi-kind candidate fixture test}
+  - {id: US-145, epic: EPIC-14-ANALYSIS-RELATED, as: DJ, want: ComfyUI ASR transcript and phrase markers proposed on the timeline, so_that: vocal structure can help navigation and cue preparation, verify: transcript marker overlay test}
+  - {id: US-146, epic: EPIC-14-ANALYSIS-RELATED, as: DJ, want: accept or reject each suggestion explicitly, so_that: analysis never silently overwrites my preparation, verify: accept reject canonicalization test}
+  - {id: US-147, epic: EPIC-14-ANALYSIS-RELATED, as: DJ, want: cached suggestions reviewable while offline, so_that: intelligence gathered before travel still helps me catalog, verify: offline suggestion review test}
+  - {id: US-148, epic: EPIC-14-ANALYSIS-RELATED, as: DJ, want: backend capabilities to degrade independently, so_that: unavailable Demucs ASR or one BPM engine does not disable the rest of the app, verify: partial capability matrix test}
+  - {id: US-149, epic: EPIC-14-ANALYSIS-RELATED, as: DJ, want: loudness and spectral outlier warnings clearly separated from musical suggestions, so_that: potential ear-safety problems are hard to miss, verify: safety suggestion priority UI test}
+
+  - {id: US-150, epic: EPIC-15-ANDROID-MEDIA-INTEGRATION, as: DJ, want: lock-screen and notification playback controls, so_that: auditioning works outside the app, verify: media session instrumentation test}
+  - {id: US-151, epic: EPIC-15-ANDROID-MEDIA-INTEGRATION, as: DJ, want: Bluetooth transport controls, so_that: headphones can control audition playback, verify: media key test}
+  - {id: US-152, epic: EPIC-15-ANDROID-MEDIA-INTEGRATION, as: DJ, want: correct audio focus handling, so_that: calls and other apps do not corrupt playback state, verify: focus transition test}
+
+  - {id: US-160, epic: EPIC-16-DEBUG-HARNESS, as: tester, want: switch fixture and real providers, so_that: UI and backend bugs can be separated, verify: debug provider selector test}
+  - {id: US-161, epic: EPIC-16-DEBUG-HARNESS, as: tester, want: inject offline degraded auth and conflict states, so_that: hard-to-reproduce UI is directly testable, verify: state injector test}
+  - {id: US-162, epic: EPIC-16-DEBUG-HARNESS, as: tester, want: inspect pending mutations and receipts, so_that: synchronization failures are diagnosable, verify: journal inspector UI test}
+  - {id: US-163, epic: EPIC-16-DEBUG-HARNESS, as: release engineer, want: debug facilities absent from production builds, so_that: diagnostics do not become attack surface, verify: release variant test}
+
+  - {id: US-170, epic: EPIC-17-ACCESSIBILITY-PERFORMANCE, as: user, want: meaningful TalkBack semantics, so_that: controls remain understandable without visual guessing, verify: semantics test}
+  - {id: US-171, epic: EPIC-17-ACCESSIBILITY-PERFORMANCE, as: user, want: font scaling support, so_that: accessibility settings do not hide essential actions, verify: scaled-font screenshot test}
+  - {id: US-172, epic: EPIC-17-ACCESSIBILITY-PERFORMANCE, as: DJ, want: large libraries to remain responsive, so_that: real collections do not degrade the app, verify: 10000-track benchmark}
+  - {id: US-173, epic: EPIC-17-ACCESSIBILITY-PERFORMANCE, as: DJ, want: smooth waveform gestures, so_that: precise preparation feels immediate, verify: frame-time benchmark}
+
+  - {id: US-180, epic: EPIC-18-PARITY-E2E, as: product_owner, want: every required story linked to executable evidence, so_that: parity is objectively checkable, verify: parity matrix validator}
+  - {id: US-181, epic: EPIC-18-PARITY-E2E, as: product_owner, want: real Sample Lib E2E for core flows, so_that: fixture success is not mistaken for integration success, verify: device plus backend suite}
+  - {id: US-182, epic: EPIC-18-PARITY-E2E, as: product_owner, want: offline reconnect conflict and process-death scenarios passing, so_that: the app is safe for real preparation work, verify: resilience suite}
+
+  - {id: US-190, epic: EPIC-19-PACKAGING-RELEASE, as: tester, want: installable reproducible APKs, so_that: dogfood builds are trustworthy, verify: artifact hash build test}
+  - {id: US-191, epic: EPIC-19-PACKAGING-RELEASE, as: user, want: upgrades to preserve local data and journal state, so_that: releases do not destroy preparation work, verify: migration upgrade test}
+  - {id: US-192, epic: EPIC-19-PACKAGING-RELEASE, as: operator, want: protocol compatibility stated in release notes, so_that: incompatible backend combinations are visible before install, verify: release metadata test}

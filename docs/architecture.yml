@@ -1,0 +1,203 @@
+schema: androidjtools.architecture/v1
+project:
+  id: androidjtools
+  title: Android DJ Tools
+  objective: >-
+    Deliver a cloudless Android DJ-library preparation client with state-of-the-art
+    mobile UX, fixture-first operation, offline-first edits, direct Sample Lib /
+    Sample Lab synchronization, and DJXML interoperability.
+  product_principles:
+    - ui_first
+    - fixture_provider_before_backend
+    - no_third_party_cloud_required
+    - sample_lib_is_canonical_authority
+    - offline_first_mutations
+    - idempotent_sync
+    - explicit_conflict_states
+    - parity_is_measured_by_user_story_acceptance
+
+android_tool_tree:
+  language: Kotlin
+  ui:
+    framework: Jetpack Compose
+    navigation: Navigation Compose
+    design_system:
+      base: Material 3
+      extensions:
+        - dense_track_rows
+        - waveform_surface
+        - cue_chip
+        - loop_range
+        - beatgrid_overlay
+        - sync_badge
+        - download_badge
+        - conflict_badge
+    image_loading: Coil
+    screenshot_testing: compose-ui-test
+  media:
+    player: Media3 ExoPlayer
+    background_service: MediaSessionService
+    audio_focus: Android AudioManager
+    notifications: Media3 session notification
+  persistence:
+    database: Room
+    key_value: DataStore
+    cache: app_private_files
+    mutation_journal: Room
+  networking:
+    http: OkHttp
+    serialization: kotlinx.serialization
+    realtime: WebSocket
+    discovery:
+      - manual_url
+      - mdns_optional
+    transport_security:
+      - https_preferred
+      - explicit_trust_on_first_pairing
+  background_work:
+    scheduler: WorkManager
+    use_cases:
+      - sync_retry
+      - download_resume
+      - cache_prune
+      - background_analysis_refresh
+  testing:
+    unit: JUnit
+    coroutine: kotlinx-coroutines-test
+    ui: ComposeTestRule
+    instrumentation: AndroidX Test
+    contract: fixture_and_fake_server
+    e2e: emulator_plus_sample_lib
+
+provider_architecture:
+  rule: UI must not depend on concrete backend implementations.
+  interfaces:
+    LibraryProvider:
+      responsibilities: [browse, search, sort, filter, track_detail, artwork]
+      implementations: [FixtureLibraryProvider, LocalCacheLibraryProvider, SampleLibLibraryProvider]
+    PreparationProvider:
+      responsibilities: [cues, loops, beatgrid, tags, ratings, regions]
+      implementations: [FixturePreparationProvider, JournaledPreparationProvider]
+    PlaybackProvider:
+      responsibilities: [play, pause, seek, queue, waveform_position]
+      implementations: [FixturePlaybackProvider, Media3PlaybackProvider]
+    PlaylistProvider:
+      responsibilities: [playlists, smart_playlists, crates, ordering]
+      implementations: [FixturePlaylistProvider, LocalPlaylistProvider, SyncedPlaylistProvider]
+    DownloadProvider:
+      responsibilities: [enqueue, pause, resume, cancel, cache_policy, offline_availability]
+      implementations: [FixtureDownloadProvider, WorkManagerDownloadProvider]
+    SyncProvider:
+      responsibilities: [pair, pull, push, receipts, conflicts, health]
+      implementations: [FixtureSyncProvider, SampleLibSyncProvider]
+    AnalysisProvider:
+      responsibilities: [capabilities, suggestions, refresh, accept, reject, bpm, key, energy, waveform, related_tracks, stems, transcript_markers, safety_warnings]
+      implementations: [FixtureAnalysisProvider, SampleLibAnalysisProvider]
+
+canonical_domain:
+  Track:
+    identity: stable_server_id
+    fields: [title, artist, album, duration_ms, artwork_ref, bpm, key, genre, rating, energy]
+  Cue:
+    fields: [id, track_id, position_ms, role, label, color, hotcue_number, quantized]
+  Loop:
+    fields: [id, track_id, start_ms, end_ms, role, label, color, hotcue_number]
+  BeatGrid:
+    fields: [track_id, anchor_ms, bpm, beat_index, revision]
+  Region:
+    roles: [intro, outro, mix_in, mix_out, fade_in, fade_out, hook, drop, break]
+    fields: [id, track_id, start_ms, end_ms, role, label]
+  Tag:
+    scopes: [asset, full_asset_interval]
+    fields: [namespace, value]
+  Playlist:
+    fields: [id, name, parent_id, ordered_track_ids, smart_rule]
+  Mutation:
+    fields: [mutation_id, entity_type, entity_id, base_revision, operation, payload, created_at]
+  Receipt:
+    fields: [mutation_id, outcome, authoritative_revision, conflict]
+  AnalysisSuggestion:
+    authority: advisory_only
+    fields: [suggestion_id, track_id, kind, payload, source, confidence, generated_at, input_revision, decision, stale]
+    kinds: [bpm, key, cue, loop, region, stem, transcript_marker, related_track, loudness_warning, spectral_outlier_warning, mix_prep]
+    decisions: [proposed, accepted, rejected, superseded]
+
+sync_state_machine:
+  states:
+    - unconfigured
+    - discovered
+    - pairing
+    - online_idle
+    - pulling
+    - pushing
+    - pending_local
+    - offline
+    - degraded
+    - conflict
+    - auth_required
+    - server_incompatible
+    - local_migration_required
+  invariants:
+    - every_local_edit_is_persisted_before_network_send
+    - process_death_must_not_drop_pending_mutations
+    - mutation_ids_are_idempotency_keys
+    - server_receipt_is_required_before_journal_compaction
+    - conflict_resolution_never_silently_discards_local_or_remote_state
+    - fixture_provider_can_force_every_state_for_ui_debugging
+
+backend_boundary:
+  authority: Sample Lib
+  transport:
+    primary: REST_JSON
+    optional_realtime: WebSocket
+  advisory_intelligence_plane:
+    rule: backend analysis may propose but never silently canonicalize user preparation state
+    capability_discovery: required
+    candidate_sources:
+      - sample_intelligence
+      - demucs
+      - comfyui_asr
+      - tempo_ensemble
+      - future_external_analysis_services
+    lifecycle: [not_requested, queued, running, ready, partial, failed, unavailable, stale]
+    candidate_decisions: [proposed, accepted, rejected, superseded]
+    acceptance_semantics: accepted suggestions become ordinary journaled sync mutations carrying suggestion provenance
+    offline_semantics: cached suggestions may be reviewed and accepted offline; canonicalization waits for the normal mutation receipt
+    degradability: each backend capability fails independently and the Android UI remains usable without it
+    safety_rule: loudness and spectral outlier warnings remain visibly distinct from musical suggestions
+  interoperability:
+    djxml:
+      direction: bidirectional
+      role: exchange_format_not_authority
+      existing_adapter: sample-lib DJXML v2 adapter
+  cloud_dependency: none
+
+ui_debug_contract:
+  mandatory_before_real_sync:
+    - provider_selector
+    - fixture_dataset_selector
+    - network_state_injector
+    - conflict_injector
+    - download_failure_injector
+    - empty_library_mode
+    - mutation_journal_inspector
+    - sync_receipt_viewer
+    - backend_health_panel
+    - state_machine_overlay
+
+quality_gates:
+  per_story:
+    - acceptance_assertions_defined
+    - fixture_test
+    - ui_interaction_test_when_applicable
+    - accessibility_semantics_when_visible
+  per_epic:
+    - unit_tests
+    - ui_tests
+    - no_unhandled_loading_error_empty_states
+    - process_death_or_recreation_test_for_persistent_state
+  final:
+    - sample_lib_real_backend_e2e
+    - offline_edit_reconnect_e2e
+    - conflict_resolution_e2e
+    - parity_matrix_all_required_stories_green

@@ -1,0 +1,92 @@
+schema: androidjtools.agent-workflows/v1
+project: androidjtools
+workflow_policy:
+  max_active_workers: 4
+  review: independent_required
+  mutation: transactional
+  scheduling: highest_priority_then_dependency_ready
+  design_goal: maximize_non_overlapping_write_scopes
+
+roles:
+  android_foundation:
+    focus: Gradle, application shell, Compose theme, navigation, dependency graph.
+    preferred_scope: [app/build.gradle.kts, build.gradle.kts, settings.gradle.kts, gradle/, app/src/main/java/**/shell/**]
+  ui_library:
+    focus: Library, search, filters, track rows, metadata editor, playlists.
+    preferred_scope: [app/src/main/java/**/library/**, app/src/main/java/**/playlist/**, app/src/main/java/**/metadata/**]
+  audio_waveform:
+    focus: Media3 playback, queue, waveform, cue/loop interactions, beatgrid.
+    preferred_scope: [app/src/main/java/**/playback/**, app/src/main/java/**/waveform/**, app/src/main/java/**/prep/**]
+  offline_sync:
+    focus: Room cache, mutation journal, sync engine, conflicts, downloads.
+    preferred_scope: [app/src/main/java/**/data/**, app/src/main/java/**/sync/**, app/src/main/java/**/offline/**]
+  backend_contract:
+    focus: Sample Lib API contract, fake server, DJXML interoperability, protocol fixtures.
+    preferred_scope: [contracts/, test-server/, app/src/main/java/**/remote/**]
+  intelligence_ux:
+    focus: Advisory suggestions, provenance, confidence, capability degradation, ASR/stem/BPM presentation and accept/reject UX.
+    preferred_scope: [app/src/main/java/**/analysis/**, contracts/intelligence/**, app/src/test/**/analysis/**]
+  diagnostics_qa:
+    focus: Debug surfaces, state injection, screenshots, accessibility, performance and E2E.
+    preferred_scope: [app/src/debug/, app/src/androidTest/, app/src/test/, e2e/, docs/parity/**]
+
+execution_waves:
+  wave_0_contracts:
+    parallel:
+      - EPIC-00-FOUNDATION
+      - EPIC-10-SYNC-CONTRACT
+      - EPIC-16-DEBUG-HARNESS
+    exit: app_shell_builds_and_contract_types_are_stable
+  wave_1_ui_primitives:
+    parallel:
+      - EPIC-01-LIBRARY
+      - EPIC-03-PLAYBACK-QUEUE
+      - EPIC-04-WAVEFORM
+      - EPIC-07-METADATA
+    depends_on: [EPIC-00-FOUNDATION]
+    exit: all_primary_screens_are_navigable_with_fixture_data
+  wave_2_prep_and_catalog:
+    parallel:
+      - EPIC-02-SEARCH-FILTER
+      - EPIC-05-CUES-LOOPS
+      - EPIC-06-BEATGRID
+      - EPIC-08-PLAYLISTS
+    depends_on: [wave_1_ui_primitives]
+    exit: feature_complete_fixture_driven_dogfood_ui
+  wave_3_offline_backend:
+    parallel:
+      - EPIC-09-OFFLINE-DOWNLOADS
+      - EPIC-11-MUTATION-JOURNAL-CONFLICTS
+      - EPIC-12-SAMPLELIB-INTEGRATION
+      - EPIC-13-DJXML-INTEROP
+    depends_on: [EPIC-10-SYNC-CONTRACT]
+    exit: edits_survive_offline_and_round_trip_to_sample_lib
+  wave_4_enhancement:
+    parallel:
+      - EPIC-14-ANALYSIS-RELATED
+      - EPIC-15-ANDROID-MEDIA-INTEGRATION
+      - EPIC-17-ACCESSIBILITY-PERFORMANCE
+    intelligence_contract:
+      - backend_capabilities_are_negotiated
+      - suggestions_remain_advisory_until_user_acceptance
+      - sample_intelligence_demucs_comfyui_asr_and_tempo_engines_may_degrade_independently
+      - suggestion_acceptance_uses_the_same_offline_mutation_receipt_path_as_manual_edits
+    depends_on: [wave_2_prep_and_catalog, wave_3_offline_backend]
+  wave_5_release_gate:
+    parallel:
+      - EPIC-18-PARITY-E2E
+      - EPIC-19-PACKAGING-RELEASE
+    depends_on: [wave_4_enhancement]
+
+handoff_contract:
+  each_epic_must_report:
+    - changed_paths
+    - acceptance_story_ids
+    - exact_tests_run
+    - screenshots_or_semantics_evidence_for_ui
+    - remaining_risk
+  forbidden:
+    - cross_epic_scope_expansion_without_new_opportunity
+    - backend_specific_types_in_composable_signatures
+    - direct_network_calls_from_ui
+    - silent_conflict_resolution

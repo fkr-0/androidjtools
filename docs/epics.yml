@@ -1,0 +1,312 @@
+schema: androidjtools.epics/v1
+project: androidjtools
+status_values: [planned, active, blocked, review, done]
+priority_scale: 0-100
+parallelism_rule: Epics in the same wave are expected to have non-overlapping primary write scopes.
+
+epics:
+  - id: EPIC-00-FOUNDATION
+    title: Android application foundation and fixture-first shell
+    wave: 0
+    priority: 100
+    owner_role: android_foundation
+    dependencies: []
+    primary_write_scope: [app/, gradle/, build.gradle.kts, settings.gradle.kts]
+    objective: Build an installable Compose application that is fully navigable without a backend.
+    stories: [US-001, US-002, US-003, US-004]
+    acceptance:
+      - debug APK builds and launches
+      - every top-level destination is reachable using fixture providers
+      - provider selection persists across recreation
+      - loading empty error offline and conflict visual states can be injected
+
+  - id: EPIC-01-LIBRARY
+    title: Library browsing and track-detail UI
+    wave: 1
+    priority: 96
+    owner_role: ui_library
+    dependencies: [EPIC-00-FOUNDATION]
+    primary_write_scope: [app/src/main/java/**/library/**]
+    objective: Deliver dense, fast library browsing with artwork, compact metadata and stable navigation state.
+    stories: [US-010, US-011, US-012, US-013, US-014]
+    acceptance:
+      - large fixture library scrolls smoothly
+      - track selection opens detail without losing list position
+      - artwork missing and loading states are visible and testable
+
+  - id: EPIC-02-SEARCH-FILTER
+    title: Search, sort, filter and saved views
+    wave: 2
+    priority: 91
+    owner_role: ui_library
+    dependencies: [EPIC-01-LIBRARY]
+    primary_write_scope: [app/src/main/java/**/library/search/**]
+    objective: Provide incremental full-library discovery and reusable compound views.
+    stories: [US-020, US-021, US-022, US-023]
+    acceptance:
+      - incremental query updates deterministically
+      - sort order is explicit and reversible
+      - compound filters serialize and restore
+      - saved view can be renamed and deleted safely
+
+  - id: EPIC-03-PLAYBACK-QUEUE
+    title: Playback, background session and queue
+    wave: 1
+    priority: 95
+    owner_role: audio_waveform
+    dependencies: [EPIC-00-FOUNDATION]
+    primary_write_scope: [app/src/main/java/**/playback/**]
+    objective: Provide reliable audition playback, persistent queue and mini/full player surfaces.
+    stories: [US-030, US-031, US-032, US-033, US-034]
+    acceptance:
+      - fixture playback can drive all player UI states
+      - real provider uses Media3
+      - queue ordering survives recreation
+      - seek play pause next previous are covered by tests
+
+  - id: EPIC-04-WAVEFORM
+    title: Interactive waveform surface
+    wave: 1
+    priority: 95
+    owner_role: audio_waveform
+    dependencies: [EPIC-00-FOUNDATION]
+    primary_write_scope: [app/src/main/java/**/waveform/**]
+    objective: Implement overview and zoomable waveform interaction independent of sync implementation.
+    stories: [US-040, US-041, US-042, US-043]
+    acceptance:
+      - overview and detailed waveforms share playhead state
+      - pinch zoom pan scrub and seek are deterministic
+      - marker and loop overlays render from fixture models
+      - waveform has screenshot tests across densities
+
+  - id: EPIC-05-CUES-LOOPS
+    title: Cue points, loops and preparation regions
+    wave: 2
+    priority: 94
+    owner_role: audio_waveform
+    dependencies: [EPIC-04-WAVEFORM]
+    primary_write_scope: [app/src/main/java/**/prep/cues/**, app/src/main/java/**/prep/loops/**]
+    objective: Match professional mobile DJ preparation operations for cueing and looping.
+    stories: [US-050, US-051, US-052, US-053, US-054, US-055]
+    acceptance:
+      - create move rename recolor number and delete cues
+      - create resize rename recolor and delete loops
+      - semantic roles include mix and fade regions
+      - edits work while offline through provider abstraction
+
+  - id: EPIC-06-BEATGRID
+    title: Beatgrid, beat jump and quantization
+    wave: 2
+    priority: 90
+    owner_role: audio_waveform
+    dependencies: [EPIC-04-WAVEFORM]
+    primary_write_scope: [app/src/main/java/**/prep/beatgrid/**]
+    objective: Provide precise mobile beatgrid correction and quantized navigation.
+    stories: [US-060, US-061, US-062, US-063]
+    acceptance:
+      - anchor and BPM edits update waveform grid immediately
+      - half and double BPM actions are reversible
+      - beat jump supports configurable lengths
+      - cue and loop quantization is testable
+
+  - id: EPIC-07-METADATA
+    title: Track metadata, ratings and tags
+    wave: 1
+    priority: 90
+    owner_role: ui_library
+    dependencies: [EPIC-00-FOUNDATION]
+    primary_write_scope: [app/src/main/java/**/metadata/**]
+    objective: Provide fast single-track and batch catalog annotation.
+    stories: [US-070, US-071, US-072, US-073]
+    acceptance:
+      - editable DJ fields are explicit
+      - rating supports fast one-touch operation
+      - namespaced tags preserve scope
+      - edits are provider-backed and never directly mutate remote state
+
+  - id: EPIC-08-PLAYLISTS
+    title: Playlists, crates and smart playlists
+    wave: 2
+    priority: 89
+    owner_role: ui_library
+    dependencies: [EPIC-01-LIBRARY]
+    primary_write_scope: [app/src/main/java/**/playlist/**]
+    objective: Implement ordered playlists, nested crates and rule-based smart playlists.
+    stories: [US-080, US-081, US-082, US-083, US-084]
+    acceptance:
+      - create rename reorder move and delete safely
+      - nested crate navigation preserves hierarchy
+      - smart rule builder previews results before save
+      - fixture provider covers empty and deeply nested cases
+
+  - id: EPIC-09-OFFLINE-DOWNLOADS
+    title: Downloads and offline media cache
+    wave: 3
+    priority: 92
+    owner_role: offline_sync
+    dependencies: [EPIC-03-PLAYBACK-QUEUE, EPIC-10-SYNC-CONTRACT]
+    primary_write_scope: [app/src/main/java/**/offline/download/**]
+    objective: Make selected tracks and playlists available for reliable offline audition and preparation.
+    stories: [US-090, US-091, US-092, US-093, US-094]
+    acceptance:
+      - track and playlist download progress is observable
+      - resume survives app process death
+      - cache eviction never removes pinned media
+      - offline playback and metadata preparation remain available
+
+  - id: EPIC-10-SYNC-CONTRACT
+    title: Sample Lib sync protocol and state machine contract
+    wave: 0
+    priority: 100
+    owner_role: backend_contract
+    dependencies: []
+    primary_write_scope: [contracts/, test-server/]
+    objective: Specify and test the backend-neutral pull push receipt and conflict protocol before the real client implementation.
+    stories: [US-100, US-101, US-102, US-103, US-104]
+    acceptance:
+      - protocol schemas are versioned
+      - every mutation has idempotency identity and base revision
+      - receipts classify applied no-op rejected and conflict outcomes
+      - fake server can drive every sync state
+      - compatibility errors are explicit
+
+  - id: EPIC-11-MUTATION-JOURNAL-CONFLICTS
+    title: Offline mutation journal, replay and conflict resolution
+    wave: 3
+    priority: 99
+    owner_role: offline_sync
+    dependencies: [EPIC-10-SYNC-CONTRACT]
+    primary_write_scope: [app/src/main/java/**/sync/journal/**, app/src/main/java/**/sync/conflict/**]
+    objective: Guarantee lossless offline edits with deterministic replay and user-visible conflict resolution.
+    stories: [US-110, US-111, US-112, US-113, US-114]
+    acceptance:
+      - mutation is durable before UI reports success
+      - replay is idempotent
+      - acknowledged mutations compact only after receipt
+      - safe field-wise merges are automatic
+      - unsafe conflicts surface both local and remote values
+
+  - id: EPIC-12-SAMPLELIB-INTEGRATION
+    title: Direct Sample Lib backend integration
+    wave: 3
+    priority: 97
+    owner_role: backend_contract
+    dependencies: [EPIC-10-SYNC-CONTRACT]
+    primary_write_scope: [app/src/main/java/**/remote/samplelib/**, test-server/samplelib/**]
+    objective: Replace fixture remote providers with direct LAN or VPN Sample Lib communication without changing UI contracts.
+    stories: [US-120, US-121, US-122, US-123]
+    acceptance:
+      - pairing and health checks are explicit
+      - incremental library pull works from real Sample Lib
+      - prep mutations receive authoritative receipts
+      - disconnect reconnect cycle preserves pending edits
+
+  - id: EPIC-13-DJXML-INTEROP
+    title: DJXML interoperability visibility and round-trip tests
+    wave: 3
+    priority: 86
+    owner_role: backend_contract
+    dependencies: [EPIC-12-SAMPLELIB-INTEGRATION]
+    primary_write_scope: [e2e/djxml/**, app/src/main/java/**/interop/**]
+    objective: Expose and verify the existing Sample Lib DJXML v2 bridge as an interoperability lane, never as mobile authority.
+    stories: [US-130, US-131, US-132]
+    acceptance:
+      - Android-authored cues loops regions and tags survive Sample Lib DJXML export
+      - imported DJXML changes appear on Android after sync
+      - crate playlist semantics are covered end to end
+
+  - id: EPIC-14-ANALYSIS-RELATED
+    title: Advisory intelligence, analysis and related-track discovery
+    wave: 4
+    priority: 93
+    owner_role: ui_library
+    dependencies: [EPIC-12-SAMPLELIB-INTEGRATION]
+    primary_write_scope: [app/src/main/java/**/analysis/**, contracts/intelligence/**]
+    objective: >-
+      Surface backend intelligence from Sample Intelligence and optional external pipelines such as
+      Demucs and ComfyUI ASR as explicit, provenance-rich suggestions that the DJ can preview,
+      accept or reject without allowing analysis services to mutate canonical preparation state.
+    stories: [US-140, US-141, US-142, US-143, US-144, US-145, US-146, US-147, US-148, US-149]
+    acceptance:
+      - analysis provenance confidence freshness and input revision are visible
+      - related tracks explain matching dimensions
+      - backend capability availability is negotiated and independently degradable
+      - BPM key cue loop region stem transcript and mix-prep candidates can coexist
+      - accepting a suggestion emits the normal journaled mutation path with suggestion provenance
+      - rejecting a suggestion never mutates canonical Sample Lib state
+      - cached suggestions remain reviewable offline and stale suggestions are visibly marked
+      - loudness and spectral outlier warnings remain visually distinct from musical suggestions
+      - missing analysis degrades gracefully
+
+  - id: EPIC-15-ANDROID-MEDIA-INTEGRATION
+    title: Android media, Bluetooth and external controls
+    wave: 4
+    priority: 78
+    owner_role: audio_waveform
+    dependencies: [EPIC-03-PLAYBACK-QUEUE]
+    primary_write_scope: [app/src/main/java/**/platform/media/**]
+    objective: Integrate audition playback with Android system media controls and supported external transport surfaces.
+    stories: [US-150, US-151, US-152]
+    acceptance:
+      - lock-screen and notification controls operate queue
+      - Bluetooth transport commands map correctly
+      - audio focus loss and regain behave predictably
+
+  - id: EPIC-16-DEBUG-HARNESS
+    title: Dogfood diagnostics and state injection
+    wave: 0
+    priority: 98
+    owner_role: diagnostics_qa
+    dependencies: []
+    primary_write_scope: [app/src/debug/**, docs/debug/**]
+    objective: Allow end users and developers to debug the full UI before backend completion.
+    stories: [US-160, US-161, US-162, US-163]
+    acceptance:
+      - provider selector exists in debug builds
+      - all sync states and failures can be injected
+      - mutation journal and receipts are inspectable
+      - no debug-only controls leak into release builds
+
+  - id: EPIC-17-ACCESSIBILITY-PERFORMANCE
+    title: Accessibility, responsiveness and large-library performance
+    wave: 4
+    priority: 82
+    owner_role: diagnostics_qa
+    dependencies: [EPIC-01-LIBRARY, EPIC-04-WAVEFORM, EPIC-08-PLAYLISTS]
+    primary_write_scope: [app/src/androidTest/**/a11y/**, app/src/androidTest/**/performance/**, benchmark/**]
+    objective: Ensure the dense DJ interface remains usable and fast on phones and tablets.
+    stories: [US-170, US-171, US-172, US-173]
+    acceptance:
+      - primary controls expose meaningful semantics
+      - font scaling does not hide core operations
+      - ten-thousand-track fixture remains interactively usable
+      - waveform interaction has bounded frame-time regression tests
+
+  - id: EPIC-18-PARITY-E2E
+    title: Feature parity matrix and real-system E2E acceptance
+    wave: 5
+    priority: 100
+    owner_role: diagnostics_qa
+    dependencies: [EPIC-02-SEARCH-FILTER, EPIC-05-CUES-LOOPS, EPIC-06-BEATGRID, EPIC-08-PLAYLISTS, EPIC-09-OFFLINE-DOWNLOADS, EPIC-11-MUTATION-JOURNAL-CONFLICTS, EPIC-12-SAMPLELIB-INTEGRATION, EPIC-14-ANALYSIS-RELATED, EPIC-15-ANDROID-MEDIA-INTEGRATION, EPIC-17-ACCESSIBILITY-PERFORMANCE]
+    primary_write_scope: [e2e/, docs/parity/]
+    objective: Prove every required user story against fixture and real Sample Lib configurations.
+    stories: [US-180, US-181, US-182]
+    acceptance:
+      - parity report maps every required story to executable evidence
+      - offline edit reconnect conflict and process-death scenarios pass
+      - no required story remains untested
+
+  - id: EPIC-19-PACKAGING-RELEASE
+    title: Packaging, upgrade safety and dogfood release lane
+    wave: 5
+    priority: 88
+    owner_role: android_foundation
+    dependencies: [EPIC-18-PARITY-E2E]
+    primary_write_scope: [.github/, fastlane/, release/, app/src/main/AndroidManifest.xml]
+    objective: Produce reproducible APK artifacts and safe upgrades for dogfood deployment.
+    stories: [US-190, US-191, US-192]
+    acceptance:
+      - debug and release artifacts are reproducible
+      - local database migrations have upgrade tests
+      - release notes include known protocol compatibility
+      - installed upgrade preserves offline journal and cached metadata
