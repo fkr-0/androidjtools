@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://androidjtools.invalid/contracts/sync/v1/sync.schema.json",
+  "title": "Android DJ Tools Sample Lib Sync Protocol v1 — synthesis decision",
+  "oneOf": [
+    {"$ref": "#/$defs/hello_request"},
+    {"$ref": "#/$defs/hello_accepted"},
+    {"$ref": "#/$defs/hello_incompatible"},
+    {"$ref": "#/$defs/pull_request"},
+    {"$ref": "#/$defs/pull_response"},
+    {"$ref": "#/$defs/pull_cursor_expired"},
+    {"$ref": "#/$defs/push_request"},
+    {"$ref": "#/$defs/push_response"},
+    {"$ref": "#/$defs/receipt_lookup_response"}
+  ],
+  "$defs": {
+    "protocol_version": {"type": "string", "const": "1"},
+    "non_empty_string": {"type": "string", "minLength": 1},
+    "opaque_revision": {"type": "string", "minLength": 1},
+    "server_change_revision": {"type": "integer", "minimum": 0},
+    "capability_list": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pull_page_max", "push_batch_max", "tombstone_retention_seconds", "mutation_replay_horizon_seconds"],
+      "properties": {
+        "pull_page_max": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "push_batch_max": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "tombstone_retention_seconds": {"type": "integer", "minimum": 1},
+        "mutation_replay_horizon_seconds": {"type": "integer", "minimum": 1}
+      }
+    },
+    "server_capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pull", "mutations", "playlists", "analysis", "media"],
+      "properties": {
+        "pull": {"$ref": "#/$defs/capability_list"},
+        "mutations": {"$ref": "#/$defs/capability_list"},
+        "playlists": {"enum": ["unsupported_until_canonical_playlist_migration", "read_only", "read_write"]},
+        "analysis": {"$ref": "#/$defs/capability_list"},
+        "media": {"$ref": "#/$defs/capability_list"}
+      }
+    },
+    "hello_request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "protocol_versions", "client_id", "installation_id", "capabilities"],
+      "properties": {
+        "type": {"const": "hello_request"},
+        "protocol_versions": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "client_id": {"$ref": "#/$defs/non_empty_string"},
+        "installation_id": {"$ref": "#/$defs/non_empty_string"},
+        "capabilities": {"$ref": "#/$defs/capability_list"}
+      }
+    },
+    "hello_accepted": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "protocol_version", "server_id", "authority_generation", "server_change_revision", "capabilities", "limits"],
+      "properties": {
+        "type": {"const": "hello_accepted"},
+        "protocol_version": {"$ref": "#/$defs/protocol_version"},
+        "server_id": {"$ref": "#/$defs/non_empty_string"},
+        "authority_generation": {"$ref": "#/$defs/non_empty_string"},
+        "server_change_revision": {"$ref": "#/$defs/server_change_revision"},
+        "capabilities": {"$ref": "#/$defs/server_capabilities"},
+        "limits": {"$ref": "#/$defs/limits"}
+      }
+    },
+    "hello_incompatible": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "error", "requested_versions", "supported_versions"],
+      "properties": {
+        "type": {"const": "hello_incompatible"},
+        "error": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"const": "incompatible_protocol"}, "message": {"$ref": "#/$defs/non_empty_string"}}},
+        "requested_versions": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "supported_versions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+      }
+    },
+    "entity_change": {
+      "type": "object", "additionalProperties": false,
+      "required": ["entity_type", "entity_id", "revision", "schema", "value"],
+      "properties": {
+        "entity_type": {"$ref": "#/$defs/non_empty_string"},
+        "entity_id": {"$ref": "#/$defs/non_empty_string"},
+        "revision": {"$ref": "#/$defs/opaque_revision"},
+        "schema": {"$ref": "#/$defs/non_empty_string"},
+        "value": {"type": "object"}
+      }
+    },
+    "tombstone": {
+      "type": "object", "additionalProperties": false,
+      "required": ["entity_type", "entity_id", "revision", "deleted_at"],
+      "properties": {
+        "entity_type": {"$ref": "#/$defs/non_empty_string"},
+        "entity_id": {"$ref": "#/$defs/non_empty_string"},
+        "revision": {"$ref": "#/$defs/opaque_revision"},
+        "deleted_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "pull_request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "protocol_version", "cursor", "scopes", "limit"],
+      "properties": {
+        "type": {"const": "pull_request"},
+        "protocol_version": {"$ref": "#/$defs/protocol_version"},
+        "cursor": {"type": ["string", "null"]},
+        "scopes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 1000}
+      }
+    },
+    "pull_response": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "protocol_version", "mode", "next_cursor", "has_more", "changes", "tombstones", "authority_generation", "server_change_revision"],
+      "properties": {
+        "type": {"const": "pull_response"},
+        "protocol_version": {"$ref": "#/$defs/protocol_version"},
+        "mode": {"enum": ["snapshot", "incremental"]},
+        "next_cursor": {"type": "string", "minLength": 1},
+        "has_more": {"type": "boolean"},
+        "changes": {"type": "array", "items": {"$ref": "#/$defs/entity_change"}},
+        "tombstones": {"type": "array", "items": {"$ref": "#/$defs/tombstone"}},
+        "authority_generation": {"$ref": "#/$defs/non_empty_string"},
+        "server_change_revision": {"$ref": "#/$defs/server_change_revision"}
+      }
+    },
+    "pull_cursor_expired": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "protocol_version", "authority_generation", "error"],
+      "properties": {
+        "type": {"const": "pull_cursor_expired"},
+        "protocol_version": {"$ref": "#/$defs/protocol_version"},
+        "authority_generation": {"$ref": "#/$defs/non_empty_string"},
+        "error": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"const": "cursor_expired"}, "message": {"$ref": "#/$defs/non_empty_string"}}}
+      }
+    },
+    "mutation_operation": {"enum": ["interval.editor_state.replace", "asset.metadata.patch", "tag.ensure_attach", "tag.detach", "analysis.suggestion.accept"]},
+    "mutation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mutation_id", "entity_type", "entity_id", "base_revision", "operation", "payload", "created_at", "provenance"],
+      "properties": {
+        "mutation_id": {"type": "string", "minLength": 8, "maxLength": 200},
+        "entity_type": {"$ref": "#/$defs/non_empty_string"},
+        "entity_id": {"$ref": "#/$defs/non_empty_string"},
+        "base_revision": {"oneOf": [{"$ref": "#/$defs/opaque_revision"}, {"type": "null"}]},
+        "operation": {"$ref": "#/$defs/mutation_operation"},
+        "payload": {"type": "object"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "provenance": {"type": "object"}
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {"properties": {"operation": {"const": "interval.editor_state.replace"}, "entity_type": {"const": "interval"}, "base_revision": {"$ref": "#/$defs/opaque_revision"}}},
+            {"properties": {"operation": {"const": "asset.metadata.patch"}, "entity_type": {"const": "asset"}, "base_revision": {"$ref": "#/$defs/opaque_revision"}}},
+            {"properties": {"operation": {"const": "tag.ensure_attach"}, "entity_type": {"const": "tag_attachment"}, "base_revision": {"type": "null"}}},
+            {"properties": {"operation": {"const": "tag.detach"}, "entity_type": {"const": "tag_attachment"}, "base_revision": {"$ref": "#/$defs/opaque_revision"}}},
+            {"properties": {"operation": {"const": "analysis.suggestion.accept"}, "entity_type": {"enum": ["asset", "interval"]}, "base_revision": {"$ref": "#/$defs/opaque_revision"}}}
+          ]
+        }
+      ]
+    },
+    "conflict": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mutation_id", "entity_id", "base_revision", "authoritative_revision", "local_value", "remote_value", "merge_class", "code"],
+      "properties": {
+        "mutation_id": {"$ref": "#/$defs/non_empty_string"},
+        "entity_id": {"$ref": "#/$defs/non_empty_string"},
+        "base_revision": {"oneOf": [{"$ref": "#/$defs/opaque_revision"}, {"type": "null"}]},
+        "authoritative_revision": {"oneOf": [{"$ref": "#/$defs/opaque_revision"}, {"type": "null"}]},
+        "local_value": {"type": ["object", "null"]},
+        "remote_value": {"type": ["object", "null"]},
+        "merge_class": {"enum": ["safe_fieldwise", "editor_aggregate", "ordered_collection", "delete_vs_edit", "identity_conflict", "incompatible_schema"]},
+        "code": {"$ref": "#/$defs/non_empty_string"}
+      }
+    },
+    "receipt_applied": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mutation_id", "outcome", "server_change_revision", "entity_revision"],
+      "properties": {"mutation_id": {"$ref": "#/$defs/non_empty_string"}, "outcome": {"const": "applied"}, "server_change_revision": {"$ref": "#/$defs/server_change_revision"}, "entity_revision": {"$ref": "#/$defs/opaque_revision"}, "canonical": {"type": "object"}}
+    },
+    "receipt_no_op": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mutation_id", "outcome", "server_change_revision", "entity_revision"],
+      "properties": {"mutation_id": {"$ref": "#/$defs/non_empty_string"}, "outcome": {"const": "no_op"}, "server_change_revision": {"$ref": "#/$defs/server_change_revision"}, "entity_revision": {"$ref": "#/$defs/opaque_revision"}}
+    },
+    "receipt_rejected": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mutation_id", "outcome", "server_change_revision", "error"],
+      "properties": {"mutation_id": {"$ref": "#/$defs/non_empty_string"}, "outcome": {"const": "rejected"}, "server_change_revision": {"$ref": "#/$defs/server_change_revision"}, "error": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"$ref": "#/$defs/non_empty_string"}, "message": {"$ref": "#/$defs/non_empty_string"}}}}
+    },
+    "receipt_conflict": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mutation_id", "outcome", "server_change_revision", "conflict"],
+      "properties": {"mutation_id": {"$ref": "#/$defs/non_empty_string"}, "outcome": {"const": "conflict"}, "server_change_revision": {"$ref": "#/$defs/server_change_revision"}, "conflict": {"$ref": "#/$defs/conflict"}}
+    },
+    "receipt": {"oneOf": [{"$ref": "#/$defs/receipt_applied"}, {"$ref": "#/$defs/receipt_no_op"}, {"$ref": "#/$defs/receipt_rejected"}, {"$ref": "#/$defs/receipt_conflict"}]},
+    "push_request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "protocol_version", "client_id", "mutations"],
+      "properties": {"type": {"const": "push_request"}, "protocol_version": {"$ref": "#/$defs/protocol_version"}, "client_id": {"$ref": "#/$defs/non_empty_string"}, "mutations": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/$defs/mutation"}}}
+    },
+    "push_response": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "protocol_version", "receipts", "server_change_revision"],
+      "properties": {"type": {"const": "push_response"}, "protocol_version": {"$ref": "#/$defs/protocol_version"}, "receipts": {"type": "array", "items": {"$ref": "#/$defs/receipt"}}, "server_change_revision": {"$ref": "#/$defs/server_change_revision"}}
+    },
+    "receipt_lookup_response": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "protocol_version", "receipt"],
+      "properties": {"type": {"const": "receipt_lookup_response"}, "protocol_version": {"$ref": "#/$defs/protocol_version"}, "receipt": {"$ref": "#/$defs/receipt"}}
+    }
+  }
+}

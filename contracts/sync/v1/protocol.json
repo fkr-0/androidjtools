@@ -1,0 +1,75 @@
+{
+  "schema": "androidjtools.sync-contract",
+  "version": 1,
+  "wire_schema": "sync.schema.json",
+  "protocol_versions": ["1"],
+  "status": "synthesis-decision",
+  "authority": {
+    "canonical": "sample_lib",
+    "entity_revision_kind": "opaque_string",
+    "server_change_revision_kind": "diagnostic_monotonic_integer",
+    "cursor_kind": "opaque_string",
+    "websocket_role": "wakeup_hint_only"
+  },
+  "negotiation": {
+    "selection": "highest_mutually_supported_version",
+    "no_overlap_http_status": 426,
+    "no_overlap_message_type": "hello_incompatible",
+    "silent_downgrade_allowed": false,
+    "authority_generation_required": true,
+    "capabilities_are_operation_family_scoped": true
+  },
+  "limits_defaults": {
+    "pull_page_max": 1000,
+    "push_batch_max": 100,
+    "tombstone_retention_seconds": 7776000,
+    "mutation_replay_horizon_seconds": 31536000
+  },
+  "capabilities": {
+    "pull": ["asset", "interval", "marker", "tag", "tag_attachment", "analysis_suggestion"],
+    "mutations": ["interval.editor_state.replace", "asset.metadata.patch", "tag.ensure_attach", "tag.detach", "analysis.suggestion.accept"],
+    "playlists": "unsupported_until_canonical_playlist_migration",
+    "analysis": ["suggestions.read"],
+    "media": ["resource_uri", "content_hash", "range"]
+  },
+  "mutation": {
+    "idempotency_field": "mutation_id",
+    "base_revision_field": "base_revision",
+    "base_revision_kind": "opaque_string_or_null_when_operation_explicitly_allows_create",
+    "generic_crud_allowed": false,
+    "operation_contracts": {
+      "interval.editor_state.replace": {"entity_types": ["interval"], "base_revision_policy": "required_existing"},
+      "asset.metadata.patch": {"entity_types": ["asset"], "base_revision_policy": "required_existing"},
+      "tag.ensure_attach": {"entity_types": ["tag_attachment"], "base_revision_policy": "must_be_null_create_or_ensure"},
+      "tag.detach": {"entity_types": ["tag_attachment"], "base_revision_policy": "required_existing"},
+      "analysis.suggestion.accept": {"entity_types": ["asset", "interval"], "base_revision_policy": "required_existing"}
+    },
+    "replay": "same mutation_id and canonical body returns the original receipt without reapplying",
+    "collision": "same mutation_id with a different canonical body is rejected with idempotency_key_reused",
+    "batch_semantics": "serial_request_order_one_authoritative_receipt_per_mutation_not_cross_entity_atomic"
+  },
+  "receipt_outcomes": ["applied", "no_op", "rejected", "conflict"],
+  "conflict_merge_classes": ["safe_fieldwise", "editor_aggregate", "ordered_collection", "delete_vs_edit", "identity_conflict", "incompatible_schema"],
+  "sync_states": {
+    "compatible": {"endpoint": "hello", "effect": "negotiation succeeds"},
+    "up_to_date": {"endpoint": "pull", "effect": "empty incremental change set"},
+    "changes_available": {"endpoint": "pull", "effect": "deterministic change/tombstone page"},
+    "cursor_expired": {"endpoint": "pull", "effect": "explicit reset required; client must bootstrap from cursor null"},
+    "applied": {"endpoint": "push", "effect": "applied receipt"},
+    "no_op": {"endpoint": "push", "effect": "no_op receipt"},
+    "rejected": {"endpoint": "push", "effect": "rejected receipt"},
+    "conflict": {"endpoint": "push", "effect": "conflict receipt with authoritative revision/value"},
+    "auth_required": {"endpoint": "any", "effect": "HTTP 401 auth_required"},
+    "unavailable": {"endpoint": "any", "effect": "HTTP 503 unavailable"},
+    "offline": {"endpoint": "any", "effect": "transport closes without a protocol response"},
+    "incompatible": {"endpoint": "hello", "effect": "HTTP 426 hello_incompatible"}
+  },
+  "http": {
+    "hello": "/v1/sync/hello",
+    "pull": "/v1/sync/pull",
+    "push": "/v1/sync/push",
+    "receipt": "/v1/sync/receipts/{mutation_id}",
+    "websocket": "/v1/sync/events",
+    "fake_scenario": "/__scenario__"
+  }
+}

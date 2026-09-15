@@ -1,0 +1,30 @@
+site_name: Android DJ Tools
+site_url: https://androiddjtools.fkr.dev/
+site_description: Cloudless Android DJ library preparation for Sample Lib and Sample Lab.
+repo_url: https://github.com/fkr-0/androidjtools
+repo_name: fkr-0/androidjtools
+docs_dir: docs
+strict: true
+
+theme:
+  name: mkdocs
+  navigation_depth: 3
+
+nav:
+  - Home: index.md
+  - Release v0.1.0: release/v0.1.0.md
+  - Protocol decision: protocol-negotiation/decision.md
+  - Android protocol proposal: protocol-negotiation/android-client.md
+  - Sample Lib protocol proposal: protocol-negotiation/sample-lib.md
+  - Sample Lab / Overtone proposal: protocol-negotiation/samplelab-overtone.md
+
+exclude_docs: |
+  operator-prompts/
+  agent-workflows.yml
+  architecture.yml
+  epics.yml
+  user-stories.yml
+  wave3-preflight/
+  wave4-preflight/
+  debug/
+

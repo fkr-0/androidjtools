@@ -1,0 +1,98 @@
+schema: androidjtools.intelligence-suggestions/v1
+status: synthesis-decision
+purpose: >-
+  Surface backend-generated musical/audio-analysis candidates and mediated performance
+  requests on Android without allowing models, workers, or Overtone to mutate canonical
+  Sample Lib metadata silently.
+machine_contract: protocol.json
+
+authority:
+  canonical_metadata: sample_lib
+  analysis_outputs: advisory_only
+  candidate_acceptance: normal_revision_checked_sync_mutation
+  performance_runtime: overtone
+  mediation: request_correlation_and_user_confirmation_not_metadata_authority
+
+capability:
+  semantic_ids:
+    - analysis.stems
+    - analysis.note_transcription
+    - analysis.speech_transcript
+    - analysis.tempo
+    - analysis.key
+    - analysis.structure
+    - analysis.related_tracks
+    - analysis.audio_safety
+  fields: [capability_id, label, availability, operations, input_scopes, output_kinds, estimated_cost, provider, status_reason, observed_at]
+  availability: [available, degraded, unavailable, unknown]
+  rule: android_branches_on_semantic_capability_not_provider_model_or_endpoint
+
+job:
+  schema: androidjtools.analysis-job/v1
+  fields: [job_id, analysis_run_id, correlation_id, capability_id, asset_id, interval_id, input_identity, state, progress, submitted_at, started_at, completed_at, result_refs, error]
+  states: [not_requested, queued, running, ready, partial, failed, cancelled, unavailable, stale]
+  ready_rule: required_media_and_evidence_are_registered_in_sample_lib_before_ready
+  error_rule: never_expose_worker_urls_paths_credentials_stdout_or_raw_request_bodies
+
+candidate:
+  schema: androidjtools.analysis-candidate/v1
+  fields: [candidate_id, analysis_run_id, asset_id, interval_id, kind, value, confidence, source, generated_at, input_identity, freshness, decision]
+  kinds: [bpm, key, cue, loop, region, transcript_marker, related_track, mix_prep]
+  decisions: [proposed, accepted, rejected, superseded]
+  freshness_states: [fresh, stale, unknown]
+  rules:
+    - multiple_candidates_may_coexist
+    - source_confidence_and_freshness_are_visible
+    - provider_family_is_provenance_not_dispatch_key
+    - stale_candidates_are_not_auto_applied
+    - accepted_means_authoritative_receipt_has_confirmed_the_normal_sync_mutation
+    - acceptance_provenance_retains_candidate_analysis_and_input_identity
+
+safety_finding:
+  schema: androidjtools.safety-finding/v1
+  categories: [loudness, clipping, spectral_outlier, silence, corrupted_media, speech_sensitive, other]
+  severities: [info, warning, blocking]
+  status: [active, acknowledged, resolved, stale]
+  rule: warning_or_blocking_findings_remain_visible_independently_of_candidate_ranking
+
+media_ref:
+  schema: androidjtools.media-ref/v1
+  fields: [resource_uri, file_id, parent_asset_id, analysis_run_id, role, stem_role, mime_type, duration_ms, content_sha256, byte_size]
+  durable_identity: resource_uri
+  host_paths: forbidden
+  signed_fetch_url: transport_material_not_identity
+
+transcript_marker:
+  schema: androidjtools.transcript-marker/v1
+  fields: [marker_id, candidate_id, asset_id, interval_id, start_ms, end_ms, text, language, speaker_label, confidence, source, freshness, durability]
+  durability: [proposal, accepted]
+  rule: asr_response_is_not_a_durable_marker_without_normal_sample_lib_mutation
+
+mediated_action_request:
+  schema: androidjtools.mediated-action-request/v1
+  fields: [request_id, correlation_id, requester, intent, target, proposal, reason, created_at, expires_at, state]
+  intents: [cue.confirm_set, loop.confirm_set, marker.confirm_set]
+  states: [received, validated, awaiting_user, mutation_queued, mutation_submitted, committed, needs_reconfirmation, rejected, expired, failed, requester_replied]
+  rules:
+    - request_id_is_requester_owned_and_idempotent
+    - same_request_id_different_material_content_is_conflict
+    - mediator_validates_target_identity_and_expected_opaque_revision_before_user_prompt
+    - user_acceptance_creates_fresh_normal_sync_mutation_with_request_and_correlation_provenance
+    - offline_acceptance_may_queue_but_requester_is_not_told_applied_before_authoritative_receipt
+    - conflict_is_never_auto_rebased_and_requires_reconfirmation
+    - every_terminal_path_produces_queryable_requester_reply
+
+requester_reply:
+  schema: androidjtools.mediated-action-reply/v1
+  dispositions: [pending, applied, no_op, rejected_by_user, expired, conflict, failed]
+  terminal: [applied, no_op, rejected_by_user, expired, conflict, failed]
+  rule: exactly_one_terminal_disposition_remains_queryable_by_request_id
+
+performance_after_commit:
+  rule: overtone_runtime_application_is_separate_from_sample_lib_commit
+  failure: performance_apply_failed_does_not_roll_back_or_repeat_canonical_mutation
+
+provider_boundaries:
+  - current_demucs_or_other_worker_details_may_be_preserved_server_side_as_provenance
+  - no_verified_canonical_asr_provider_is_claimed_by_this_contract
+  - future_asr_may_implement_the_same_semantic_capability_without_android_protocol_changes

@@ -1,0 +1,46 @@
+{
+  "contract_version": 1,
+  "provider_kinds": [
+    "FIXTURE",
+    "SAMPLE_LIB_SIMULATOR"
+  ],
+  "datasets": [
+    "NOMINAL",
+    "EMPTY",
+    "LARGE_LIBRARY",
+    "FAILURE"
+  ],
+  "network_states": [
+    "ONLINE",
+    "OFFLINE",
+    "DEGRADED"
+  ],
+  "sync_states": [
+    "UNCONFIGURED",
+    "DISCOVERED",
+    "PAIRING",
+    "ONLINE_IDLE",
+    "PULLING",
+    "PUSHING",
+    "PENDING_LOCAL",
+    "OFFLINE",
+    "DEGRADED",
+    "CONFLICT",
+    "AUTH_REQUIRED",
+    "SERVER_INCOMPATIBLE",
+    "LOCAL_MIGRATION_REQUIRED"
+  ],
+  "failure_modes": [
+    "NONE",
+    "PROVIDER_ERROR",
+    "CONFLICT",
+    "DOWNLOAD_FAILURE",
+    "MUTATION_REJECTED",
+    "AUTH_REQUIRED",
+    "SERVER_INCOMPATIBLE",
+    "LOCAL_MIGRATION_REQUIRED",
+    "BACKEND_UNHEALTHY"
+  ],
+  "large_library_size": 512,
+  "deterministic_seed": "androidjtools-debug-v1"
+}

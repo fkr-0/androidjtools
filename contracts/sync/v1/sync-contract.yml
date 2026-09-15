@@ -1,0 +1,139 @@
+schema: androidjtools.sync/v1
+status: synthesis-decision
+wire_schema: sync.schema.json
+machine_contract: protocol.json
+
+principles:
+  - sample_lib_is_canonical_authority
+  - backend_neutral
+  - offline_first
+  - entity_revisions_are_opaque
+  - server_change_sequence_is_not_an_entity_revision
+  - mutations_are_idempotent_per_negotiated_operation_family
+  - receipts_are_authoritative
+  - cursors_are_opaque
+  - cursor_expiry_is_explicit
+  - conflicts_are_explicit
+  - websocket_is_wakeup_hint_only
+  - intelligence_is_advisory_until_normal_mutation_receipt
+  - playlists_remain_read_only_until_canonical_playlist_identity_exists
+
+versioning:
+  protocol_versions: ["1"]
+  repair_policy: repair_unshipped_v1_in_place
+  negotiation: highest_mutually_supported_version
+  no_overlap: http_426_with_hello_incompatible_body
+  rule: clients_must_not_silently_downgrade_or_guess
+
+authority:
+  server: sample_lib
+  hello_identity: [server_id, authority_generation]
+  generation_rule: generation_change_invalidates_existing_cursors_and_requires_bootstrap
+  entity_revision:
+    wire_type: opaque_non_empty_string
+    allowed_client_operation: equality_only
+  server_change_revision:
+    wire_type: non_negative_integer
+    role: diagnostic_and_internal_feed_high_water_only
+    concurrency_authority: false
+
+endpoints:
+  hello: POST /v1/sync/hello
+  pull: POST /v1/sync/pull
+  push: POST /v1/sync/push
+  receipt: GET /v1/sync/receipts/{mutation_id}
+  websocket_optional: WS /v1/sync/events
+
+capability_negotiation:
+  generic_write_flag: forbidden
+  pull_families: [asset, interval, marker, tag, tag_attachment, analysis_suggestion]
+  mutation_families:
+    - interval.editor_state.replace
+    - asset.metadata.patch
+    - tag.ensure_attach
+    - tag.detach
+    - analysis.suggestion.accept
+  playlists: unsupported_until_canonical_playlist_migration
+  analysis: [suggestions.read]
+  media: [resource_uri, content_hash, range]
+
+client:
+  hello:
+    request_type: hello_request
+    response_types: [hello_accepted, hello_incompatible]
+    request_fields: [protocol_versions, client_id, installation_id, capabilities]
+    response_fields: [protocol_version, server_id, authority_generation, server_change_revision, capabilities, limits]
+  pull:
+    request_type: pull_request
+    response_types: [pull_response, pull_cursor_expired]
+    request_fields: [protocol_version, cursor, scopes, limit]
+    response_fields: [protocol_version, mode, next_cursor, has_more, changes, tombstones, authority_generation, server_change_revision]
+    local_atomicity: page_changes_tombstones_and_next_cursor_commit_together
+    reset: cursor_null_begins_snapshot
+  push:
+    request_type: push_request
+    response_type: push_response
+    request_fields: [protocol_version, client_id, mutations]
+    mutation_fields: [mutation_id, entity_type, entity_id, base_revision, operation, payload, created_at, provenance]
+    receipt_outcomes: [applied, no_op, rejected, conflict]
+
+mutation:
+  idempotency_identity: mutation_id
+  base_revision: opaque_string_or_null_only_when_operation_explicitly_allows_create
+  created_at: diagnostic_only
+  generic_create_update_delete: forbidden
+  replay_rule: same_mutation_id_and_same_canonical_body_returns_original_receipt_without_reapplying
+  collision_rule: same_mutation_id_with_different_body_is_rejected_as_idempotency_key_reused
+  batch_rule: serial_request_order_one_receipt_per_mutation_no_implied_cross_entity_atomicity
+
+receipt:
+  authoritative: true
+  recovery_endpoint: true
+  principal_scoped: true
+  outcomes:
+    applied: mutation_changed_authoritative_state
+    no_op: mutation_was_valid_but_authoritative_state_was_already_equivalent
+    rejected: mutation_was_invalid_unauthorized_unsupported_or_idempotency_key_reused
+    conflict: revision_or_structural_authority_requires_explicit_resolution
+
+conflict:
+  revision_fields: [base_revision, authoritative_revision]
+  revision_type: opaque_string_or_null
+  merge_classes: [safe_fieldwise, editor_aggregate, ordered_collection, delete_vs_edit, identity_conflict, incompatible_schema]
+  timestamp_last_write_wins: forbidden
+
+pull:
+  cursor: opaque_and_server_integrity_protected
+  modes: [snapshot, incremental]
+  tombstones: required_for_sync_visible_deletes
+  cursor_expired: explicit_response_requires_new_snapshot
+  snapshot_prune_rule: client_prunes_unseen_rows_only_after_final_snapshot_page_commits
+
+realtime:
+  role: wakeup_hint_only
+  transport: websocket_optional
+  rule: websocket_events_trigger_pull_and_never_replace_cursor_sync
+
+security:
+  pairing: explicit_operator_pairing
+  authenticated_principal_and_installation: server_derived_from_credential
+  non_loopback_transport: authenticated_tls_or_equivalent_private_transport
+  scopes: [sync.read, sync.write, media.read, analysis.read, analysis.request]
+  credentials_in_resource_uri_cursor_log_or_provenance: forbidden
+
+media:
+  durable_identity: resource_uri
+  integrity: content_sha256
+  resumable_when_advertised: byte_range
+  host_paths_on_mobile_boundary: forbidden
+
+intelligence:
+  candidates: advisory_only
+  acceptance: normal_revision_checked_sync_mutation
+  provenance: bounded_suggestion_analysis_evidence_reference
+  stale_candidate_auto_apply: forbidden
+
+retention_defaults:
+  tombstone_and_cursor_seconds: 7776000
+  mutation_receipt_replay_seconds: 31536000
+  rule: effective_horizons_are_advertised_by_hello_and_expiry_never_silently_rebases

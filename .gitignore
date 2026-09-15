@@ -5,5 +5,13 @@
 *.swo
 *.log
 *.tmp
+*.py[cod]
+__pycache__/
 .vscode/
 .idea/
+.gradle/
+.gradle-local/
+.ws-bridge/
+build/
+**/build/
+local.properties

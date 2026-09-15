@@ -1,0 +1,45 @@
+schema: androidjtools.release-evidence
+version: 1
+release:
+  version: 0.1.0
+  tag: v0.1.0
+  date: 2026-09-15
+  repository: fkr-0/androidjtools
+  branch: main
+  custom_docs_domain: androiddjtools.fkr.dev
+android:
+  version_code: 1
+  version_name: 0.1.0
+  artifact: app/build/outputs/apk/debug/app-debug.apk
+  artifact_source: github-actions-exact-release-revision
+verification:
+  local_required:
+    - protocol_fake_server_tests
+    - android_jvm_unit_tests
+    - android_test_source_compilation
+    - android_lint
+    - debug_apk_assembly
+    - mkdocs_strict_build
+    - git_diff_check
+  github_required:
+    - Android CI / verify-and-build-apk
+    - Documentation Pages / deploy
+evidence_boundaries:
+  device_or_avd_runtime: not_available
+  real_sample_lib: not_claimed
+  release_apk_kind: unsigned_debug_dogfood
+excluded_concurrent_namespaces:
+  - app/src/main/java/dev/androidjtools/prep/cues
+  - app/src/main/java/dev/androidjtools/prep/loops
+  - app/src/main/java/dev/androidjtools/prep/beatgrid
+  - app/src/main/java/dev/androidjtools/remote/samplelib
+  - app/src/main/java/dev/androidjtools/offline/download
+  - app/src/main/java/dev/androidjtools/interop
+publication:
+  repository_created: pending
+  main_pushed: pending
+  tag_pushed: pending
+  github_release_created: pending
+  ci_apk_attached: pending
+  pages_deployed: pending
+  godaddy_cname: pending

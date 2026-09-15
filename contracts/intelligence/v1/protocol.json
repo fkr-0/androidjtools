@@ -1,0 +1,40 @@
+{
+  "schema": "androidjtools.intelligence-contract",
+  "version": 1,
+  "authority": {
+    "canonical_metadata": "sample_lib",
+    "analysis_outputs": "advisory",
+    "acceptance": "normal_revision_checked_sync_mutation"
+  },
+  "capability_ids": [
+    "analysis.stems",
+    "analysis.note_transcription",
+    "analysis.speech_transcript",
+    "analysis.tempo",
+    "analysis.key",
+    "analysis.structure",
+    "analysis.related_tracks",
+    "analysis.audio_safety"
+  ],
+  "job_states": ["not_requested", "queued", "running", "ready", "partial", "failed", "cancelled", "unavailable", "stale"],
+  "candidate_freshness": ["fresh", "stale", "unknown"],
+  "candidate_decisions": ["proposed", "accepted", "rejected", "superseded"],
+  "safety_status": ["active", "acknowledged", "resolved", "stale"],
+  "mediated_action": {
+    "intents": ["cue.confirm_set", "loop.confirm_set", "marker.confirm_set"],
+    "states": ["received", "validated", "awaiting_user", "mutation_queued", "mutation_submitted", "committed", "needs_reconfirmation", "rejected", "expired", "failed", "requester_replied"],
+    "terminal_replies": ["applied", "no_op", "rejected_by_user", "expired", "conflict", "failed"],
+    "request_id_idempotent": true,
+    "conflict_auto_rebase": false,
+    "canonical_commit_required_before_applied_reply": true
+  },
+  "media": {
+    "durable_identity": "resource_uri",
+    "host_path_allowed": false,
+    "content_hash_required_for_offline_complete": true
+  },
+  "websocket": {
+    "authoritative": false,
+    "role": "wakeup_hint_only"
+  }
+}
