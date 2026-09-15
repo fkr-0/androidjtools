@@ -1,0 +1,21 @@
+version: 1
+name: androidjtools
+description: Cloudless Android DJ library preparation client for Sample Lib / Sample Lab, with fixture-first UI, offline mutation journal, sync state machine, DJXML interoperability, and parity-driven user stories.
+default_track: local
+shell: true
+sync_dir:
+  - .
+
+agent:
+  notes: |
+    Project created by ws-bridge create_project. Keep bridge.yml commands runnable from the project root.
+  tasks: []
+  changelog:
+    - Initialized project scaffold.
+
+commands:
+  list:
+    description: List project files
+    category: custom
+    cwd: .
+    run: ["find", ".", "-maxdepth", "2", "-type", "f"]
