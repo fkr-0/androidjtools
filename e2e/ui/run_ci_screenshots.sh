@@ -15,7 +15,9 @@ for image in \
   04-suggestions.png \
   05-sync.png
 do
-  adb exec-out run-as dev.androidjtools.debug cat "files/ui-screenshots/${image}" > "artifacts/ui-screenshots/${image}"
+  adb exec-out run-as dev.androidjtools.debug base64 "files/ui-screenshots/${image}" \
+    | tr -d '\r' \
+    | base64 --decode > "artifacts/ui-screenshots/${image}"
   test -s "artifacts/ui-screenshots/${image}"
 done
 

@@ -42,8 +42,9 @@ class LibraryScreenTest {
         compose.onNodeWithText("Filters").performClick()
         compose.onNodeWithText("Any availability").performClick()
         compose.onNodeWithText("2 of 3 tracks").assertIsDisplayed()
-        compose.onNodeWithText("Night Bus").assertIsDisplayed()
         compose.onNodeWithText("Dub Colony").assertIsDisplayed()
+        compose.onNodeWithTag("library-track-list").performScrollToIndex(1)
+        compose.onNodeWithText("Night Bus").assertIsDisplayed()
         compose.onAllNodesWithText("Concrete Flash").assertCountEquals(0)
     }
 
@@ -59,7 +60,7 @@ class LibraryScreenTest {
             }
         }
 
-        compose.onNodeWithTag("library-track-list").performScrollToIndex(2)
+        compose.onNodeWithTag("library-track-list").performScrollToIndex(1)
         compose.onNodeWithContentDescription("Open details for Dub Colony").performClick()
         compose.onNodeWithText("Track details").assertIsDisplayed()
 
@@ -78,6 +79,7 @@ class LibraryScreenTest {
             AndroidDjToolsTheme { LibraryScreen(providers) }
         }
 
+        compose.onNodeWithTag("library-track-list").performScrollToIndex(2)
         compose.onNodeWithTag("track-row-trk-001").assertIsDisplayed()
         compose.onNodeWithTag("track-artwork-trk-001").assertIsDisplayed()
         compose.onNodeWithTag("track-metadata-trk-001")

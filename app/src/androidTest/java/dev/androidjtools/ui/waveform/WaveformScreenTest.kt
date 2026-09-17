@@ -60,12 +60,13 @@ class WaveformScreenTest {
         compose.onNodeWithText("Beat jump").assertExists()
         compose.onNodeWithText("Gesture: pan/zoom").assertExists()
         compose.onNodeWithTag("waveform-grid-editor").assertExists()
-        compose.onNodeWithTag("grid-bpm-input").assertExists().assertTextContains("92.50")
+        compose.onNodeWithTag("grid-bpm-input").assertExists()
+        assertGridBpm("92.50")
         compose.onNodeWithTag("grid-anchor-input").assertExists()
         compose.onNodeWithTag("grid-half-bpm").assertExists().performClick()
-        compose.onNodeWithTag("grid-bpm-input").assertTextContains("46.25")
+        assertGridBpm("46.25")
         compose.onNodeWithTag("grid-double-bpm").assertExists().performClick()
-        compose.onNodeWithTag("grid-bpm-input").assertTextContains("92.50")
+        assertGridBpm("92.50")
     }
 
     @Test
@@ -127,8 +128,9 @@ class WaveformScreenTest {
         val afterScrub = providers.playback.positionMs.value
         assertNotEquals("Scrub gesture must seek playback", beforeScrub, afterScrub)
         assertTrue(afterScrub in 0L..244_000L)
-        compose.onNodeWithTag("waveform-time-zoom")
-            .assertTextContains(formatWaveformTime(afterScrub))
+        val expectedTime = formatWaveformTime(afterScrub)
+        val renderedStatus = waveformStatusText()
+        assertTrue("Expected '$expectedTime' in '$renderedStatus'", expectedTime in renderedStatus)
     }
 
     @Test
@@ -149,4 +151,13 @@ class WaveformScreenTest {
         .fetchSemanticsNode()
         .config[SemanticsProperties.Text]
         .joinToString(separator = "") { it.text }
+
+    private fun assertGridBpm(expected: String) {
+        compose.waitForIdle()
+        val actual = compose.onNodeWithTag("grid-bpm-input")
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.EditableText]
+            .text
+        assertTrue("Expected grid BPM '$expected', got '$actual'", expected in actual)
+    }
 }

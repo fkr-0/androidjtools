@@ -4,9 +4,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performClick
 import dev.androidjtools.core.model.BeatGrid
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -52,18 +53,18 @@ class BeatGridEditorTest {
         }
 
         compose.onNodeWithTag("beatgrid-half-bpm").assertIsEnabled().performClick()
-        compose.onNodeWithTag("beatgrid-staged-summary").assertTextContains("46.25 BPM")
+        assertTaggedTextContains("beatgrid-staged-summary", "46.25 BPM")
         compose.onNodeWithTag("beatgrid-double-bpm").assertIsEnabled().performClick()
-        compose.onNodeWithTag("beatgrid-staged-summary").assertTextContains("92.50 BPM")
+        assertTaggedTextContains("beatgrid-staged-summary", "92.50 BPM")
 
         compose.onNodeWithTag("beatgrid-set-downbeat-at-playhead").performClick()
-        compose.onNodeWithTag("beatgrid-staged-summary").assertTextContains("2000 ms")
+        assertTaggedTextContains("beatgrid-staged-summary", "2000 ms")
         compose.onNodeWithTag("beatgrid-phase-forward").performClick()
-        compose.onNodeWithTag("beatgrid-staged-summary").assertTextContains("2010 ms")
+        assertTaggedTextContains("beatgrid-staged-summary", "2010 ms")
 
         compose.onNodeWithTag("beatgrid-accept-candidate").performClick()
-        compose.onNodeWithTag("beatgrid-staged-summary").assertTextContains("128.00 BPM")
-        compose.onNodeWithTag("beatgrid-staged-summary").assertTextContains("250 ms")
+        assertTaggedTextContains("beatgrid-staged-summary", "128.00 BPM")
+        assertTaggedTextContains("beatgrid-staged-summary", "250 ms")
         compose.onNodeWithTag("beatgrid-pending-edit").assertIsDisplayed()
         compose.onNodeWithText("Pending local beatgrid edit · canonical state is unchanged until a receipt is accepted.").assertIsDisplayed()
 
@@ -94,13 +95,22 @@ class BeatGridEditorTest {
         }
 
         compose.onNodeWithTag("beatgrid-phase-forward").performClick()
-        compose.onNodeWithTag("beatgrid-staged-summary").assertTextContains("10 ms")
+        assertTaggedTextContains("beatgrid-staged-summary", "10 ms")
         compose.onNodeWithTag("beatgrid-undo").performClick()
-        compose.onNodeWithTag("beatgrid-staged-summary").assertTextContains("0 ms")
+        assertTaggedTextContains("beatgrid-staged-summary", "0 ms")
 
         compose.onNodeWithTag("beatgrid-double-bpm").performClick()
         compose.onNodeWithTag("beatgrid-cancel").performClick()
-        compose.onNodeWithTag("beatgrid-staged-summary").assertTextContains("120.00 BPM")
+        assertTaggedTextContains("beatgrid-staged-summary", "120.00 BPM")
         compose.runOnIdle { assertEquals(canonical, state.canonical) }
+    }
+
+    private fun assertTaggedTextContains(tag: String, expected: String) {
+        compose.waitForIdle()
+        val actual = compose.onNodeWithTag(tag)
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.Text]
+            .joinToString(separator = "") { it.text }
+        assertTrue("Expected '$expected' in '$actual' for $tag", expected in actual)
     }
 }

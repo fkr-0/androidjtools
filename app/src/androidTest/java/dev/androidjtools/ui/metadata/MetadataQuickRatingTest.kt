@@ -44,7 +44,8 @@ class MetadataQuickRatingTest {
         val tags = compose.onNodeWithText("Tags (namespace:value, comma separated)")
         tags.performScrollTo().performTextReplacement("mood:late-night")
         compose.onNodeWithText("Save locally").assertIsEnabled().performClick()
-        compose.onNodeWithText("Clean").assertExists()
+        compose.waitForIdle()
+        compose.onNodeWithText("Queued locally for Night Bus:", substring = true).assertExists()
 
         tags.performTextReplacement("late-night")
         compose.onNodeWithText("Use namespaced tags such as mood:late-night").assertExists()
