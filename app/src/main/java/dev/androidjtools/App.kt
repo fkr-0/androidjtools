@@ -20,6 +20,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -73,6 +75,9 @@ fun AndroidDjToolsApp(
                 NavigationBar {
                     destinations.forEachIndexed { index, destination ->
                         NavigationBarItem(
+                            modifier = Modifier.semantics {
+                                contentDescription = destination.label
+                            },
                             selected = currentRoute == destination.route,
                             onClick = {
                                 playerExpanded = false
