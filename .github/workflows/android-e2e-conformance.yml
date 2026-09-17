@@ -60,7 +60,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
-            set -euo pipefail
+            set -eu
             mkdir -p artifacts/e2e
             adb shell cmd uimode night no || true
             adb shell settings put system font_scale 1.0
