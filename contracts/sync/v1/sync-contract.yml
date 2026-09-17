@@ -85,6 +85,8 @@ mutation:
   replay_rule: same_mutation_id_and_same_canonical_body_returns_original_receipt_without_reapplying
   collision_rule: same_mutation_id_with_different_body_is_rejected_as_idempotency_key_reused
   batch_rule: serial_request_order_one_receipt_per_mutation_no_implied_cross_entity_atomicity
+  operation_merge_safe_fields:
+    asset.metadata.patch: [title, artist, album, genre, year, rating, key, bpm, energy, tags, comments, mixInNote, mixOutNote, preparationNote]
 
 receipt:
   authoritative: true
@@ -100,6 +102,8 @@ conflict:
   revision_fields: [base_revision, authoritative_revision]
   revision_type: opaque_string_or_null
   merge_classes: [safe_fieldwise, editor_aggregate, ordered_collection, delete_vs_edit, identity_conflict, incompatible_schema]
+  safe_fieldwise_authority_field: merge_safe_fields
+  safe_fieldwise_rule: local_and_remote_changed_fields_must_be_disjoint_and_each_present_in_operation_declared_merge_safe_fields
   timestamp_last_write_wins: forbidden
 
 pull:

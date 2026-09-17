@@ -39,7 +39,11 @@
     "generic_crud_allowed": false,
     "operation_contracts": {
       "interval.editor_state.replace": {"entity_types": ["interval"], "base_revision_policy": "required_existing"},
-      "asset.metadata.patch": {"entity_types": ["asset"], "base_revision_policy": "required_existing"},
+      "asset.metadata.patch": {
+        "entity_types": ["asset"],
+        "base_revision_policy": "required_existing",
+        "merge_safe_fields": ["title", "artist", "album", "genre", "year", "rating", "key", "bpm", "energy", "tags", "comments", "mixInNote", "mixOutNote", "preparationNote"]
+      },
       "tag.ensure_attach": {"entity_types": ["tag_attachment"], "base_revision_policy": "must_be_null_create_or_ensure"},
       "tag.detach": {"entity_types": ["tag_attachment"], "base_revision_policy": "required_existing"},
       "analysis.suggestion.accept": {"entity_types": ["asset", "interval"], "base_revision_policy": "required_existing"}
@@ -50,6 +54,7 @@
   },
   "receipt_outcomes": ["applied", "no_op", "rejected", "conflict"],
   "conflict_merge_classes": ["safe_fieldwise", "editor_aggregate", "ordered_collection", "delete_vs_edit", "identity_conflict", "incompatible_schema"],
+  "conflict_merge_authority_field": "merge_safe_fields",
   "sync_states": {
     "compatible": {"endpoint": "hello", "effect": "negotiation succeeds"},
     "up_to_date": {"endpoint": "pull", "effect": "empty incremental change set"},

@@ -6,6 +6,7 @@ import dev.androidjtools.core.model.BeatGrid
 import dev.androidjtools.core.model.Cue
 import dev.androidjtools.core.model.Loop
 import dev.androidjtools.core.model.MutationReceipt
+import dev.androidjtools.core.model.OfflineCacheSummary
 import dev.androidjtools.core.model.PendingMutation
 import dev.androidjtools.core.model.Playlist
 import dev.androidjtools.core.model.SyncState
@@ -57,7 +58,15 @@ interface PlaylistProvider {
 }
 
 interface DownloadProvider {
+    val cacheSummary: StateFlow<OfflineCacheSummary>
     fun state(trackId: String): StateFlow<TrackDownloadState>
+    fun pinTrack(trackId: String)
+    fun unpinTrack(trackId: String)
+    fun pinPlaylist(playlistId: String)
+    fun unpinPlaylist(playlistId: String)
+    fun retry(trackId: String)
+    fun cancel(trackId: String)
+    fun pruneUnpinned()
 }
 
 interface MutationJournalProvider {

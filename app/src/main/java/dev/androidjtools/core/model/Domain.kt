@@ -49,7 +49,7 @@ data class Playlist(
     val ruleSummary: String? = null,
 )
 
-enum class DownloadStatus { NOT_DOWNLOADED, QUEUED, DOWNLOADING, AVAILABLE, FAILED }
+enum class DownloadStatus { NOT_DOWNLOADED, QUEUED, DOWNLOADING, AVAILABLE, FAILED, CANCELLED, CORRUPT }
 
 data class TrackDownloadState(
     val trackId: String,
@@ -58,6 +58,14 @@ data class TrackDownloadState(
     val bytesDownloaded: Long = 0,
     val totalBytes: Long? = null,
     val error: String? = null,
+)
+
+data class OfflineCacheSummary(
+    val usedBytes: Long = 0L,
+    val maxBytes: Long = 0L,
+    val evictableBytes: Long = 0L,
+    val pinnedTrackIds: Set<String> = emptySet(),
+    val pinnedPlaylistIds: Set<String> = emptySet(),
 )
 
 data class PendingMutation(

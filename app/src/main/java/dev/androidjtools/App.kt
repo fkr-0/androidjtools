@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Icon
@@ -30,6 +31,7 @@ import dev.androidjtools.playback.PlayerQueueController
 import dev.androidjtools.ui.analysis.AnalysisScreen
 import dev.androidjtools.ui.collections.CollectionsScreen
 import dev.androidjtools.ui.library.LibraryScreen
+import dev.androidjtools.ui.offline.OfflineScreen
 import dev.androidjtools.ui.player.PlayerHost
 import dev.androidjtools.ui.sync.SyncScreen
 import dev.androidjtools.ui.waveform.WaveformScreen
@@ -48,6 +50,7 @@ fun AndroidDjToolsApp(
         Destination("collections", "Lists"),
         Destination("waveform", "Prep"),
         Destination("analysis", "Suggest"),
+        Destination("offline", "Offline"),
         Destination("sync", "Sync"),
     )
     val currentRoute = nav.currentBackStackEntryAsState().value?.destination?.route
@@ -81,6 +84,7 @@ fun AndroidDjToolsApp(
                                     1 -> Icons.AutoMirrored.Filled.QueueMusic
                                     2 -> Icons.Default.GraphicEq
                                     3 -> Icons.Default.Lightbulb
+                                    4 -> Icons.Default.CloudOff
                                     else -> Icons.Default.Sync
                                 }
                                 Icon(image, contentDescription = destination.label)
@@ -97,6 +101,7 @@ fun AndroidDjToolsApp(
             composable("collections") { CollectionsScreen(providers) }
             composable("waveform") { WaveformScreen(providers) }
             composable("analysis") { AnalysisScreen(providers) }
+            composable("offline") { OfflineScreen(providers) }
             composable("sync") { SyncScreen(providers) }
         }
     }

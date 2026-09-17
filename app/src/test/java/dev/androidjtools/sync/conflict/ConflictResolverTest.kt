@@ -6,12 +6,13 @@ import org.junit.Test
 
 class ConflictResolverTest {
     @Test
-    fun `safe fieldwise server label does not invent field authority`() {
+    fun `authoritative safe fieldwise disjoint edits auto merge including deletion`() {
         val conflict = ConflictCase(
             mutationId = "mutation-100",
             mergeClass = ConflictMergeClass.SAFE_FIELDWISE,
-            localChanges = mapOf("rating" to "5"),
-            remoteChanges = mapOf("comment" to "remote"),
+            localChanges = mapOf("rating" to "5", "comments" to null),
+            remoteChanges = mapOf("genre" to "garage"),
+            mergeSafeFields = setOf("rating", "comments", "genre"),
             code = "independent_fields",
             baseRevision = "rev:base",
             authoritativeRevision = "rev:remote",
@@ -19,7 +20,12 @@ class ConflictResolverTest {
 
         val resolution = ConflictResolver.resolve(conflict)
 
-        assertRequiresUser(conflict, resolution)
+        assertEquals(
+            ConflictResolution.AutoMerged(
+                mapOf("genre" to "garage", "rating" to "5", "comments" to null),
+            ),
+            resolution,
+        )
     }
 
     @Test
@@ -29,24 +35,32 @@ class ConflictResolverTest {
             ConflictMergeClass.SAFE_FIELDWISE,
             localChanges = mapOf("rating" to "5"),
             remoteChanges = mapOf("rating" to "3"),
+            mergeSafeFields = setOf("rating"),
             code = "same_field",
         )
         assertRequiresUser(conflict, ConflictResolver.resolve(conflict))
     }
 
     @Test
-    fun `caller cannot supply a manufactured safe field allowlist`() {
-        val parameterNames = ConflictCase::class.java.declaredFields.map { it.name }.toSet()
-        assertTrue("approvedIndependentFields" !in parameterNames)
-
-        val conflict = ConflictCase(
-            "mutation-102",
+    fun `safe label without authoritative fields and undeclared fields fail closed`() {
+        val noAuthority = ConflictCase(
+            "mutation-102a",
             ConflictMergeClass.SAFE_FIELDWISE,
             localChanges = mapOf("title" to "local"),
             remoteChanges = mapOf("rating" to "3"),
+            code = "missing_merge_authority",
+        )
+        assertRequiresUser(noAuthority, ConflictResolver.resolve(noAuthority))
+
+        val undeclared = ConflictCase(
+            "mutation-102b",
+            ConflictMergeClass.SAFE_FIELDWISE,
+            localChanges = mapOf("title" to "local"),
+            remoteChanges = mapOf("rating" to "3"),
+            mergeSafeFields = setOf("rating"),
             code = "field_not_declared_safe_by_protocol",
         )
-        assertRequiresUser(conflict, ConflictResolver.resolve(conflict))
+        assertRequiresUser(undeclared, ConflictResolver.resolve(undeclared))
     }
 
     @Test
@@ -64,6 +78,7 @@ class ConflictResolverTest {
                 mergeClass = mergeClass,
                 localChanges = mapOf("range" to "10-20"),
                 remoteChanges = mapOf("range" to "15-25"),
+                mergeSafeFields = setOf("range"),
                 code = mergeClass.name.lowercase(),
                 baseRevision = "rev:base",
                 authoritativeRevision = "rev:remote",

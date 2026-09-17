@@ -1,0 +1,104 @@
+{
+  "schema": "androidjtools.release-evidence/v1",
+  "release": "v0.1.1",
+  "release_date": "2026-09-17",
+  "authorization": "User explicitly authorized patch version bump, changelog, commit, push, and tag as far as release gates permit. GitHub Release publication was not requested.",
+  "base_commit": "aca6d131c16d7094a38e8cee3752d710f6561a24",
+  "target_ref": "refs/tags/v0.1.1",
+  "version": {
+    "version_name": "0.1.1",
+    "version_code": 2
+  },
+  "checks": {
+    "release_metadata_consistency": "passed",
+    "release_critical_independent_review": {
+      "status": "passed",
+      "packet_id": "553de827-32ed-4686-ba50-b1550d1213f5",
+      "reviewer_worker": "release-integrator-20260917",
+      "author_worker": "lane-b-sync-resilience-20260917",
+      "reviewer_independent": true
+    },
+    "test_server_unittest": {
+      "status": "passed",
+      "tests": 36,
+      "core_protocol_tests": 29,
+      "authenticated_samplelib_http_tests": 7,
+      "ci_discovery_fix": "android-ci.yml now executes both unittest roots so the authenticated Sample Lib HTTP suite cannot be silently omitted"
+    },
+    "real_sample_lib_djxml": {
+      "status": "passed",
+      "consecutive_pre_release_passes": 2,
+      "integrated_release_pass": true,
+      "adapter_tests_passed": true,
+      "playlist_authority_tests_passed": true,
+      "canonical_playlist_identity_and_order": true,
+      "playlist_round_trip": "qualified",
+      "android_real_round_trip": "qualified",
+      "missing_production_sync_routes": []
+    },
+    "android_gradle": {
+      "status": "passed",
+      "tasks": [
+        ":app:testDebugUnitTest",
+        ":app:compileDebugAndroidTestKotlin",
+        ":app:lintDebug",
+        ":app:assembleDebug",
+        ":app:assembleDebugAndroidTest",
+        ":app:assembleRelease"
+      ]
+    },
+    "ui_host_runner": "passed_host_build_gate_device_pending",
+    "core_real_system_probe": {
+      "status": "blocked",
+      "blocker": "no_attached_android_device",
+      "real_sample_lib": "qualified"
+    },
+    "parity_matrix": {
+      "qualified": false,
+      "required_stories": 87,
+      "pass": 49,
+      "partial": 13,
+      "blocked": 25,
+      "missing": 0,
+      "fail": 0,
+      "snapshot_phase": "2026-09-17 integrated convergence",
+      "policy": "Not promoted into a full-product-parity claim for v0.1.1. Remaining non-pass stories are explicit higher-tier/device blockers; real Sample Lib qualification is green, but hosted CI and a real Android target are distinct evidence tiers."
+    },
+    "git_diff_check": "passed",
+    "actionlint": "passed",
+    "apk_zip_integrity": "passed"
+  },
+  "artifact": {
+    "path": "app/build/outputs/apk/debug/app-debug.apk",
+    "kind": "unsigned-debug-dogfood-apk",
+    "size_bytes": 111050517,
+    "sha256": "3bb8fbe1e549c2afea05847290d422eb7ef80fb6c778c23d1ebd23ad426c7164"
+  },
+  "reviewed_packets": {
+    "ci_screenshots": "3f2ffe53-3726-4fa0-8c87-db82428772df",
+    "estimator_advisory_transport": "295dc157-d796-4a4d-824f-b3c098bf70f8",
+    "player_media3_shell": "faa50207-8efc-4efb-a989-7cba243b0df6",
+    "beatgrid_prep_route": "e94e96fe-a539-4406-8c69-61add6e36977",
+    "cues_loops": "5a012762-a280-46a1-94d6-2fa38d3721ed",
+    "djxml_interop": "cb2eba72-307c-4ed8-99c3-135f9f48fa64",
+    "us113_safe_fieldwise_conflict": "8717c94e-eb69-4c0a-b577-4470ea457a40",
+    "lane_b_offline_sync_resilience": "553de827-32ed-4686-ba50-b1550d1213f5"
+  },
+  "publication": {
+    "authorized": true,
+    "status_at_commit": "pending_push_hosted_ci_and_tag",
+    "postflight_required": [
+      "origin/main contains release commit",
+      "hosted Android CI and API-35 screenshot jobs pass for the release commit",
+      "tag resolves to release commit",
+      "origin/v0.1.1 resolves to release commit",
+      "local debug APK hash matches this evidence"
+    ]
+  },
+  "known_warnings": [
+    "AGP 8.5.2 warns that compileSdk 35 is newer than its certified compileSdk 34 range.",
+    "No ready adb device was attached during local release qualification; the healthy SDK adb reported zero targets.",
+    "Parity matrix contains explicit partial/blocked stories and is not claimed complete.",
+    "Hosted API-35 CI evidence is pending until the release-preparation commit is pushed."
+  ]
+}

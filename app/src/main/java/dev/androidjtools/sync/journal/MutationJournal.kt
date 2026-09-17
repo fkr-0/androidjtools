@@ -1,5 +1,13 @@
 package dev.androidjtools.sync.journal
 
+import dev.androidjtools.remote.samplelib.MutationDelivery
+import dev.androidjtools.remote.samplelib.MutationOperation
+import dev.androidjtools.remote.samplelib.MutationReceipt
+import dev.androidjtools.remote.samplelib.OpaqueRevision
+import dev.androidjtools.remote.samplelib.ReceiptOutcome
+import dev.androidjtools.remote.samplelib.SampleLibClient
+import dev.androidjtools.remote.samplelib.SampleLibMutation
+import dev.androidjtools.remote.samplelib.SampleLibSession
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -142,6 +150,11 @@ class DurableMutationJournal(
         current.copy(state = JournalMutationState.APPLYING)
     }
 
+    fun markPending(mutationId: String): JournalMutation = update(mutationId) { current ->
+        require(current.receipt == null) { "terminal mutation cannot return to pending" }
+        current.copy(state = JournalMutationState.PENDING)
+    }
+
     fun recordReceipt(receipt: JournalReceipt): JournalMutation = update(receipt.mutationId) { current ->
         current.receipt?.let { existing ->
             require(existing == receipt) { "authoritative receipt changed for ${receipt.mutationId}" }
@@ -201,6 +214,110 @@ class DurableMutationJournal(
         },
     )
 }
+
+/**
+ * Applies canonical success receipts to the Android-side canonical projection.
+ * Implementations must be idempotent: a crash after this callback but before the journal
+ * receipt write intentionally causes the same authoritative receipt to be applied again.
+ */
+fun interface CanonicalMutationReconciler {
+    fun reconcile(receipt: MutationReceipt)
+}
+
+data class JournalReplayRecord(
+    val mutationId: String,
+    val state: JournalMutationState,
+    val authoritativeReceipt: MutationReceipt? = null,
+    val pendingReason: String? = null,
+)
+
+/**
+ * Durable bridge from offline mutation intent to Sample Lib authority.
+ *
+ * The journal is marked APPLYING before network I/O. Pending deliveries stay replayable with
+ * the same immutable mutation ID/body. Confirmed success is reconciled locally before the
+ * authoritative receipt is durably recorded; therefore a crash at either boundary is recovered
+ * by exact idempotent replay instead of inventing a replacement mutation.
+ */
+class SampleLibMutationJournalReplayer(
+    private val journal: DurableMutationJournal,
+    private val client: SampleLibClient,
+    private val canonicalReconciler: CanonicalMutationReconciler = CanonicalMutationReconciler { },
+) {
+    suspend fun replay(session: SampleLibSession, limit: Int = Int.MAX_VALUE): List<JournalReplayRecord> {
+        require(limit > 0)
+        val results = mutableListOf<JournalReplayRecord>()
+        for (queued in journal.replayBatch(limit)) {
+            val applying = journal.markApplying(queued.mutationId)
+            when (val delivery = client.pushWithRecovery(session, applying.toSampleLibMutation())) {
+                is MutationDelivery.Confirmed -> {
+                    val receipt = delivery.receipt
+                    if (receipt.outcome == ReceiptOutcome.APPLIED || receipt.outcome == ReceiptOutcome.NO_OP) {
+                        canonicalReconciler.reconcile(receipt)
+                    }
+                    val recorded = journal.recordReceipt(receipt.toJournalReceipt())
+                    results += JournalReplayRecord(
+                        mutationId = recorded.mutationId,
+                        state = recorded.state,
+                        authoritativeReceipt = receipt,
+                    )
+                }
+                is MutationDelivery.Pending -> {
+                    // Do not overtake unresolved intent. Returning to PENDING is itself durable;
+                    // if that write fails, APPLYING still recovers to PENDING after process restart.
+                    val pending = journal.markPending(applying.mutationId)
+                    results += JournalReplayRecord(
+                        mutationId = pending.mutationId,
+                        state = pending.state,
+                        pendingReason = delivery.reason,
+                    )
+                    break
+                }
+            }
+        }
+        return results
+    }
+}
+
+private fun JournalMutation.toSampleLibMutation(): SampleLibMutation {
+    val wireOperation = MutationOperation.values().firstOrNull { it.wireName == operation }
+        ?: throw IllegalArgumentException("unsupported mutation operation $operation")
+    val payload = Json.parseToJsonElement(canonicalPayload) as? JsonObject
+        ?: throw IllegalStateException("journal payload is not a JSON object")
+    val provenance = Json.parseToJsonElement(canonicalProvenance) as? JsonObject
+        ?: throw IllegalStateException("journal provenance is not a JSON object")
+    return SampleLibMutation(
+        mutationId = mutationId,
+        entityType = entityType,
+        entityId = entityId,
+        baseRevision = baseRevision?.let(::OpaqueRevision),
+        operation = wireOperation,
+        payload = payload,
+        createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
+        provenance = provenance,
+    )
+}
+
+private fun MutationReceipt.toJournalReceipt(): JournalReceipt = JournalReceipt(
+    mutationId = mutationId,
+    outcome = when (outcome) {
+        ReceiptOutcome.APPLIED -> JournalReceiptOutcome.APPLIED
+        ReceiptOutcome.NO_OP -> JournalReceiptOutcome.NO_OP
+        ReceiptOutcome.REJECTED -> JournalReceiptOutcome.REJECTED
+        ReceiptOutcome.CONFLICT -> JournalReceiptOutcome.CONFLICT
+    },
+    entityRevision = entityRevision?.value,
+    detail = error?.let { "${it.code}: ${it.message}" },
+    conflict = conflict?.let { evidence ->
+        JournalConflict(
+            code = evidence.code,
+            mergeClass = evidence.mergeClass,
+            authoritativeRevision = evidence.authoritativeRevision?.value,
+            localValueJson = evidence.localValue?.toString(),
+            remoteValueJson = evidence.remoteValue?.toString(),
+        )
+    },
+)
 
 object ProtocolOperationPolicy {
     fun validate(operation: String, entityType: String, baseRevision: String?) {

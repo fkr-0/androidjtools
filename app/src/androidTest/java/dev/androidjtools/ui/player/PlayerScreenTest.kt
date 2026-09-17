@@ -1,10 +1,14 @@
 package dev.androidjtools.ui.player
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.core.model.Track
 import dev.androidjtools.fixture.FixtureAppProviders
@@ -43,6 +47,46 @@ class PlayerScreenTest {
         compose.onNodeWithTag("mini-player").assertExists()
         compose.onNodeWithText("Night Bus").assertExists()
         compose.onNodeWithContentDescription("Pause").assertExists()
+    }
+
+    @Test
+    fun miniAndFullPlayer_keepTransportAndSeekContinuityAcrossExpansion() {
+        val providers = FixtureAppProviders.create(FixtureScenario.NOMINAL)
+        val controller = PlayerQueueController(providers.playback, InMemoryQueueStateStore())
+        controller.playNow("trk-001")
+        controller.seek(61_000)
+        var expanded by mutableStateOf(false)
+
+        compose.setContent {
+            MaterialTheme {
+                PlayerHost(
+                    providers = providers,
+                    controller = controller,
+                    expanded = expanded,
+                    onExpand = { expanded = true },
+                    onCollapse = { expanded = false },
+                    onJumpToPrep = {},
+                )
+            }
+        }
+
+        compose.onNodeWithTag("mini-player").assertExists()
+        compose.onNodeWithText("Night Bus").assertExists()
+        compose.onNodeWithContentDescription("Pause").assertExists()
+        compose.onNodeWithTag("mini-open").performClick()
+
+        compose.onNodeWithTag("full-player").assertExists()
+        compose.onNodeWithText("1:01").assertExists()
+        compose.onNodeWithContentDescription("Pause").assertExists()
+        compose.onNodeWithContentDescription("Close player").performClick()
+
+        compose.onNodeWithTag("mini-player").assertExists()
+        compose.onNodeWithTag("mini-toggle").performClick()
+        compose.onNodeWithContentDescription("Play").assertExists()
+        compose.onNodeWithTag("mini-open").performClick()
+        compose.onNodeWithTag("full-player").assertExists()
+        compose.onNodeWithText("1:01").assertExists()
+        compose.onNodeWithContentDescription("Play").assertExists()
     }
 
     @Test

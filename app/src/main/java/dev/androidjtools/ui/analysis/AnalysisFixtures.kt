@@ -12,14 +12,16 @@ object AnalysisAssistantFixtures {
         val keyB = candidate("key-b", SuggestionKind.KEY, "8B / C major", sourceB, 0.62)
         val cue = candidate("cue-drop", SuggestionKind.CUE, "Detected drop", sourceA, 0.89, startMs = 31_820)
         val loop = candidate("loop-break", SuggestionKind.LOOP, "Break loop", sourceA, 0.82, startMs = 62_000, endMs = 70_000)
+        val region = candidate("region-break", SuggestionKind.REGION, "Break region", sourceA, 0.84, startMs = 62_000, endMs = 78_000)
         val transcript = candidate("phrase-a", SuggestionKind.TRANSCRIPT_MARKER, "“bring it back”", SuggestionProvenanceUi("comfyui-asr", "whisper-workflow", "1"), 0.81, startMs = 46_000)
         val stem = candidate("stem-drums", SuggestionKind.STEM, "Drums stem", SuggestionProvenanceUi("demucs", "htdemucs", "4"), 0.99)
-        val related = candidate("related-a", SuggestionKind.RELATED_TRACK, "Night Bus", sourceA, 0.78)
+        val related = candidate("related-a", SuggestionKind.RELATED_TRACK, "Night Bus", sourceA, 0.78, detail = "bpm · key · energy")
         val groups = listOf(
             CandidateGroupUi(SuggestionKind.BPM, "Tempo", listOf(bpmA, bpmB)),
             CandidateGroupUi(SuggestionKind.KEY, "Key", listOf(keyA, keyB)),
             CandidateGroupUi(SuggestionKind.CUE, "Cue points", listOf(cue)),
             CandidateGroupUi(SuggestionKind.LOOP, "Loops", listOf(loop)),
+            CandidateGroupUi(SuggestionKind.REGION, "Regions", listOf(region)),
             CandidateGroupUi(SuggestionKind.STEM, "Stems", listOf(stem)),
             CandidateGroupUi(SuggestionKind.TRANSCRIPT_MARKER, "Transcript & phrases", listOf(transcript)),
             CandidateGroupUi(SuggestionKind.RELATED_TRACK, "Related tracks", listOf(related)),
@@ -61,6 +63,7 @@ object AnalysisAssistantFixtures {
                 TimelineAnalysisItemUi(cue.id, 31_820, label = cue.value, kind = cue.kind, stale = false),
                 TimelineAnalysisItemUi(transcript.id, 46_000, label = transcript.value, kind = transcript.kind, stale = false),
                 TimelineAnalysisItemUi(loop.id, 62_000, 70_000, loop.value, loop.kind, stale = false),
+                TimelineAnalysisItemUi(region.id, 62_000, 78_000, region.value, region.kind, stale = false),
             ),
             partialFailure = true,
         )
@@ -92,12 +95,14 @@ object AnalysisAssistantFixtures {
         stale: Boolean = false,
         startMs: Long? = null,
         endMs: Long? = null,
+        detail: String? = null,
     ) = CandidateUi(
         id = id,
         trackId = "trk-fixture",
         kind = kind,
         title = kind.name,
         value = value,
+        detail = detail,
         confidence = confidence,
         provenance = source,
         inputRevision = 42,

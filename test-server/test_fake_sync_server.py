@@ -63,7 +63,18 @@ class FakeSyncServerTests(unittest.TestCase):
         self.assertEqual("conflict", receipt["outcome"])
         self.assertEqual("rev:asset-1:6", receipt["conflict"]["base_revision"])
         self.assertEqual("rev:asset-1:7", receipt["conflict"]["authoritative_revision"])
-        self.assertEqual({"title": "Fixture One", "rating": 3}, receipt["conflict"]["remote_value"])
+        self.assertEqual({"rating": 3}, receipt["conflict"]["remote_value"])
+        self.assertIn("rating", receipt["conflict"]["merge_safe_fields"])
+
+    def test_safe_fieldwise_receipt_exposes_authoritative_merge_fields_for_disjoint_edits(self) -> None:
+        server = FakeSyncServer()
+        local = mutation("safe-disjoint", base_revision="rev:asset-1:6", payload={"title": "Local title"})
+        conflict = server.push(push_request(local))["receipts"][0]["conflict"]
+        self.assertEqual("safe_fieldwise", conflict["merge_class"])
+        self.assertEqual({"title": "Local title"}, conflict["local_value"])
+        self.assertEqual({"rating": 3}, conflict["remote_value"])
+        self.assertIn("title", conflict["merge_safe_fields"])
+        self.assertIn("rating", conflict["merge_safe_fields"])
 
     def test_equal_authoritative_patch_produces_no_op(self) -> None:
         server = FakeSyncServer()
@@ -99,6 +110,50 @@ class FakeSyncServerTests(unittest.TestCase):
         self.assertEqual("snapshot", body["mode"])
         self.assertFalse(body["has_more"])
         self.assertEqual(expected, observed)
+
+    def test_analysis_suggestion_scope_exposes_sanitized_bpm_and_key_candidates(self) -> None:
+        server = FakeSyncServer()
+        body = server.pull({"type": "pull_request", "protocol_version": "1", "cursor": None, "scopes": ["analysis_suggestion"], "limit": 100})
+        self.assertEqual(3, len(body["changes"]))
+        candidates = {item["value"]["kind"]: item for item in body["changes"]}
+        self.assertEqual({"bpm", "key", "related_track"}, set(candidates))
+        bpm = candidates["bpm"]["value"]
+        self.assertEqual(92.48, bpm["value"])
+        self.assertEqual("rev:asset-1:7", bpm["input_identity"]["revision"])
+        self.assertEqual("essentia-rhythm", bpm["source"]["model"])
+        self.assertEqual(["bpm", "key", "energy"], candidates["related_track"]["value"]["value"]["dimensions"])
+        serialized = json.dumps(body)
+        for forbidden in ("worker_url", "storage_relpath", "credential", "access_token"):
+            self.assertNotIn(forbidden, serialized)
+
+    def test_analysis_accept_updates_canonical_bpm_only_after_revision_checked_push(self) -> None:
+        server = FakeSyncServer()
+        item = mutation(
+            "analysis-accept-0001",
+            operation="analysis.suggestion.accept",
+            payload={
+                "candidate_id": "candidate-bpm-1",
+                "analysis_run_id": "analysis-run-fixture-1",
+                "kind": "bpm",
+                "value": 92.48,
+                "input_identity": {"entity_type": "asset", "entity_id": "asset-1", "revision": "rev:asset-1:7"},
+            },
+        )
+        self.assertNotIn("bpm", server.entities[("asset", "asset-1")]["value"])
+        receipt = server.push(push_request(item))["receipts"][0]
+        self.assertEqual("applied", receipt["outcome"])
+        self.assertEqual(92.48, receipt["canonical"]["bpm"])
+        self.assertEqual(92.48, server.entities[("asset", "asset-1")]["value"]["bpm"])
+
+        stale = mutation(
+            "analysis-accept-stale",
+            base_revision="rev:asset-1:7",
+            operation="analysis.suggestion.accept",
+            payload={"candidate_id": "candidate-key-1", "analysis_run_id": "analysis-run-fixture-1", "kind": "key", "value": "8A"},
+        )
+        conflict = server.push(push_request(stale))["receipts"][0]
+        self.assertEqual("conflict", conflict["outcome"])
+        self.assertNotIn("key", server.entities[("asset", "asset-1")]["value"])
 
     def test_cursor_expiry_is_explicit_and_requires_bootstrap(self) -> None:
         server = FakeSyncServer("cursor_expired")

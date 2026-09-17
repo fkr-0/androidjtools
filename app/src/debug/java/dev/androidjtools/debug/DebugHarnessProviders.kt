@@ -3,7 +3,9 @@ package dev.androidjtools.debug
 import android.content.Context
 import dev.androidjtools.core.model.DownloadStatus
 import dev.androidjtools.core.model.MutationReceipt
+import dev.androidjtools.core.model.OfflineCacheSummary
 import dev.androidjtools.core.model.PendingMutation
+import dev.androidjtools.core.model.Playlist
 import dev.androidjtools.core.model.ReceiptOutcome
 import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.core.model.Track
@@ -102,7 +104,7 @@ private fun buildProviders(config: DebugHarnessConfig): AppProviders {
         playlists = base.playlists,
         preparation = base.preparation,
         playback = base.playback,
-        downloads = DebugDownloadProvider(config, tracks),
+        downloads = DebugDownloadProvider(config, tracks, base.playlists.playlists.value),
         journal = journal,
         sync = DebugSyncProvider(config, journal),
         analysis = base.analysis,
@@ -122,13 +124,95 @@ private class DebugLibraryProvider(items: List<Track>) : LibraryProvider {
 private class DebugDownloadProvider(
     private val config: DebugHarnessConfig,
     tracks: List<Track>,
+    playlists: List<Playlist>,
 ) : DownloadProvider {
     private val trackById = tracks.associateBy { it.id }
+    private val playlistById = playlists.associateBy { it.id }
+    private val explicitTrackPins = trackById.values.filter(Track::offlineAvailable).mapTo(linkedSetOf(), Track::id)
+    private val playlistPins = mutableSetOf<String>()
     private val states = mutableMapOf<String, MutableStateFlow<TrackDownloadState>>()
+    private val mutableCacheSummary = MutableStateFlow(
+        OfflineCacheSummary(
+            usedBytes = 96_000_000L,
+            maxBytes = 512_000_000L,
+            evictableBytes = 32_000_000L,
+            pinnedTrackIds = explicitTrackPins.toSet(),
+        )
+    )
+    override val cacheSummary: StateFlow<OfflineCacheSummary> = mutableCacheSummary.asStateFlow()
 
     override fun state(trackId: String): StateFlow<TrackDownloadState> = states.getOrPut(trackId) {
         MutableStateFlow(downloadState(trackId))
     }.asStateFlow()
+
+    override fun pinTrack(trackId: String) {
+        if (trackId !in trackById) return
+        explicitTrackPins += trackId
+        publishPins()
+        val flow = mutableState(trackId)
+        if (flow.value.status == DownloadStatus.NOT_DOWNLOADED || flow.value.status == DownloadStatus.CANCELLED) {
+            flow.value = flow.value.copy(status = DownloadStatus.QUEUED, error = null)
+        }
+    }
+
+    override fun unpinTrack(trackId: String) {
+        explicitTrackPins -= trackId
+        publishPins()
+    }
+
+    override fun pinPlaylist(playlistId: String) {
+        val playlist = playlistById[playlistId] ?: return
+        playlistPins += playlistId
+        publishPins()
+        playlist.trackIds.forEach { trackId ->
+            val flow = mutableState(trackId)
+            if (flow.value.status == DownloadStatus.NOT_DOWNLOADED || flow.value.status == DownloadStatus.CANCELLED) {
+                flow.value = flow.value.copy(status = DownloadStatus.QUEUED, error = null)
+            }
+        }
+    }
+
+    override fun unpinPlaylist(playlistId: String) {
+        playlistPins -= playlistId
+        publishPins()
+    }
+
+    override fun retry(trackId: String) {
+        val flow = mutableState(trackId)
+        if (flow.value.status in setOf(DownloadStatus.FAILED, DownloadStatus.CANCELLED, DownloadStatus.CORRUPT)) {
+            flow.value = flow.value.copy(status = DownloadStatus.QUEUED, progress = 0.0, error = null)
+        }
+    }
+
+    override fun cancel(trackId: String) {
+        val flow = mutableState(trackId)
+        if (flow.value.status == DownloadStatus.QUEUED || flow.value.status == DownloadStatus.DOWNLOADING) {
+            flow.value = flow.value.copy(status = DownloadStatus.CANCELLED, error = "Cancelled")
+        }
+    }
+
+    override fun pruneUnpinned() {
+        mutableCacheSummary.value = cacheSummary.value.copy(
+            usedBytes = (cacheSummary.value.usedBytes - cacheSummary.value.evictableBytes).coerceAtLeast(0L),
+            evictableBytes = 0L,
+        )
+    }
+
+    private fun mutableState(trackId: String): MutableStateFlow<TrackDownloadState> = states.getOrPut(trackId) {
+        MutableStateFlow(downloadState(trackId))
+    }
+
+    private fun publishPins() {
+        val inheritedTrackPins = playlistPins
+            .asSequence()
+            .mapNotNull(playlistById::get)
+            .flatMap { it.trackIds.asSequence() }
+            .toSet()
+        mutableCacheSummary.value = cacheSummary.value.copy(
+            pinnedTrackIds = explicitTrackPins + inheritedTrackPins,
+            pinnedPlaylistIds = playlistPins.toSet(),
+        )
+    }
 
     private fun downloadState(trackId: String): TrackDownloadState {
         if (config.failureMode == DebugFailureMode.DOWNLOAD_FAILURE || config.dataset == DebugDataset.FAILURE) {

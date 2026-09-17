@@ -8,6 +8,7 @@ import dev.androidjtools.core.model.DownloadStatus
 import dev.androidjtools.core.model.IntelligenceSource
 import dev.androidjtools.core.model.Loop
 import dev.androidjtools.core.model.MutationReceipt
+import dev.androidjtools.core.model.OfflineCacheSummary
 import dev.androidjtools.core.model.PendingMutation
 import dev.androidjtools.core.model.Playlist
 import dev.androidjtools.core.model.ReceiptOutcome
@@ -52,15 +53,14 @@ object FixtureAppProviders {
             Track("trk-003", "Dub Colony", "Fixture Artist", "Mobile Prep", 327_000, 74.0, "2A", 0.55, 3, true),
         )
         val library = FixtureLibraryProvider(tracks)
-        val playlists = FixturePlaylistProvider(
-            listOf(
-                Playlist("pl-warmup", "Warmup", listOf("trk-001", "trk-003")),
-                Playlist("pl-energy", "High Energy", listOf("trk-002"), smart = true, ruleSummary = "energy ≥ 0.75"),
-            )
+        val playlistItems = listOf(
+            Playlist("pl-warmup", "Warmup", listOf("trk-001", "trk-003")),
+            Playlist("pl-energy", "High Energy", listOf("trk-002"), smart = true, ruleSummary = "energy ≥ 0.75"),
         )
+        val playlists = FixturePlaylistProvider(playlistItems)
         val preparation = FixturePreparationProvider()
         val playback = FixturePlaybackProvider()
-        val downloads = FixtureDownloadProvider()
+        val downloads = FixtureDownloadProvider(tracks, playlistItems)
         val journal = FixtureMutationJournalProvider()
         val sync = FixtureSyncProvider(journal, scenario)
         val analysis = FixtureAnalysisProvider()
@@ -115,8 +115,25 @@ private class FixturePlaybackProvider : PlaybackProvider {
     override fun seek(positionMs: Long) { mutablePosition.value = positionMs.coerceAtLeast(0) }
 }
 
-private class FixtureDownloadProvider : DownloadProvider {
+private class FixtureDownloadProvider(
+    tracks: List<Track>,
+    playlists: List<Playlist>,
+) : DownloadProvider {
+    private val trackById = tracks.associateBy { it.id }
+    private val playlistById = playlists.associateBy { it.id }
+    private val explicitTrackPins = mutableSetOf("trk-001")
+    private val playlistPins = mutableSetOf<String>()
     private val states = mutableMapOf<String, MutableStateFlow<TrackDownloadState>>()
+    private val mutableCacheSummary = MutableStateFlow(
+        OfflineCacheSummary(
+            usedBytes = 142_000_000L,
+            maxBytes = 1_000_000_000L,
+            evictableBytes = 84_000_000L,
+            pinnedTrackIds = explicitTrackPins.toSet(),
+            pinnedPlaylistIds = emptySet(),
+        )
+    )
+    override val cacheSummary = mutableCacheSummary.asStateFlow()
 
     override fun state(trackId: String): StateFlow<TrackDownloadState> = states.getOrPut(trackId) {
         MutableStateFlow(
@@ -127,6 +144,81 @@ private class FixtureDownloadProvider : DownloadProvider {
             }
         )
     }.asStateFlow()
+
+    override fun pinTrack(trackId: String) {
+        if (trackId !in trackById) return
+        explicitTrackPins += trackId
+        publishPins()
+        val current = mutableState(trackId)
+        if (current.value.status == DownloadStatus.NOT_DOWNLOADED || current.value.status == DownloadStatus.CANCELLED) {
+            current.value = current.value.copy(status = DownloadStatus.QUEUED, progress = 0.0, error = null)
+        }
+    }
+
+    override fun unpinTrack(trackId: String) {
+        explicitTrackPins -= trackId
+        publishPins()
+    }
+
+    override fun pinPlaylist(playlistId: String) {
+        val playlist = playlistById[playlistId] ?: return
+        playlistPins += playlistId
+        publishPins()
+        playlist.trackIds.forEach { trackId ->
+            val current = mutableState(trackId)
+            if (current.value.status == DownloadStatus.NOT_DOWNLOADED || current.value.status == DownloadStatus.CANCELLED) {
+                current.value = current.value.copy(status = DownloadStatus.QUEUED, progress = 0.0, error = null)
+            }
+        }
+    }
+
+    override fun unpinPlaylist(playlistId: String) {
+        playlistPins -= playlistId
+        publishPins()
+    }
+
+    override fun retry(trackId: String) {
+        val current = mutableState(trackId)
+        if (current.value.status == DownloadStatus.FAILED || current.value.status == DownloadStatus.CANCELLED || current.value.status == DownloadStatus.CORRUPT) {
+            current.value = current.value.copy(status = DownloadStatus.QUEUED, progress = 0.0, error = null)
+        }
+    }
+
+    override fun cancel(trackId: String) {
+        val current = mutableState(trackId)
+        if (current.value.status == DownloadStatus.QUEUED || current.value.status == DownloadStatus.DOWNLOADING) {
+            current.value = current.value.copy(status = DownloadStatus.CANCELLED, error = "Cancelled")
+        }
+    }
+
+    override fun pruneUnpinned() {
+        val pinned = cacheSummary.value.pinnedTrackIds
+        states.forEach { (trackId, flow) ->
+            if (trackId !in pinned && flow.value.status == DownloadStatus.AVAILABLE) {
+                flow.value = TrackDownloadState(trackId, DownloadStatus.NOT_DOWNLOADED)
+            }
+        }
+        mutableCacheSummary.value = cacheSummary.value.copy(
+            usedBytes = (cacheSummary.value.usedBytes - cacheSummary.value.evictableBytes).coerceAtLeast(0L),
+            evictableBytes = 0L,
+        )
+    }
+
+    private fun mutableState(trackId: String): MutableStateFlow<TrackDownloadState> = states.getOrPut(trackId) {
+        MutableStateFlow(TrackDownloadState(trackId, DownloadStatus.NOT_DOWNLOADED))
+    }
+
+    private fun publishPins() {
+        val inheritedTrackPins = playlistPins
+            .asSequence()
+            .mapNotNull(playlistById::get)
+            .flatMap { it.trackIds.asSequence() }
+            .toSet()
+        mutableCacheSummary.value = cacheSummary.value.copy(
+            pinnedTrackIds = explicitTrackPins + inheritedTrackPins,
+            pinnedPlaylistIds = playlistPins.toSet(),
+        )
+    }
 }
 
 private class FixtureMutationJournalProvider : MutationJournalProvider {

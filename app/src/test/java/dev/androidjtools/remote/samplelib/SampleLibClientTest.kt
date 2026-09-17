@@ -89,6 +89,39 @@ class SampleLibClientTest {
     }
 
     @Test
+    fun offlinePushWithoutReceiptRemainsPendingAndRetriesSameMutation() = runTest {
+        val transport = FakeTransport(credential, capabilities, limits).apply { offlinePush = true }
+        val client = SampleLibClient(transport, "android", "install-1")
+        val session = client.connect(credential, "sample-lib-a")
+        val mutation = assetMutation("offline-pending")
+
+        val pending = client.pushWithRecovery(session, mutation)
+        assertTrue(pending is MutationDelivery.Pending)
+        assertEquals(mutation.mutationId, (pending as MutationDelivery.Pending).mutation.mutationId)
+        assertEquals(1, transport.receiptCalls)
+
+        transport.offlinePush = false
+        val retried = client.pushWithRecovery(session, pending.mutation)
+        assertTrue(retried is MutationDelivery.Confirmed)
+        assertEquals(mutation.mutationId, (retried as MutationDelivery.Confirmed).receipt.mutationId)
+    }
+
+    @Test
+    fun unavailablePushRecoversReceiptIfServerCommittedBeforeFailure() = runTest {
+        val transport = FakeTransport(credential, capabilities, limits).apply { unavailablePush = true }
+        val client = SampleLibClient(transport, "android", "install-1")
+        val session = client.connect(credential, "sample-lib-a")
+        val mutation = assetMutation("unavailable-committed")
+        transport.receipts[mutation.mutationId] = appliedReceipt(mutation.mutationId)
+
+        val delivery = client.pushWithRecovery(session, mutation)
+        assertTrue(delivery is MutationDelivery.Confirmed)
+        assertEquals(mutation.mutationId, (delivery as MutationDelivery.Confirmed).receipt.mutationId)
+        assertEquals(1, transport.pushCalls)
+        assertEquals(1, transport.receiptCalls)
+    }
+
+    @Test
     fun unsupportedPlaylistCapabilityFailsExplicitly() = runTest {
         val transport = FakeTransport(credential, capabilities, limits)
         val client = SampleLibClient(transport, "android", "install-1")
@@ -195,6 +228,8 @@ class SampleLibClientTest {
     ) : SampleLibTransport {
         var generation = "generation-1"
         var ambiguousPush = false
+        var offlinePush = false
+        var unavailablePush = false
         var pushCalls = 0
         var receiptCalls = 0
         val receipts = mutableMapOf<String, MutationReceipt>()
@@ -228,6 +263,8 @@ class SampleLibClientTest {
         ): PushResult {
             pushCalls++
             if (ambiguousPush) throw SampleLibFailure.AmbiguousDelivery()
+            if (offlinePush) throw SampleLibFailure.Offline()
+            if (unavailablePush) throw SampleLibFailure.Unavailable()
             return PushResult(
                 mutations.map {
                     receipts[it.mutationId] ?: MutationReceipt(

@@ -150,8 +150,15 @@ class AuthenticatedSampleLibFakeTests(unittest.TestCase):
         incremental["cursor"] = None
         _, reset = self.post("/v1/sync/pull", incremental, auth=True)
         self.assertEqual("snapshot", reset["mode"])
-        self.assertEqual("asset-1", reset["changes"][0]["entity_id"])
-        resource = reset["changes"][0]["value"]["resources"][0]
+        # Bootstrap snapshots may contain additional authoritative entity families (for
+        # example analysis suggestions). Ordering is not a sync-contract guarantee, so
+        # locate the canonical asset by identity instead of treating changes[0] as asset-1.
+        asset_change = next(
+            change
+            for change in reset["changes"]
+            if change["entity_type"] == "asset" and change["entity_id"] == "asset-1"
+        )
+        resource = asset_change["value"]["resources"][0]
         self.assertEqual(MEDIA_SHA256, resource["sha256"])
 
     def test_incremental_pull_carries_tombstone_and_version_mismatch_is_explicit(self) -> None:

@@ -95,14 +95,14 @@ Wall-clock last-write-wins is rejected.
 
 | Merge class | Example | v1 behavior |
 | --- | --- | --- |
-| `safe_fieldwise` | explicitly independent metadata fields | server may expose bounded merge information only when operation contract declares it safe |
+| `safe_fieldwise` | explicitly independent metadata fields | server returns bounded changed-field maps plus `merge_safe_fields` derived only from the operation contract; Android may auto-merge only when local/remote keys are disjoint and every changed key is declared safe |
 | `editor_aggregate` | cue/loop/marker editor aggregate changed | return current aggregate/revision; rebase requires new user/client intent |
 | `ordered_collection` | concurrent playlist reorder | never timestamp-LWW; current ordered IDs required after playlist model exists |
 | `delete_vs_edit` | queued edit targets tombstoned entity | do not recreate silently; explicit conflict |
 | `identity_conflict` | child ID belongs to another aggregate | reject |
 | `incompatible_schema` | queued payload no longer understood | reject/migrate/review |
 
-Conflict DTOs carry opaque base/current revisions, stable code, merge class, and bounded local/remote values where safe. A conflict is never an instruction to auto-rebase.
+Conflict DTOs carry opaque base/current revisions, stable code, merge class, and bounded local/remote changed-field values where safe. `safe_fieldwise` additionally requires authoritative `merge_safe_fields`; callers cannot manufacture this authority. All other conflict classes, overlapping keys, missing authority, and undeclared fields remain explicit user resolution rather than generic auto-rebase.
 
 ## 7. Change journal, tombstones and retention
 

@@ -110,6 +110,8 @@ class SyncContractSchemaTests(unittest.TestCase):
         contracts = self.protocol["mutation"]["operation_contracts"]
         self.assertEqual(["asset"], contracts["asset.metadata.patch"]["entity_types"])
         self.assertEqual("required_existing", contracts["asset.metadata.patch"]["base_revision_policy"])
+        self.assertIn("rating", contracts["asset.metadata.patch"]["merge_safe_fields"])
+        self.assertNotIn("merge_safe_fields", contracts["interval.editor_state.replace"])
         self.assertEqual("must_be_null_create_or_ensure", contracts["tag.ensure_attach"]["base_revision_policy"])
 
     def test_mutation_requires_idempotency_identity_and_base_revision(self) -> None:
@@ -126,7 +128,7 @@ class SyncContractSchemaTests(unittest.TestCase):
             {"mutation_id": "mutation-0001", "outcome": "applied", "server_change_revision": 8, "entity_revision": "rev:8"},
             {"mutation_id": "mutation-0002", "outcome": "no_op", "server_change_revision": 8, "entity_revision": "rev:8"},
             {"mutation_id": "mutation-0003", "outcome": "rejected", "server_change_revision": 8, "error": {"code": "invalid_mutation", "message": "Rejected."}},
-            {"mutation_id": "mutation-0004", "outcome": "conflict", "server_change_revision": 8, "conflict": {"mutation_id": "mutation-0004", "entity_id": "asset-1", "base_revision": "rev:7", "authoritative_revision": "rev:8", "local_value": {"rating": 4}, "remote_value": {"rating": 5}, "merge_class": "safe_fieldwise", "code": "stale_base_revision"}},
+            {"mutation_id": "mutation-0004", "outcome": "conflict", "server_change_revision": 8, "conflict": {"mutation_id": "mutation-0004", "entity_id": "asset-1", "base_revision": "rev:7", "authoritative_revision": "rev:8", "local_value": {"title": "Local"}, "remote_value": {"rating": 5}, "merge_class": "safe_fieldwise", "merge_safe_fields": ["title", "rating"], "code": "stale_base_revision"}},
         ]
         self.assertEqual(set(self.protocol["receipt_outcomes"]), {r["outcome"] for r in receipts})
         self.validate({"type": "push_response", "protocol_version": "1", "receipts": receipts, "server_change_revision": 8})

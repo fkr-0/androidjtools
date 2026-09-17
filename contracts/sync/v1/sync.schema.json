@@ -170,8 +170,14 @@
         "local_value": {"type": ["object", "null"]},
         "remote_value": {"type": ["object", "null"]},
         "merge_class": {"enum": ["safe_fieldwise", "editor_aggregate", "ordered_collection", "delete_vs_edit", "identity_conflict", "incompatible_schema"]},
+        "merge_safe_fields": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/non_empty_string"}},
         "code": {"$ref": "#/$defs/non_empty_string"}
-      }
+      },
+      "allOf": [{
+        "if": {"properties": {"merge_class": {"const": "safe_fieldwise"}}, "required": ["merge_class"]},
+        "then": {"required": ["merge_safe_fields"]},
+        "else": {"not": {"required": ["merge_safe_fields"]}}
+      }]
     },
     "receipt_applied": {
       "type": "object", "additionalProperties": false,

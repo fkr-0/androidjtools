@@ -59,7 +59,28 @@ class FakeSyncServer:
                 "revision": "rev:asset-1:7",
                 "schema": "sample-lib.asset.sync/v1",
                 "value": {"title": "Fixture One", "rating": 3},
-            }
+            },
+            ("analysis_suggestion", "candidate-bpm-1"): self._analysis_candidate(
+                "candidate-bpm-1", "bpm", 92.48, 0.94, "essentia-rhythm"
+            ),
+            ("analysis_suggestion", "candidate-key-1"): self._analysis_candidate(
+                "candidate-key-1", "key", "8A", 0.87, "essentia-tonal"
+            ),
+            ("analysis_suggestion", "candidate-related-1"): self._analysis_candidate(
+                "candidate-related-1",
+                "related_track",
+                {"track_id": "asset-2", "dimensions": ["bpm", "key", "energy"]},
+                0.79,
+                "sample-intelligence-related",
+            ),
+        }
+        # Minimal revision history lets the fake emit bounded remote changed-field maps for
+        # safe-fieldwise conflicts instead of pretending the entire canonical object changed.
+        self.entity_history: dict[tuple[str, str], dict[str, dict[str, Any]]] = {
+            ("asset", "asset-1"): {
+                "rev:asset-1:6": {"title": "Fixture One", "rating": 2},
+                "rev:asset-1:7": {"title": "Fixture One", "rating": 3},
+            },
         }
         self.tombstones = [
             {
@@ -71,6 +92,39 @@ class FakeSyncServer:
         ]
         self.receipts: dict[str, tuple[str, dict[str, Any]]] = {}
         self.set_scenario(scenario)
+
+    @staticmethod
+    def _analysis_candidate(
+        candidate_id: str, kind: str, value: Any, confidence: float, model: str
+    ) -> dict[str, Any]:
+        return {
+            "revision": f"rev:analysis_suggestion:{candidate_id}:1",
+            "schema": "androidjtools.analysis-candidate/v1",
+            "value": {
+                "candidate_id": candidate_id,
+                "analysis_run_id": "analysis-run-fixture-1",
+                "asset_id": "asset-1",
+                "interval_id": None,
+                "kind": kind,
+                "value": value,
+                "confidence": confidence,
+                "source": {
+                    "service": "sample-lib",
+                    "model": model,
+                    "version": "fixture-1",
+                    "pipeline_version": "analysis-v1",
+                },
+                "generated_at": "2026-09-15T12:00:00Z",
+                "input_identity": {
+                    "entity_type": "asset",
+                    "entity_id": "asset-1",
+                    "revision": "rev:asset-1:7",
+                    "content_sha256": "a" * 64,
+                },
+                "freshness": "fresh",
+                "decision": "proposed",
+            },
+        }
 
     @property
     def capabilities(self) -> dict[str, Any]:
@@ -209,23 +263,45 @@ class FakeSyncServer:
     def _conflict_receipt(self, mutation: dict[str, Any], code: str = "stale_base_revision") -> dict[str, Any]:
         key = (mutation["entity_type"], mutation["entity_id"])
         authoritative = self.entities.get(key)
-        merge_class = "delete_vs_edit" if authoritative is None else (
-            "safe_fieldwise" if mutation.get("operation") in {"asset.metadata.patch", "analysis.suggestion.accept"} else "editor_aggregate"
+        operation = mutation.get("operation")
+        contract = OPERATION_CONTRACTS.get(operation, {})
+        declared_safe_fields = set(contract.get("merge_safe_fields", []))
+        local_value = copy.deepcopy(mutation["payload"])
+        base_value = self.entity_history.get(key, {}).get(mutation.get("base_revision"))
+        authoritative_value = copy.deepcopy(authoritative["value"]) if authoritative else None
+        remote_changed = None
+        if authoritative_value is not None and base_value is not None:
+            remote_changed = {
+                field: authoritative_value.get(field)
+                for field in set(base_value) | set(authoritative_value)
+                if base_value.get(field) != authoritative_value.get(field)
+            }
+        safe_fieldwise = bool(
+            authoritative is not None
+            and declared_safe_fields
+            and isinstance(local_value, dict)
+            and remote_changed is not None
+            and set(local_value).issubset(declared_safe_fields)
+            and set(remote_changed).issubset(declared_safe_fields)
         )
+        merge_class = "delete_vs_edit" if authoritative is None else ("safe_fieldwise" if safe_fieldwise else "editor_aggregate")
+        conflict = {
+            "mutation_id": mutation["mutation_id"],
+            "entity_id": mutation["entity_id"],
+            "base_revision": mutation.get("base_revision"),
+            "authoritative_revision": authoritative["revision"] if authoritative else None,
+            "local_value": local_value,
+            "remote_value": remote_changed if safe_fieldwise else authoritative_value,
+            "merge_class": merge_class,
+            "code": code,
+        }
+        if safe_fieldwise:
+            conflict["merge_safe_fields"] = sorted(declared_safe_fields)
         return {
             "mutation_id": mutation["mutation_id"],
             "outcome": "conflict",
             "server_change_revision": self.server_change_revision,
-            "conflict": {
-                "mutation_id": mutation["mutation_id"],
-                "entity_id": mutation["entity_id"],
-                "base_revision": mutation.get("base_revision"),
-                "authoritative_revision": authoritative["revision"] if authoritative else None,
-                "local_value": copy.deepcopy(mutation["payload"]),
-                "remote_value": copy.deepcopy(authoritative["value"]) if authoritative else None,
-                "merge_class": merge_class,
-                "code": code,
-            },
+            "conflict": conflict,
         }
 
     def _forced_receipt(self, mutation: dict[str, Any]) -> dict[str, Any] | None:
@@ -284,6 +360,22 @@ class FakeSyncServer:
         if mutation["operation"] == "asset.metadata.patch" and authoritative is not None:
             next_value = copy.deepcopy(authoritative["value"])
             next_value.update(payload)
+        elif mutation["operation"] == "analysis.suggestion.accept" and authoritative is not None:
+            next_value = copy.deepcopy(authoritative["value"])
+            kind = payload.get("kind")
+            proposed = payload.get("value")
+            if kind == "bpm" and isinstance(proposed, (int, float)) and not isinstance(proposed, bool):
+                next_value["bpm"] = float(proposed)
+            elif kind == "key" and isinstance(proposed, str) and proposed.strip():
+                next_value["key"] = proposed.strip()
+            else:
+                receipt = self._rejected_receipt(
+                    mutation_id,
+                    "unsupported_analysis_candidate",
+                    "The fake supports canonical acceptance for BPM and key candidates only.",
+                )
+                self.receipts[mutation_id] = (body_fingerprint, copy.deepcopy(receipt))
+                return receipt
         else:
             next_value = payload
         if authoritative is not None and authoritative["value"] == next_value:
@@ -291,6 +383,9 @@ class FakeSyncServer:
         else:
             revision = self._next_revision(*key)
             schema = authoritative["schema"] if authoritative else f"sample-lib.{mutation['entity_type']}.sync/v1"
+            if authoritative is not None:
+                self.entity_history.setdefault(key, {})[authoritative_revision] = copy.deepcopy(authoritative["value"])
+            self.entity_history.setdefault(key, {})[revision] = copy.deepcopy(next_value)
             self.entities[key] = {"revision": revision, "schema": schema, "value": next_value}
             receipt = {"mutation_id": mutation_id, "outcome": "applied", "server_change_revision": self.server_change_revision, "entity_revision": revision, "canonical": copy.deepcopy(next_value)}
         self.receipts[mutation_id] = (body_fingerprint, copy.deepcopy(receipt))

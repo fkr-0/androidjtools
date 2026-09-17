@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.androidjtools.core.model.SuggestionKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -40,7 +41,7 @@ class AnalysisAssistantContentTest {
     }
 
     @Test
-    fun staleOfflineAcceptAndRejectEmitDistinctAdvisoryActions() {
+    fun staleCandidateFailsClosedToRefreshWhileRejectRemainsExplicit() {
         val state = AnalysisAssistantFixtures.competition()
         val candidate = state.candidateGroups
             .first { it.kind == SuggestionKind.BPM }
@@ -59,18 +60,43 @@ class AnalysisAssistantContentTest {
         }
 
         compose.onNodeWithTag("freshness-${candidate.id}").assertIsDisplayed()
-        compose.onNodeWithText("Source input changed. Explicit reconfirmation is required before this can commit.").assertIsDisplayed()
-        compose.onNodeWithTag("accept-${candidate.id}").assertIsEnabled().performClick()
-        compose.onNodeWithText("Stale proposal selected. Confirm once more to create the review intent.").assertIsDisplayed()
-        assertTrue(actions.filterIsInstance<AnalysisUiAction.QueueAcceptance>().isEmpty())
-        compose.onNodeWithTag("accept-${candidate.id}").performClick()
+        compose.onNodeWithText("Source input changed. Refresh this proposal before accepting; stale input never creates a mutation intent.").assertIsDisplayed()
+        compose.onNodeWithTag("accept-${candidate.id}").assertDoesNotExist()
+        compose.onNodeWithTag("refresh-stale-${candidate.id}").assertIsEnabled().performClick()
         compose.onNodeWithTag("reject-${candidate.id}").assertIsEnabled().performClick()
 
+        assertTrue(actions.filterIsInstance<AnalysisUiAction.QueueAcceptance>().isEmpty())
+        assertEquals(state.trackId, actions.filterIsInstance<AnalysisUiAction.Refresh>().single().trackId)
+        assertEquals(candidate.id, actions.filterIsInstance<AnalysisUiAction.Reject>().single().suggestionId)
+    }
+
+    @Test
+    fun freshOfflineAcceptanceQueuesIntentWithoutClaimingCanonicalSuccess() {
+        val state = AnalysisAssistantFixtures.competition()
+        val candidate = state.candidateGroups
+            .first { it.kind == SuggestionKind.BPM }
+            .candidates
+            .first { !it.stale }
+        val actions = mutableListOf<AnalysisUiAction>()
+        compose.setContent {
+            MaterialTheme {
+                CandidateCard(
+                    candidate = candidate,
+                    offline = true,
+                    acceptanceEnabled = true,
+                    onAction = actions::add,
+                )
+            }
+        }
+
+        compose.onNodeWithTag("accept-${candidate.id}").assertIsEnabled().performClick()
+
         val accept = actions.filterIsInstance<AnalysisUiAction.QueueAcceptance>().single()
+        assertEquals(candidate.id, accept.intent.suggestionId)
         assertEquals(SuggestionKind.BPM, accept.intent.kind)
         assertTrue(accept.intent.queuedOffline)
-        assertTrue(accept.intent.requiresFreshnessConfirmation)
-        assertEquals(candidate.id, actions.filterIsInstance<AnalysisUiAction.Reject>().single().suggestionId)
+        assertFalse(accept.intent.requiresFreshnessConfirmation)
+        assertTrue(actions.filterIsInstance<AnalysisUiAction.Reject>().isEmpty())
     }
 
     @Test

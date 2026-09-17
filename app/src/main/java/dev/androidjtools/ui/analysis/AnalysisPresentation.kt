@@ -119,7 +119,7 @@ sealed interface AnalysisUiAction {
 }
 
 fun CandidateUi.acceptanceIntent(offline: Boolean): AnalysisMutationIntent? {
-    if (reviewState != CandidateReviewState.PROPOSED) return null
+    if (reviewState != CandidateReviewState.PROPOSED || stale) return null
     return AnalysisMutationIntent(
         suggestionId = id,
         trackId = trackId,

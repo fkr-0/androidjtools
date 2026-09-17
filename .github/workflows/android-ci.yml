@@ -24,6 +24,22 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Verify release metadata consistency
+        id: app_version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n1)"
+          version_code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' app/build.gradle.kts | head -n1)"
+          test -n "$version"
+          test -n "$version_code"
+          grep -Fq "## ${version} -" CHANGELOG.md
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            test "${GITHUB_REF_NAME}" = "v${version}"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -36,7 +52,9 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: '1'
           PYTHONWARNINGS: error::ResourceWarning
-        run: python -m unittest discover -s test-server -p 'test_*.py' -v
+        run: |
+          python -m unittest discover -s test-server -p 'test_*.py' -v
+          PYTHONPATH=test-server/samplelib python -m unittest discover -s test-server/samplelib -p 'test_*.py' -v
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -59,7 +77,102 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: androidjtools-v0.1.0-debug-apk
+          name: androidjtools-v${{ steps.app_version.outputs.version }}-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+  render-ui-screenshots:
+    name: Render Android UI screenshots
+    needs: verify-and-build-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Render screenshots on Android 15 / Pixel 7 Pro
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: |
+            set -eu
+            adb shell cmd uimode night no || true
+            adb shell settings put system font_scale 1.0
+            ./gradlew :app:connectedDebugAndroidTest \
+              -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.visual.CiScreenshotTest \
+              --stacktrace
+
+            mkdir -p artifacts/ui-screenshots
+            for image in \
+              01-library.png \
+              02-collections.png \
+              03-preparation.png \
+              04-suggestions.png \
+              05-sync.png
+            do
+              adb exec-out run-as dev.androidjtools.debug cat "files/ui-screenshots/${image}" > "artifacts/ui-screenshots/${image}"
+              test -s "artifacts/ui-screenshots/${image}"
+            done
+
+            python - <<'PY'
+            from pathlib import Path
+            import struct
+
+            root = Path("artifacts/ui-screenshots")
+            files = sorted(root.glob("*.png"))
+            if len(files) != 5:
+                raise SystemExit(f"expected 5 screenshots, found {len(files)}")
+
+            for image in files:
+                data = image.read_bytes()
+                if data[:8] != b"\x89PNG\r\n\x1a\n" or len(data) < 24:
+                    raise SystemExit(f"invalid PNG: {image}")
+                width, height = struct.unpack(">II", data[16:24])
+                if width < 720 or height < 1280:
+                    raise SystemExit(f"unexpected screenshot dimensions for {image}: {width}x{height}")
+                print(f"{image.name}: {width}x{height} ({len(data)} bytes)")
+            PY
+
+      - name: Upload rendered Android UI screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: androidjtools-android15-ui-screenshots
+          path: artifacts/ui-screenshots/*.png
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload instrumentation diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: androidjtools-ui-screenshot-diagnostics
+          path: |
+            app/build/reports/androidTests/connected/**
+            app/build/outputs/androidTest-results/connected/**
+          if-no-files-found: warn
+          retention-days: 14

@@ -20,10 +20,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -201,7 +197,6 @@ fun CandidateCard(
     acceptanceEnabled: Boolean,
     onAction: (AnalysisUiAction) -> Unit,
 ) {
-    var staleAcceptanceConfirmed by rememberSaveable(candidate.id) { mutableStateOf(false) }
     Column(Modifier.testTag("candidate-${candidate.id}"), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(candidate.value, fontWeight = FontWeight.SemiBold)
@@ -227,10 +222,7 @@ fun CandidateCard(
             modifier = Modifier.testTag("freshness-${candidate.id}"),
         )
         if (candidate.stale) {
-            Text("Source input changed. Explicit reconfirmation is required before this can commit.", style = MaterialTheme.typography.bodySmall)
-            if (staleAcceptanceConfirmed) {
-                Text("Stale proposal selected. Confirm once more to create the review intent.", style = MaterialTheme.typography.labelMedium)
-            }
+            Text("Source input changed. Refresh this proposal before accepting; stale input never creates a mutation intent.", style = MaterialTheme.typography.bodySmall)
         }
         when (candidate.reviewState) {
             CandidateReviewState.PROPOSED -> {
@@ -238,25 +230,19 @@ fun CandidateCard(
                     if (candidate.timelineStartMs != null) {
                         OutlinedButton(onClick = { onAction(AnalysisUiAction.Preview(candidate.id)) }) { Text("Preview") }
                     }
-                    Button(
-                        onClick = {
-                            if (candidate.stale && !staleAcceptanceConfirmed) {
-                                staleAcceptanceConfirmed = true
-                            } else {
+                    if (candidate.stale) {
+                        OutlinedButton(
+                            onClick = { onAction(AnalysisUiAction.Refresh(candidate.trackId)) },
+                            modifier = Modifier.testTag("refresh-stale-${candidate.id}"),
+                        ) { Text("Refresh stale") }
+                    } else {
+                        Button(
+                            onClick = {
                                 candidate.acceptanceIntent(offline)?.let { onAction(AnalysisUiAction.QueueAcceptance(it)) }
-                            }
-                        },
-                        enabled = acceptanceEnabled,
-                        modifier = Modifier.testTag("accept-${candidate.id}"),
-                    ) {
-                        Text(
-                            when {
-                                candidate.stale && !staleAcceptanceConfirmed -> "Review stale"
-                                candidate.stale -> "Confirm stale acceptance"
-                                offline -> "Queue accept"
-                                else -> "Accept"
-                            }
-                        )
+                            },
+                            enabled = acceptanceEnabled,
+                            modifier = Modifier.testTag("accept-${candidate.id}"),
+                        ) { Text(if (offline) "Queue accept" else "Accept") }
                     }
                     OutlinedButton(
                         onClick = { onAction(AnalysisUiAction.Reject(candidate.id)) },

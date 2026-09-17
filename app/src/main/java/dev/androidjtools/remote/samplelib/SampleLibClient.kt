@@ -92,6 +92,14 @@ class SampleLibClient(
             MutationDelivery.Confirmed(receipt)
         } catch (ambiguous: SampleLibFailure.AmbiguousDelivery) {
             recoverReceiptOrKeepPending(session, mutation, ambiguous.message ?: "ambiguous delivery")
+        } catch (offline: SampleLibFailure.Offline) {
+            // Keep the immutable mutation pending. A transport can know it is offline before
+            // sending bytes, while journal replay remains safe because mutation_id/body are stable.
+            recoverReceiptOrKeepPending(session, mutation, offline.message ?: "offline delivery")
+        } catch (unavailable: SampleLibFailure.Unavailable) {
+            // A 5xx does not authorize minting a replacement intent. Receipt lookup first in
+            // case the server committed before failing its response; otherwise retry this ID.
+            recoverReceiptOrKeepPending(session, mutation, unavailable.message ?: "server unavailable")
         }
     }
 

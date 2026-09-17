@@ -7,6 +7,7 @@ import dev.androidjtools.core.model.IntelligenceSource
 import dev.androidjtools.core.model.Loop
 import dev.androidjtools.core.model.SuggestionKind
 import dev.androidjtools.core.model.SuggestionPayload
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -149,6 +150,41 @@ class WaveformModelTest {
         assertEquals(0L, lowAnchor.anchorMs)
         assertEquals(500L, nudged.anchorMs)
         assertTrue(nudged.dirty)
+    }
+
+    @Test
+    fun gridHalfAndDoubleBpmAreReversibleAndFailClosedAtBounds() {
+        val initial = StagedGridEdit.from(BeatGrid("track", anchorMs = 125L, bpm = 92.5, revision = 7L))
+        val halved = scaleGridBpm(initial, 0.5)
+        val restored = scaleGridBpm(halved, 2.0)
+
+        assertEquals(46.25, halved.bpm, 0.000001)
+        assertEquals(initial.anchorMs, halved.anchorMs)
+        assertEquals(initial.revision, halved.revision)
+        assertEquals(initial.bpm, restored.bpm, 0.000001)
+        assertEquals(initial.anchorMs, restored.anchorMs)
+        assertEquals(initial.revision, restored.revision)
+
+        val tooLow = initial.copy(bpm = 30.0)
+        val tooHigh = initial.copy(bpm = 180.0)
+        assertEquals(null, transformedGridBpm(tooLow, 0.5))
+        assertEquals(tooLow, scaleGridBpm(tooLow, 0.5))
+        assertEquals(null, transformedGridBpm(tooHigh, 2.0))
+        assertEquals(tooHigh, scaleGridBpm(tooHigh, 2.0))
+        assertEquals(null, transformedGridBpm(initial, Double.NaN))
+        assertEquals(null, transformedGridBpm(initial, 0.0))
+    }
+
+    @Test
+    fun editableGridBpmFormattingUsesDotDecimalUnderGermanLocale() {
+        val previous = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.GERMANY)
+            assertEquals("92.50", formatGridBpm(92.5))
+            assertEquals("128.00", formatGridBpm(128.0))
+        } finally {
+            Locale.setDefault(previous)
+        }
     }
 
     @Test

@@ -33,18 +33,17 @@ class AnalysisPresentationTest {
     }
 
     @Test
-    fun `stale cached candidate can request offline queue but requires reconfirmation`() {
+    fun `stale cached candidate remains reviewable offline but cannot create acceptance intent`() {
         val state = present(
             suggestions = listOf(suggestion("bpm-stale", SuggestionKind.BPM, SuggestionPayload.Bpm(91.9), stale = true, inputRevision = 41)),
             sync = SyncState.OFFLINE,
         )
         val candidate = state.candidateGroups.single().candidates.single()
-        val intent = candidate.acceptanceIntent(state.offline)
-        assertNotNull(intent)
-        assertTrue(intent!!.queuedOffline)
-        assertTrue(intent.requiresFreshnessConfirmation)
-        assertEquals(41L, intent.inputRevision)
-        assertEquals("sample-intelligence", intent.provenance.service)
+        assertTrue(state.offline)
+        assertTrue(candidate.stale)
+        assertEquals(41L, candidate.inputRevision)
+        assertEquals("sample-intelligence", candidate.provenance.service)
+        assertEquals(null, candidate.acceptanceIntent(state.offline))
     }
 
     @Test
@@ -110,6 +109,20 @@ class AnalysisPresentationTest {
         assertTrue(competition.offline)
         assertTrue(competition.partialFailure)
         assertTrue(competition.candidateGroups.first { it.kind == SuggestionKind.BPM }.competing)
+        assertTrue(
+            competition.candidateGroups.map { it.kind }.containsAll(
+                setOf(
+                    SuggestionKind.BPM,
+                    SuggestionKind.KEY,
+                    SuggestionKind.CUE,
+                    SuggestionKind.LOOP,
+                    SuggestionKind.REGION,
+                    SuggestionKind.STEM,
+                    SuggestionKind.RELATED_TRACK,
+                )
+            )
+        )
+        assertEquals("bpm · key · energy", competition.candidateGroups.single { it.kind == SuggestionKind.RELATED_TRACK }.candidates.single().detail)
         assertEquals("blocking", competition.safetyFindings.first().severity)
     }
 

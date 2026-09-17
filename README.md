@@ -4,9 +4,9 @@ Android DJ Tools is a cloudless Android DJ-library preparation client for Sample
 
 ## Status
 
-`v0.1.0` is the first preview. The canonical sync protocol is versioned under `contracts/`, deterministic fake-server qualification lives under `test-server/`, and the Android application lives under `app/`.
+`v0.1.1` is the current patch preview. It integrates the post-0.1.0 preparation, offline/sync, analysis-advisory, parity, and CI screenshot lanes while keeping Sample Lib as the canonical metadata authority. The sync protocol remains versioned under `contracts/`, deterministic fake-server qualification lives under `test-server/`, and the Android application lives under `app/`.
 
-The release intentionally distinguishes verified fixture/fake-server behavior from real-device and real-backend evidence. See `CHANGELOG.md` and `docs/release/v0.1.0.md` for the exact release boundary.
+The release intentionally distinguishes fixture/fake-server, real Sample Lib, CI-emulator, and local physical-device evidence. See `CHANGELOG.md` and `docs/release/v0.1.1.md` for the exact release boundary.
 
 ## Build
 

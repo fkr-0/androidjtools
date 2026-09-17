@@ -100,6 +100,7 @@ fun WaveformScreen(providers: AppProviders) {
         applyStagedRange(canonicalOverlays, rangeHistory?.current)
     }
     val selected = overlays.firstOrNull { it.id == selectedOverlayId }
+    val visibleViewport = viewport.normalized(track.durationMs)
 
     val selectOverlay: (String?) -> Unit = { id ->
         selectedOverlayId = id
@@ -117,7 +118,8 @@ fun WaveformScreen(providers: AppProviders) {
         Text("Preparation", style = MaterialTheme.typography.headlineMedium)
         Text("${track.title} · ${track.artist}", style = MaterialTheme.typography.titleMedium)
         Text(
-            "${formatWaveformTime(positionMs)} / ${formatWaveformTime(track.durationMs)} · ${viewport.zoom.roundToInt()}× zoom",
+            "${formatWaveformTime(positionMs)} / ${formatWaveformTime(track.durationMs)} · ${visibleViewport.zoom.roundToInt()}× zoom · " +
+                "window ${formatWaveformTime(visibleViewport.startMs)}–${formatWaveformTime(visibleViewport.endMs(track.durationMs))}",
             modifier = Modifier.testTag("waveform-time-zoom"),
             style = MaterialTheme.typography.bodySmall,
         )
@@ -394,9 +396,9 @@ private fun GridEditPanel(
     onHaptic: () -> Unit,
 ) {
     val edit = history.current
-    var bpmText by remember(edit.trackId) { mutableStateOf("%.2f".format(edit.bpm)) }
+    var bpmText by remember(edit.trackId) { mutableStateOf(formatGridBpm(edit.bpm)) }
     var anchorText by remember(edit.trackId) { mutableStateOf(edit.anchorMs.toString()) }
-    LaunchedEffect(edit.bpm) { bpmText = "%.2f".format(edit.bpm) }
+    LaunchedEffect(edit.bpm) { bpmText = formatGridBpm(edit.bpm) }
     LaunchedEffect(edit.anchorMs) { anchorText = edit.anchorMs.toString() }
 
     Surface(modifier = Modifier.fillMaxWidth().testTag("waveform-grid-editor"), tonalElevation = 1.dp) {
@@ -434,6 +436,16 @@ private fun GridEditPanel(
             ) {
                 OutlinedButton(onClick = { onHistoryChange(history.update(updateGridBpm(edit, edit.bpm - 0.01))) }) { Text("BPM -0.01") }
                 OutlinedButton(onClick = { onHistoryChange(history.update(updateGridBpm(edit, edit.bpm + 0.01))) }) { Text("BPM +0.01") }
+                OutlinedButton(
+                    enabled = transformedGridBpm(edit, 0.5) != null,
+                    onClick = { onHistoryChange(history.update(scaleGridBpm(edit, 0.5))) },
+                    modifier = Modifier.testTag("grid-half-bpm"),
+                ) { Text("Half BPM") }
+                OutlinedButton(
+                    enabled = transformedGridBpm(edit, 2.0) != null,
+                    onClick = { onHistoryChange(history.update(scaleGridBpm(edit, 2.0))) },
+                    modifier = Modifier.testTag("grid-double-bpm"),
+                ) { Text("Double BPM") }
                 OutlinedButton(onClick = {
                     onHistoryChange(history.update(nudgeGridAnchorByBeats(edit, -1, durationMs)))
                     onHaptic()

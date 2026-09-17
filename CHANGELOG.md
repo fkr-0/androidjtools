@@ -4,28 +4,48 @@ All notable changes to Android DJ Tools are documented here.
 
 ## Unreleased
 
-Post-0.1.0 integration and autonomous continuation.
+No unreleased changes are documented after `v0.1.1` yet.
+
+## 0.1.1 - 2026-09-17
+
+Patch release integrating the post-0.1.0 preparation, sync, qualification, and CI hardening lanes.
 
 ### Added
 
-- Durable offline mutation journal and conflict-resolution foundations with process-safe/idempotent receipt semantics.
-- Direct Sample Lib client/fake-server qualification including pairing/auth, opaque cursor reset, receipt recovery, and resumable integrity-checked media access.
-- Offline download/cache foundations, DJXML interoperability qualification, and cue/loop preparation editing/test surfaces.
-- Canonical Wave Four and Wave Five guarded work lanes for analysis/related intelligence, Android media integration, accessibility/performance, parity E2E, and packaging/upgrade release work.
-- Durable Wave Three/Four preflight and operator handoff documentation.
+- Durable offline mutation journal and conflict-resolution foundations with process-safe/idempotent receipt semantics, deterministic no-overtake replay ordering, and process-recreation recovery.
+- Direct Sample Lib transport and deterministic fake-server qualification for pairing/auth, opaque cursor reset, receipt recovery, offline/unavailable/ambiguous delivery recovery, and resumable integrity-checked media access.
+- Cue/loop and beat-grid preparation editing, including fail-closed half/double BPM correction and locale-stable BPM entry.
+- Offline download/cache foundations plus DJXML interoperability qualification across the Sample Lib authority boundary, including offline cue/loop/metadata/namespaced-tag intent surviving process recreation and reconciling only from authoritative receipts.
+- Sanitized advisory analysis transport for BPM/key/related candidates with provenance/freshness identity and receipt-gated acceptance semantics.
+- Android 15 / Pixel 7 Pro CI screenshot rendering for the five primary app surfaces, with PNG validation and failure diagnostics.
+- Release-gate evidence and CI qualification surfaces; parity refresh and device-only accessibility/performance work remain explicit post-release follow-ups.
+
+### Changed
+
+- CI now checks that `versionName`, changelog release metadata, and a pushed `v*` tag agree before building release artifacts.
+- APK workflow artifact names now derive from the app version instead of embedding an old release number.
+- DJXML qualification fails closed when canonical playlist/item identity and ordering are unavailable or regress upstream.
+- Safe field-wise conflict auto-merge now requires authoritative versioned `merge_safe_fields` evidence, disjoint local/remote edits, and declared-safe keys; all unsafe/ambiguous conflict classes remain user-visible.
 
 ### Verification
 
-- Sync protocol/fake-server suite: 26/26 passing.
-- Sample Lib fake integration suite: 7/7 passing.
-- JDK 17 Android qualification passes `:app:testDebugUnitTest`, `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug`, and `:app:assembleDebug`.
-- `git diff --check` passes.
+The final `v0.1.1` release gate requires all of the following on the integrated tree before tag/publish:
 
-### Still gated / not claimed
+- sync protocol/fake-server tests;
+- focused real Sample Lib DJXML adapter and playlist-authority qualification;
+- Android JVM unit tests;
+- Android instrumentation-test source compilation;
+- Android lint;
+- debug APK assembly and SHA-256 capture;
+- Git whitespace/diff validation;
+- release metadata/tag consistency validation.
 
-- Running canonical agents still own waveform/library closeout, beatgrid, cue/loop, mutation journal, Sample Lib, offline-download, DJXML and the guarded Wave Four/Five dependency chain. A running OCP task is dispatch evidence, not independent acceptance.
-- Real-device/emulator runtime, TalkBack, lock-screen/notification/Bluetooth/audio-focus, frame-time/jank, and real Sample Lib production evidence remain unclaimed unless a named target is actually exercised.
-- AGP 8.5.2 continues to warn that compileSdk 35 is newer than its certified compileSdk 34 range; the verified build remains green.
+### Known limitations
+
+- The attached APK remains an unsigned debug dogfood artifact, not a Play Store distribution build.
+- Local host qualification does not claim physical-device TalkBack, lock-screen/notification/Bluetooth/audio-focus, or sustained frame-time/jank behavior unless the final evidence packet names an exercised target.
+- The refreshed EPIC-18 ledger covers all 87 required stories as 49 pass, 13 partial, and 25 blocked, with no missing or failing entries. The blocked/partial stories are kept explicit rather than promoted: the local run has no attached Android device and hosted API-35 CI evidence is not yet observed at this release-preparation commit. The release-critical Lane B workflow review is independently approved; the separate exact-snapshot parity review remains a full-parity qualification gate rather than a claim made by this patch release. v0.1.1 is therefore not presented as full product parity.
+- AGP 8.5.2 warns that compileSdk 35 is newer than its certified compileSdk 34 range; this warning is retained rather than hidden.
 
 ## 0.1.0 - 2026-09-15
 

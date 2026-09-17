@@ -7,6 +7,7 @@ import dev.androidjtools.core.model.Loop
 import dev.androidjtools.core.model.SuggestionDecision
 import dev.androidjtools.core.model.SuggestionKind
 import dev.androidjtools.core.model.SuggestionPayload
+import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.round
 import kotlin.math.roundToLong
@@ -317,6 +318,17 @@ fun nudgeRangeHandle(
 
 fun updateGridBpm(edit: StagedGridEdit, requestedBpm: Double): StagedGridEdit =
     edit.copy(bpm = requestedBpm.coerceIn(MIN_BPM, MAX_BPM))
+
+fun transformedGridBpm(edit: StagedGridEdit, factor: Double): Double? {
+    if (!factor.isFinite() || factor <= 0.0) return null
+    val transformed = edit.bpm * factor
+    return transformed.takeIf { it.isFinite() && it in MIN_BPM..MAX_BPM }
+}
+
+fun scaleGridBpm(edit: StagedGridEdit, factor: Double): StagedGridEdit =
+    transformedGridBpm(edit, factor)?.let { edit.copy(bpm = it) } ?: edit
+
+fun formatGridBpm(value: Double): String = String.format(Locale.ROOT, "%.2f", value)
 
 fun updateGridAnchor(edit: StagedGridEdit, requestedAnchorMs: Long, durationMs: Long): StagedGridEdit =
     edit.copy(anchorMs = requestedAnchorMs.coerceIn(0L, durationMs.coerceAtLeast(0L)))

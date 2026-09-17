@@ -64,6 +64,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -565,7 +566,7 @@ internal fun TrackList(
     listState: LazyListState,
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().testTag("library-track-list"),
         state = listState,
         contentPadding = contentPadding,
     ) {
@@ -604,7 +605,7 @@ private fun TrackRow(
     val metadata = remember(track) { trackMetadata(track) }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("track-row-${track.id}"),
         tonalElevation = if (isCurrent || selected) 2.dp else 0.dp,
     ) {
         Row(
@@ -658,6 +659,7 @@ private fun TrackRow(
                     style = MaterialTheme.typography.labelMedium,
                     maxLines = if (roomy) 1 else 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("track-metadata-${track.id}"),
                 )
             }
             IconButton(
@@ -762,9 +764,10 @@ private fun ArtworkPlaceholder(track: Track) {
             .ifBlank { "♪" }
     }
     Surface(
-        modifier = Modifier.size(48.dp).semantics {
-            contentDescription = "Artwork placeholder for ${track.title}"
-        },
+        modifier = Modifier
+            .size(48.dp)
+            .testTag("track-artwork-${track.id}")
+            .semantics { contentDescription = "Artwork placeholder for ${track.title}" },
         shape = RoundedCornerShape(10.dp),
         tonalElevation = 3.dp,
     ) {

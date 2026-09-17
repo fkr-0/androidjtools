@@ -1,0 +1,1439 @@
+{
+  "schema": "androidjtools.parity/v1",
+  "task_id": "ANDROIDJTOOLS-WAVE5-PARITY-E2E-20260915",
+  "observed_at": "2026-09-17T10:57:00Z",
+  "qualification": "not_qualified",
+  "required_story_rule": "Every catalog story through EPIC-18 is required. EPIC-19 is excluded because it is downstream of EPIC-18.",
+  "operator_override": {
+    "dependency_gate_waived_for_execution": true,
+    "dependency_acceptance_waived_for_qualification": false,
+    "ocp_authenticated_binding_obtained": false,
+    "authority_note": "This refresh runs through the authenticated project manager under workflow packet a0655a7e-9ced-4145-acd6-301b2cbbc3bd and its active path claim; no separate canonical OCP task binding is asserted. The execution waiver still does not promote red evidence."
+  },
+  "independent_review": {
+    "requested": true,
+    "status": "pending_workflow_review",
+    "reason": "The refreshed EPIC-18 packet requires independent read-only review after submission; approval is not pre-claimed.",
+    "qualification_requires_approval": true,
+    "policy": "independent-review",
+    "reviewer_independent": false,
+    "reviewed_revision": null
+  },
+  "dependency_gate": {
+    "dependencies": [
+      "EPIC-02-SEARCH-FILTER",
+      "EPIC-05-CUES-LOOPS",
+      "EPIC-06-BEATGRID",
+      "EPIC-08-PLAYLISTS",
+      "EPIC-09-OFFLINE-DOWNLOADS",
+      "EPIC-11-MUTATION-JOURNAL-CONFLICTS",
+      "EPIC-12-SAMPLELIB-INTEGRATION",
+      "EPIC-14-ANALYSIS-RELATED",
+      "EPIC-15-ANDROID-MEDIA-INTEGRATION",
+      "EPIC-17-ACCESSIBILITY-PERFORMANCE"
+    ],
+    "execution_override": true,
+    "qualification_requires_normal_acceptance": true
+  },
+  "environment": {
+    "host_java": "17 (explicit /usr/lib/jvm/java-17-openjdk; system default 26.0.2.1 is incompatible with this Gradle/Kotlin toolchain)",
+    "gradle_user_home": "$PWD/.gradle-local (repository-local isolated writable cache for the fresh integrated gate)",
+    "android_device": "blocked: /opt/android-sdk/platform-tools/adb is healthy but reports zero attached devices; /usr/bin/adb is ignored because its host libusb linkage is broken",
+    "real_sample_lib": "/home/user/code/sample-lab/third_party/sample-lib",
+    "real_sample_lib_sync": "qualified: /v1/sync/hello, /v1/sync/pair, /v1/sync/pull, /v1/sync/push and receipt routes present",
+    "real_sample_lib_playlist_authority": "qualified: canonical playlist identity/order tests pass",
+    "hosted_ci": "not observed in this run"
+  },
+  "status_counts": {
+    "blocked": 25,
+    "pass": 49,
+    "partial": 13
+  },
+  "evidence": {
+    "fixture-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --no-daemon --console=plain --rerun-tasks",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/fixture/FixtureProvidersTest.kt"
+      ],
+      "observed_result": "Covered by the passing debug JVM unit suite; deterministic fixture providers are exercised."
+    },
+    "library-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.ui.library.LibraryLogicTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/ui/library/LibraryLogicTest.kt"
+      ],
+      "observed_result": "Covered by the passing debug JVM unit suite, including 10,000-track deterministic filtering."
+    },
+    "library-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.library.LibraryScreenTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/ui/library/LibraryScreenTest.kt"
+      ],
+      "observed_result": "Not run: adb reported no attached devices."
+    },
+    "playback-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.playback.PlayerQueueControllerTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/playback/PlayerQueueControllerTest.kt"
+      ],
+      "observed_result": "Covered by the passing debug JVM unit suite; queue mutations, seek and recreation restore are tested."
+    },
+    "player-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.player.PlayerScreenTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/ui/player/PlayerScreenTest.kt"
+      ],
+      "observed_result": "Not run: adb reported no attached devices."
+    },
+    "waveform-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.ui.waveform.WaveformModelTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/ui/waveform/WaveformModelTest.kt"
+      ],
+      "observed_result": "Covered by the passing JVM suite; viewport, grid, quantize, beat-jump and overlay model behavior is tested."
+    },
+    "waveform-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.waveform.WaveformScreenTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/ui/waveform/WaveformScreenTest.kt"
+      ],
+      "observed_result": "Not run: adb reported no attached devices."
+    },
+    "beatgrid-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:testDebugUnitTest --no-daemon --console=plain",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/prep/beatgrid/BeatGridPreparationTest.kt"
+      ],
+      "observed_result": "Observed in the passing full debug JVM suite; beat indexing, half/double BPM, phase/downbeat edits, candidate acceptance, undo and revision-safe restore are covered."
+    },
+    "beatgrid-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.prep.beatgrid.BeatGridEditorTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/prep/beatgrid/BeatGridEditorTest.kt"
+      ],
+      "observed_result": "Instrumentation source compiles in the fresh host gate; execution remains blocked because adb reports no attached device."
+    },
+    "cues-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.prep.cues.CueEditorTest --tests dev.androidjtools.prep.cues.PreparationStagingTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/prep/cues/CueEditorTest.kt",
+        "app/src/test/java/dev/androidjtools/prep/cues/PreparationStagingTest.kt"
+      ],
+      "observed_result": "Covered by the passing JVM suite; cue CRUD, roles, undo, staging and snap semantics are tested."
+    },
+    "cues-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.prep.cues.CueEditorSemanticsTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/prep/cues/CueEditorSemanticsTest.kt"
+      ],
+      "observed_result": "Not run: adb reported no attached devices."
+    },
+    "loops-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.prep.loops.LoopEditorTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/prep/loops/LoopEditorTest.kt"
+      ],
+      "observed_result": "Covered by the passing JVM suite; loop CRUD, resizing, roles, undo and canonical staging gates are tested."
+    },
+    "loops-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.prep.loops.LoopEditorSemanticsTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/prep/loops/LoopEditorSemanticsTest.kt"
+      ],
+      "observed_result": "Not run: adb reported no attached devices."
+    },
+    "metadata-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.ui.metadata.MetadataLogicTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/ui/metadata/MetadataLogicTest.kt"
+      ],
+      "observed_result": "Covered by the passing JVM suite; staged edits, validation, proposal acceptance and batch patching are tested."
+    },
+    "metadata-lane-c-host": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:testDebugUnitTest --tests 'dev.androidjtools.ui.metadata.*' --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/ui/metadata/MetadataLogicTest.kt",
+        "app/src/test/java/dev/androidjtools/ui/metadata/MetadataQuickActionTest.kt"
+      ],
+      "observed_result": "Lane C observed the focused metadata host suite passing, including quick-rating actions and namespaced-tag staging/validation."
+    },
+    "metadata-quick-rating-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.metadata.MetadataQuickRatingTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/ui/metadata/MetadataQuickRatingTest.kt"
+      ],
+      "observed_result": "One-tap five-star rating and namespaced-tag UI instrumentation exists and compiles; SDK adb reports zero attached devices, so it has not executed."
+    },
+    "namespaced-tag-roundtrip": {
+      "tier": "fake_backend",
+      "status": "pass",
+      "environment": "host-jvm+fake-sample-lib",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:testDebugUnitTest --tests dev.androidjtools.sync.journal.MutationJournalTest --tests dev.androidjtools.remote.samplelib.SampleLibClientTest --tests dev.androidjtools.offline.download.OfflineDownloadEngineTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/sync/journal/MutationJournalTest.kt",
+        "app/src/test/java/dev/androidjtools/remote/samplelib/SampleLibClientTest.kt"
+      ],
+      "observed_result": "Lane B observed the focused suite passing. A namespaced mood:night tag is journaled offline, survives process recreation, is pushed through SampleLibClient, receives the authoritative canonical receipt, and retains exact-body retry semantics."
+    },
+    "playlist-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.ui.playlist.PlaylistLogicTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/ui/playlist/PlaylistLogicTest.kt"
+      ],
+      "observed_result": "Covered by the passing JVM suite; membership/order, hierarchy, CRUD recovery and smart-rule preview are tested."
+    },
+    "collections-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.collections.CollectionsScreenTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/ui/collections/CollectionsScreenTest.kt"
+      ],
+      "observed_result": "Not run: adb reported no attached devices."
+    },
+    "offline-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.offline.download.OfflineDownloadEngineTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/offline/download/OfflineDownloadEngineTest.kt"
+      ],
+      "observed_result": "Covered by the passing JVM suite; range resume, process-death restore, integrity and pin-safe quota behavior are tested."
+    },
+    "sync-contract": {
+      "tier": "fake_backend",
+      "status": "pass",
+      "environment": "host-python",
+      "command": "cd test-server && python3 -m unittest -v test_contracts test_fake_sync_server",
+      "test_refs": [
+        "test-server/test_contracts.py",
+        "test-server/test_fake_sync_server.py"
+      ],
+      "observed_result": "Observed 26 tests passing, including idempotent replay, receipt recovery, conflict and protocol mismatch states."
+    },
+    "journal-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.sync.journal.MutationJournalTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/sync/journal/MutationJournalTest.kt"
+      ],
+      "observed_result": "Covered by the passing JVM suite; durable-before-success, process death, immutable replay and compaction are tested."
+    },
+    "conflict-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.sync.conflict.ConflictResolverTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/sync/conflict/ConflictResolverTest.kt"
+      ],
+      "observed_result": "Observed in the passing JVM suite. Disjoint protocol-authorized SAFE_FIELDWISE edits auto-merge, including deletion; same-field, undeclared-field, ordered-collection, delete/edit, identity and schema conflicts still fail closed to user review."
+    },
+    "samplelib-client-unit": {
+      "tier": "fake_backend",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.remote.samplelib.SampleLibClientTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/remote/samplelib/SampleLibClientTest.kt"
+      ],
+      "observed_result": "Covered by the passing JVM suite; pairing, pull reset, ambiguous delivery recovery, range resume and integrity are tested against a fake transport."
+    },
+    "samplelib-fake-http": {
+      "tier": "fake_backend",
+      "status": "pass",
+      "environment": "host-python-loopback",
+      "command": "cd test-server/samplelib && python3 -m unittest -v test_fake_samplelib_server",
+      "test_refs": [
+        "test-server/samplelib/test_fake_samplelib_server.py"
+      ],
+      "observed_result": "Observed 7 authenticated fake Sample Lib HTTP tests passing, including disconnect-after-commit idempotent recovery and range integrity."
+    },
+    "djxml-policy-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.interop.DjxmlInteropQualificationTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/interop/DjxmlInteropQualificationTest.kt"
+      ],
+      "observed_result": "Covered by the passing JVM suite; policy fails closed when real sync or canonical playlist authority is absent."
+    },
+    "samplelib-real-djxml": {
+      "tier": "real_backend",
+      "status": "pass",
+      "environment": "local-real-sample-lib",
+      "command": "python3 e2e/djxml/qualify_samplelib.py --require-real-sync",
+      "test_refs": [
+        "e2e/djxml/qualify_samplelib.py",
+        "/home/user/code/sample-lab/third_party/sample-lib"
+      ],
+      "observed_result": "Fresh --require-real-sync qualification passed against the real Sample Lib checkout: adapter and playlist-authority tests pass, stable asset/cue/loop/region/tag semantics are preserved, canonical playlist identity/order is present, and production /v1/sync/hello, /v1/sync/pair, /v1/sync/pull, /v1/sync/push and receipt routes are exposed."
+    },
+    "analysis-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.ui.analysis.AnalysisPresentationTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/ui/analysis/AnalysisPresentationTest.kt"
+      ],
+      "observed_result": "Covered by the passing JVM suite; provenance, stale/offline review, capability degradation, timeline candidates and safety separation are tested."
+    },
+    "analysis-lane-c-host": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:testDebugUnitTest --tests 'dev.androidjtools.remote.samplelib.SampleLibAnalysisTest' --tests 'dev.androidjtools.sync.journal.AnalysisSuggestionAcceptanceTest' --tests 'dev.androidjtools.ui.analysis.AnalysisPresentationTest' --tests 'dev.androidjtools.ui.analysis.AnalysisCoverageE2ETest' --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/remote/samplelib/SampleLibAnalysisTest.kt",
+        "app/src/test/java/dev/androidjtools/sync/journal/AnalysisSuggestionAcceptanceTest.kt",
+        "app/src/test/java/dev/androidjtools/ui/analysis/AnalysisPresentationTest.kt",
+        "app/src/test/java/dev/androidjtools/ui/analysis/AnalysisCoverageE2ETest.kt"
+      ],
+      "observed_result": "Lane C observed the focused host suite passing. It covers related-track dimensions/provenance, CUE/LOOP/REGION transport decoding, stale fail-closed refresh, journal-only acceptance, receipt-gated canonicalization and the core/UI multi-kind candidate matrix."
+    },
+    "analysis-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.analysis.AnalysisAssistantContentTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/ui/analysis/AnalysisAssistantContentTest.kt"
+      ],
+      "observed_result": "Not run: adb reported no attached devices."
+    },
+    "audio-focus-unit": {
+      "tier": "fixture",
+      "status": "pass",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.playback.AudioFocusPolicyTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/playback/AudioFocusPolicyTest.kt"
+      ],
+      "observed_result": "Covered by the passing JVM suite; transient/permanent loss, duck and gain behavior are tested."
+    },
+    "system-media-device": {
+      "tier": "real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew connectedDebugAndroidTest",
+      "test_refs": [
+        "app/src/main/java/dev/androidjtools/playback/Media3PlaybackService.kt",
+        "app/src/main/AndroidManifest.xml"
+      ],
+      "observed_result": "No attached device and no dedicated MediaSession/Bluetooth instrumentation test was found."
+    },
+    "ui-host-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "python3 e2e/ui/run_ui_e2e.py --require-device",
+      "test_refs": [
+        "e2e/ui/run_ui_e2e.py",
+        "app/src/androidTest/java/dev/androidjtools/e2e/AppShellE2ETest.kt"
+      ],
+      "observed_result": "Fresh host gate passes unit tests, Android-test compilation, lint and assemble; instrumentation remains blocked because adb reports no attached device."
+    },
+    "lane-a-visual-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.visual.LaneAVisualParityTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/visual/LaneAVisualParityTest.kt",
+        "app/src/androidTest/java/dev/androidjtools/ui/library/LibraryScreenTest.kt"
+      ],
+      "observed_result": "Lane A added device-rendered PNG evidence for US-011 and US-040/043 plus semantic assertions for artwork/compact metadata. The complete Android-test source set compiles, but zero attached devices means these visual assertions have not executed."
+    },
+    "androidtest-compile": {
+      "tier": "host_compile",
+      "status": "pass",
+      "environment": "host-jdk17",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew :app:compileDebugAndroidTestKotlin --no-daemon --console=plain",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools"
+      ],
+      "observed_result": "Fresh full debug Android-test Kotlin source compilation passed after all four lanes converged. This proves source/build integration only and is not device execution evidence."
+    },
+    "architecture-provider-boundary": {
+      "tier": "host_static",
+      "status": "pass",
+      "environment": "host-python",
+      "command": "python3 e2e/parity/check_architecture_boundary.py",
+      "test_refs": [
+        "e2e/parity/check_architecture_boundary.py",
+        "app/src/main/java/dev/androidjtools/core/provider/Providers.kt",
+        "app/src/main/java/dev/androidjtools/ui"
+      ],
+      "observed_result": "Fresh dependency-boundary scan inspected 17 product UI Kotlin files, found no direct imports from fixture/remote/sync/debug/interop implementation packages, and verified the provider contract seam."
+    },
+    "debug-harness-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.debug.DebugHarnessActivityTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/debug/DebugHarnessActivityTest.kt"
+      ],
+      "observed_result": "Debug provider/failure injection plus journal/receipt instrumentation exists and compiles, but cannot execute without an attached Android device."
+    },
+    "scaled-font-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.a11y.ScaledFontNavigationTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/a11y/ScaledFontNavigationTest.kt"
+      ],
+      "observed_result": "The 2x font-scale navigation/discoverability instrumentation exists and compiles; execution remains blocked by device absence."
+    },
+    "debug-harness-release-exclusion": {
+      "tier": "release_artifact",
+      "status": "pass",
+      "environment": "host-apkanalyzer",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew :app:assembleDebug :app:assembleRelease --no-daemon --console=plain && python3 app/src/debug/verify_debug_harness.py --debug-apk app/build/outputs/apk/debug/app-debug.apk --release-apk app/build/outputs/apk/release/app-release-unsigned.apk",
+      "test_refs": [
+        "app/src/debug/verify_debug_harness.py",
+        "app/src/debug/AndroidManifest.xml",
+        "app/src/debug/assets/debug-harness-contract.json"
+      ],
+      "observed_result": "Fresh release build and APK inspection passed: DebugHarnessActivity and debug-harness-contract.json are present in debug and absent from release. Release APK sha256 3974f1e0debd6080d78bec32745fb5d8440c4e11becb4b0787bafa7a9e0b0d6c."
+    },
+    "a11y-shell-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.a11y.TalkBackSemanticsTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/a11y/TalkBackSemanticsTest.kt"
+      ],
+      "observed_result": "Primary shell/library/waveform accessibility semantics assertions exist and compile in the full Android-test source set, but no attached Android target exists to execute them."
+    },
+    "a11y-library-device": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.library.LibraryScreenTest",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/ui/library/LibraryScreenTest.kt::keyControlsHaveAccessibilitySemantics"
+      ],
+      "observed_result": "Semantics assertion exists but was not run because adb reported no attached devices."
+    },
+    "performance-10k-unit": {
+      "tier": "fixture",
+      "status": "partial",
+      "environment": "host-jvm",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew testDebugUnitTest --tests dev.androidjtools.ui.library.LibraryLogicTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/ui/library/LibraryLogicTest.kt::large library filtering is deterministic and preserves stable ids"
+      ],
+      "observed_result": "10,000-track logic coverage passes, but it is not a frame/latency benchmark and therefore cannot prove interactive performance."
+    },
+    "performance-device-gate": {
+      "tier": "emulator_or_real_device",
+      "status": "blocked",
+      "environment": "android-device",
+      "command": "python3 e2e/ui/run_ui_e2e.py --require-device",
+      "test_refs": [
+        "app/src/androidTest/java/dev/androidjtools/performance/PerformanceRegressionTest.kt",
+        "e2e/ui/run_ui_e2e.py"
+      ],
+      "observed_result": "A reproducible Android instrumentation regression tier now compiles: it measures 10,000-track initial/search latency and Window FrameMetrics during waveform gestures with explicit fail-closed thresholds, then emits device JSON. The SDK adb probe resolved /opt/android-sdk/platform-tools/adb but found zero attached devices, so no timing result is claimed."
+    },
+    "resilience-host-integration": {
+      "tier": "fake_backend",
+      "status": "pass",
+      "environment": "host-jvm+fake-sample-lib",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:testDebugUnitTest --tests dev.androidjtools.sync.journal.MutationJournalTest --tests dev.androidjtools.remote.samplelib.SampleLibClientTest --tests dev.androidjtools.offline.download.OfflineDownloadEngineTest --no-daemon",
+      "test_refs": [
+        "app/src/test/java/dev/androidjtools/sync/journal/MutationJournalTest.kt",
+        "app/src/test/java/dev/androidjtools/remote/samplelib/SampleLibClientTest.kt",
+        "app/src/test/java/dev/androidjtools/offline/download/OfflineDownloadEngineTest.kt"
+      ],
+      "observed_result": "Lane B observed the focused resilience suite passing for offline journaling, process recreation, reconnect/push, canonical receipts, exact replay, and offline download integrity. The complementary fake HTTP/protocol suite passed 36/36; real-device traversal remains separate."
+    },
+    "parity-validator": {
+      "tier": "hosted_ci_compatible",
+      "status": "pass",
+      "environment": "host-python",
+      "command": "python3 e2e/parity/validate_matrix.py",
+      "test_refs": [
+        "e2e/parity/validate_matrix.py",
+        "docs/parity/parity.json"
+      ],
+      "observed_result": "Structural validator is required to pass before this generated ledger is accepted; qualification mode still fails while red stories remain."
+    },
+    "real-core-e2e": {
+      "tier": "real_device_plus_real_backend",
+      "status": "blocked",
+      "environment": "android-device+real-sample-lib",
+      "command": "python3 e2e/parity/run_core_e2e.py --require-real",
+      "test_refs": [
+        "e2e/parity/run_core_e2e.py"
+      ],
+      "observed_result": "Fresh real-core probe reports the real Sample Lib server side fully qualified, but no attached Android device and no androidjtools.real-device-backend-evidence/v1 packet from an actual Android -> real Sample Lib pair/pull/push/receipt/reconnect traversal are available. Device presence alone is rejected."
+    },
+    "hosted-ci": {
+      "tier": "hosted_ci",
+      "status": "missing",
+      "environment": "hosted-ci",
+      "command": null,
+      "test_refs": [],
+      "observed_result": "No hosted-CI EPIC-18 execution evidence was available in this run."
+    }
+  },
+  "stories": [
+    {
+      "id": "US-001",
+      "epic": "EPIC-00-FOUNDATION",
+      "verify": "fixture-first launch test",
+      "status": "blocked",
+      "evidence": [
+        "ui-host-device"
+      ],
+      "gap": "The fixture-first APK host gate passes, but required install/launch evidence cannot run without an attached Android device."
+    },
+    {
+      "id": "US-002",
+      "epic": "EPIC-00-FOUNDATION",
+      "verify": "navigation UI test",
+      "status": "blocked",
+      "evidence": [
+        "ui-host-device"
+      ],
+      "gap": "AppShellE2ETest traverses every major fixture-backed route and compiles, but device instrumentation cannot execute without an attached Android device."
+    },
+    {
+      "id": "US-003",
+      "epic": "EPIC-00-FOUNDATION",
+      "verify": "fixture snapshot test",
+      "status": "pass",
+      "evidence": [
+        "fixture-unit"
+      ]
+    },
+    {
+      "id": "US-004",
+      "epic": "EPIC-00-FOUNDATION",
+      "verify": "architecture dependency test",
+      "status": "pass",
+      "evidence": [
+        "architecture-provider-boundary"
+      ]
+    },
+    {
+      "id": "US-010",
+      "epic": "EPIC-01-LIBRARY",
+      "verify": "library list UI test",
+      "status": "partial",
+      "evidence": [
+        "library-unit",
+        "library-device"
+      ],
+      "gap": "Dense-list logic is covered; actual device interaction remains unexecuted."
+    },
+    {
+      "id": "US-011",
+      "epic": "EPIC-01-LIBRARY",
+      "verify": "screenshot test",
+      "status": "blocked",
+      "evidence": [
+        "androidtest-compile",
+        "lane-a-visual-device"
+      ],
+      "gap": "Artwork/compact-metadata semantic and PNG capture assertions now exist and compile, but no Android target is attached to render the visual evidence."
+    },
+    {
+      "id": "US-012",
+      "epic": "EPIC-01-LIBRARY",
+      "verify": "navigation restoration test",
+      "status": "blocked",
+      "evidence": [
+        "library-device"
+      ],
+      "gap": "Matching Compose instrumentation exists but no Android device is attached."
+    },
+    {
+      "id": "US-013",
+      "epic": "EPIC-01-LIBRARY",
+      "verify": "injected-state tests",
+      "status": "blocked",
+      "evidence": [
+        "library-device"
+      ],
+      "gap": "Matching Compose instrumentation exists but no Android device is attached."
+    },
+    {
+      "id": "US-014",
+      "epic": "EPIC-01-LIBRARY",
+      "verify": "multiselect interaction test",
+      "status": "blocked",
+      "evidence": [
+        "library-device"
+      ],
+      "gap": "Matching Compose instrumentation exists but no Android device is attached."
+    },
+    {
+      "id": "US-020",
+      "epic": "EPIC-02-SEARCH-FILTER",
+      "verify": "query debounce and result test",
+      "status": "pass",
+      "evidence": [
+        "library-unit"
+      ]
+    },
+    {
+      "id": "US-021",
+      "epic": "EPIC-02-SEARCH-FILTER",
+      "verify": "sort contract test",
+      "status": "pass",
+      "evidence": [
+        "library-unit"
+      ]
+    },
+    {
+      "id": "US-022",
+      "epic": "EPIC-02-SEARCH-FILTER",
+      "verify": "filter composition test",
+      "status": "pass",
+      "evidence": [
+        "library-unit"
+      ]
+    },
+    {
+      "id": "US-023",
+      "epic": "EPIC-02-SEARCH-FILTER",
+      "verify": "saved-view persistence test",
+      "status": "pass",
+      "evidence": [
+        "library-unit"
+      ]
+    },
+    {
+      "id": "US-030",
+      "epic": "EPIC-03-PLAYBACK-QUEUE",
+      "verify": "playback interaction test",
+      "status": "blocked",
+      "evidence": [
+        "player-device"
+      ],
+      "gap": "The user-facing playback surfaces require instrumentation evidence; no Android device is attached."
+    },
+    {
+      "id": "US-031",
+      "epic": "EPIC-03-PLAYBACK-QUEUE",
+      "verify": "player continuity test",
+      "status": "blocked",
+      "evidence": [
+        "player-device"
+      ],
+      "gap": "The user-facing playback surfaces require instrumentation evidence; no Android device is attached."
+    },
+    {
+      "id": "US-032",
+      "epic": "EPIC-03-PLAYBACK-QUEUE",
+      "verify": "queue mutation test",
+      "status": "pass",
+      "evidence": [
+        "playback-unit"
+      ]
+    },
+    {
+      "id": "US-033",
+      "epic": "EPIC-03-PLAYBACK-QUEUE",
+      "verify": "process recreation test",
+      "status": "pass",
+      "evidence": [
+        "playback-unit"
+      ]
+    },
+    {
+      "id": "US-034",
+      "epic": "EPIC-03-PLAYBACK-QUEUE",
+      "verify": "seek precision test",
+      "status": "pass",
+      "evidence": [
+        "playback-unit"
+      ]
+    },
+    {
+      "id": "US-040",
+      "epic": "EPIC-04-WAVEFORM",
+      "verify": "waveform screenshot test",
+      "status": "blocked",
+      "evidence": [
+        "waveform-device",
+        "lane-a-visual-device"
+      ],
+      "gap": "Waveform density/render and device-rendered overview/detail/overlay evidence exist, but no Android target is attached."
+    },
+    {
+      "id": "US-041",
+      "epic": "EPIC-04-WAVEFORM",
+      "verify": "gesture test",
+      "status": "partial",
+      "evidence": [
+        "waveform-unit",
+        "waveform-device"
+      ],
+      "gap": "Deterministic model behavior passes; gesture/render instrumentation remains blocked by device availability."
+    },
+    {
+      "id": "US-042",
+      "epic": "EPIC-04-WAVEFORM",
+      "verify": "gesture-to-position test",
+      "status": "partial",
+      "evidence": [
+        "waveform-unit",
+        "waveform-device"
+      ],
+      "gap": "Deterministic model behavior passes; gesture/render instrumentation remains blocked by device availability."
+    },
+    {
+      "id": "US-043",
+      "epic": "EPIC-04-WAVEFORM",
+      "verify": "overlay rendering test",
+      "status": "partial",
+      "evidence": [
+        "waveform-unit",
+        "waveform-device",
+        "lane-a-visual-device"
+      ],
+      "gap": "Overlay model behavior passes and device-rendered canonical/candidate legend evidence exists, but Android execution remains blocked by device availability."
+    },
+    {
+      "id": "US-050",
+      "epic": "EPIC-05-CUES-LOOPS",
+      "verify": "cue creation test",
+      "status": "pass",
+      "evidence": [
+        "cues-unit"
+      ]
+    },
+    {
+      "id": "US-051",
+      "epic": "EPIC-05-CUES-LOOPS",
+      "verify": "cue edit test",
+      "status": "pass",
+      "evidence": [
+        "cues-unit"
+      ]
+    },
+    {
+      "id": "US-052",
+      "epic": "EPIC-05-CUES-LOOPS",
+      "verify": "loop edit test",
+      "status": "pass",
+      "evidence": [
+        "loops-unit"
+      ]
+    },
+    {
+      "id": "US-053",
+      "epic": "EPIC-05-CUES-LOOPS",
+      "verify": "role model test",
+      "status": "pass",
+      "evidence": [
+        "cues-unit",
+        "loops-unit"
+      ]
+    },
+    {
+      "id": "US-054",
+      "epic": "EPIC-05-CUES-LOOPS",
+      "verify": "delete confirmation and undo test",
+      "status": "pass",
+      "evidence": [
+        "cues-unit",
+        "loops-unit"
+      ]
+    },
+    {
+      "id": "US-055",
+      "epic": "EPIC-05-CUES-LOOPS",
+      "verify": "offline journal test",
+      "status": "partial",
+      "evidence": [
+        "resilience-host-integration",
+        "cues-device",
+        "loops-device"
+      ],
+      "gap": "Cue/loop preparation now survives durable journaling, process recreation, reconnect and authoritative receipt at the host/backend tier; the integrated offline editor interaction still has not run on an Android target."
+    },
+    {
+      "id": "US-060",
+      "epic": "EPIC-06-BEATGRID",
+      "verify": "grid rendering test",
+      "status": "partial",
+      "evidence": [
+        "beatgrid-unit",
+        "beatgrid-device"
+      ],
+      "gap": "Beat-grid model/editor semantics pass on the host; rendered device interaction remains blocked by device absence."
+    },
+    {
+      "id": "US-061",
+      "epic": "EPIC-06-BEATGRID",
+      "verify": "grid edit test",
+      "status": "pass",
+      "evidence": [
+        "beatgrid-unit"
+      ]
+    },
+    {
+      "id": "US-062",
+      "epic": "EPIC-06-BEATGRID",
+      "verify": "bpm transform test",
+      "status": "pass",
+      "evidence": [
+        "beatgrid-unit"
+      ]
+    },
+    {
+      "id": "US-063",
+      "epic": "EPIC-06-BEATGRID",
+      "verify": "quantize and jump tests",
+      "status": "pass",
+      "evidence": [
+        "beatgrid-unit",
+        "cues-unit"
+      ]
+    },
+    {
+      "id": "US-070",
+      "epic": "EPIC-07-METADATA",
+      "verify": "metadata edit test",
+      "status": "pass",
+      "evidence": [
+        "metadata-unit"
+      ]
+    },
+    {
+      "id": "US-071",
+      "epic": "EPIC-07-METADATA",
+      "verify": "one-tap rating test",
+      "status": "partial",
+      "evidence": [
+        "metadata-lane-c-host",
+        "androidtest-compile",
+        "metadata-quick-rating-device"
+      ],
+      "gap": "One-tap five-star rating instrumentation exists and compiles, while host quick-action logic passes; device interaction remains unexecuted."
+    },
+    {
+      "id": "US-072",
+      "epic": "EPIC-07-METADATA",
+      "verify": "tag round-trip test",
+      "status": "pass",
+      "evidence": [
+        "metadata-unit",
+        "namespaced-tag-roundtrip"
+      ]
+    },
+    {
+      "id": "US-073",
+      "epic": "EPIC-07-METADATA",
+      "verify": "multiselect batch test",
+      "status": "pass",
+      "evidence": [
+        "metadata-unit"
+      ]
+    },
+    {
+      "id": "US-080",
+      "epic": "EPIC-08-PLAYLISTS",
+      "verify": "playlist CRUD test",
+      "status": "pass",
+      "evidence": [
+        "playlist-unit"
+      ]
+    },
+    {
+      "id": "US-081",
+      "epic": "EPIC-08-PLAYLISTS",
+      "verify": "drag ordering test",
+      "status": "pass",
+      "evidence": [
+        "playlist-unit"
+      ]
+    },
+    {
+      "id": "US-082",
+      "epic": "EPIC-08-PLAYLISTS",
+      "verify": "hierarchy test",
+      "status": "pass",
+      "evidence": [
+        "playlist-unit"
+      ]
+    },
+    {
+      "id": "US-083",
+      "epic": "EPIC-08-PLAYLISTS",
+      "verify": "rule engine test",
+      "status": "pass",
+      "evidence": [
+        "playlist-unit"
+      ]
+    },
+    {
+      "id": "US-084",
+      "epic": "EPIC-08-PLAYLISTS",
+      "verify": "preview test",
+      "status": "pass",
+      "evidence": [
+        "playlist-unit"
+      ]
+    },
+    {
+      "id": "US-090",
+      "epic": "EPIC-09-OFFLINE-DOWNLOADS",
+      "verify": "pin download test",
+      "status": "pass",
+      "evidence": [
+        "offline-unit"
+      ]
+    },
+    {
+      "id": "US-091",
+      "epic": "EPIC-09-OFFLINE-DOWNLOADS",
+      "verify": "progress state test",
+      "status": "partial",
+      "evidence": [
+        "offline-unit"
+      ],
+      "gap": "Progress/error engine state is covered, but no device UI progress assertion is present."
+    },
+    {
+      "id": "US-092",
+      "epic": "EPIC-09-OFFLINE-DOWNLOADS",
+      "verify": "WorkManager resume test",
+      "status": "pass",
+      "evidence": [
+        "offline-unit"
+      ]
+    },
+    {
+      "id": "US-093",
+      "epic": "EPIC-09-OFFLINE-DOWNLOADS",
+      "verify": "cache policy test",
+      "status": "pass",
+      "evidence": [
+        "offline-unit"
+      ]
+    },
+    {
+      "id": "US-094",
+      "epic": "EPIC-09-OFFLINE-DOWNLOADS",
+      "verify": "airplane-mode instrumentation test",
+      "status": "partial",
+      "evidence": [
+        "offline-unit",
+        "resilience-host-integration"
+      ],
+      "gap": "Cached-media resolution plus offline metadata/preparation journal persistence and reconnect pass on the host; actual cached playback/editing remains unexecuted on Android hardware/emulator."
+    },
+    {
+      "id": "US-100",
+      "epic": "EPIC-10-SYNC-CONTRACT",
+      "verify": "schema compatibility test",
+      "status": "pass",
+      "evidence": [
+        "sync-contract"
+      ]
+    },
+    {
+      "id": "US-101",
+      "epic": "EPIC-10-SYNC-CONTRACT",
+      "verify": "idempotency test",
+      "status": "pass",
+      "evidence": [
+        "sync-contract"
+      ]
+    },
+    {
+      "id": "US-102",
+      "epic": "EPIC-10-SYNC-CONTRACT",
+      "verify": "receipt contract test",
+      "status": "pass",
+      "evidence": [
+        "sync-contract"
+      ]
+    },
+    {
+      "id": "US-103",
+      "epic": "EPIC-10-SYNC-CONTRACT",
+      "verify": "fake server state matrix",
+      "status": "pass",
+      "evidence": [
+        "sync-contract"
+      ]
+    },
+    {
+      "id": "US-104",
+      "epic": "EPIC-10-SYNC-CONTRACT",
+      "verify": "version mismatch test",
+      "status": "pass",
+      "evidence": [
+        "sync-contract"
+      ]
+    },
+    {
+      "id": "US-110",
+      "epic": "EPIC-11-MUTATION-JOURNAL-CONFLICTS",
+      "verify": "durability test",
+      "status": "pass",
+      "evidence": [
+        "journal-unit",
+        "sync-contract"
+      ]
+    },
+    {
+      "id": "US-111",
+      "epic": "EPIC-11-MUTATION-JOURNAL-CONFLICTS",
+      "verify": "replay test",
+      "status": "pass",
+      "evidence": [
+        "journal-unit",
+        "sync-contract"
+      ]
+    },
+    {
+      "id": "US-112",
+      "epic": "EPIC-11-MUTATION-JOURNAL-CONFLICTS",
+      "verify": "compaction test",
+      "status": "pass",
+      "evidence": [
+        "journal-unit",
+        "sync-contract"
+      ]
+    },
+    {
+      "id": "US-113",
+      "epic": "EPIC-11-MUTATION-JOURNAL-CONFLICTS",
+      "verify": "merge matrix test",
+      "status": "pass",
+      "evidence": [
+        "conflict-unit"
+      ]
+    },
+    {
+      "id": "US-114",
+      "epic": "EPIC-11-MUTATION-JOURNAL-CONFLICTS",
+      "verify": "conflict resolution UI test",
+      "status": "pass",
+      "evidence": [
+        "conflict-unit"
+      ]
+    },
+    {
+      "id": "US-120",
+      "epic": "EPIC-12-SAMPLELIB-INTEGRATION",
+      "verify": "pairing E2E",
+      "status": "blocked",
+      "evidence": [
+        "samplelib-client-unit",
+        "samplelib-fake-http",
+        "samplelib-real-djxml",
+        "real-core-e2e"
+      ],
+      "gap": "Pairing/pull/push/receipt/reconnect behavior passes at client/fake tiers and the real Sample Lib production sync facade qualifies; Android-to-real-backend traversal remains unobserved and requires both an attached Android target and a validated real-device-backend evidence packet."
+    },
+    {
+      "id": "US-121",
+      "epic": "EPIC-12-SAMPLELIB-INTEGRATION",
+      "verify": "delta pull E2E",
+      "status": "blocked",
+      "evidence": [
+        "samplelib-client-unit",
+        "samplelib-fake-http",
+        "samplelib-real-djxml",
+        "real-core-e2e"
+      ],
+      "gap": "Pairing/pull/push/receipt/reconnect behavior passes at client/fake tiers and the real Sample Lib production sync facade qualifies; Android-to-real-backend traversal remains unobserved and requires both an attached Android target and a validated real-device-backend evidence packet."
+    },
+    {
+      "id": "US-122",
+      "epic": "EPIC-12-SAMPLELIB-INTEGRATION",
+      "verify": "mutation push E2E",
+      "status": "blocked",
+      "evidence": [
+        "samplelib-client-unit",
+        "samplelib-fake-http",
+        "samplelib-real-djxml",
+        "real-core-e2e"
+      ],
+      "gap": "Pairing/pull/push/receipt/reconnect behavior passes at client/fake tiers and the real Sample Lib production sync facade qualifies; Android-to-real-backend traversal remains unobserved and requires both an attached Android target and a validated real-device-backend evidence packet."
+    },
+    {
+      "id": "US-123",
+      "epic": "EPIC-12-SAMPLELIB-INTEGRATION",
+      "verify": "reconnect E2E",
+      "status": "blocked",
+      "evidence": [
+        "samplelib-client-unit",
+        "samplelib-fake-http",
+        "samplelib-real-djxml",
+        "real-core-e2e"
+      ],
+      "gap": "Pairing/pull/push/receipt/reconnect behavior passes at client/fake tiers and the real Sample Lib production sync facade qualifies; Android-to-real-backend traversal remains unobserved and requires both an attached Android target and a validated real-device-backend evidence packet."
+    },
+    {
+      "id": "US-130",
+      "epic": "EPIC-13-DJXML-INTEROP",
+      "verify": "Android-to-DJXML E2E",
+      "status": "blocked",
+      "evidence": [
+        "djxml-policy-unit",
+        "samplelib-real-djxml",
+        "real-core-e2e"
+      ],
+      "gap": "Real Sample Lib adapter, production sync, and canonical playlist identity/order qualify; Android-to-real-backend traversal still lacks an attached target plus validated real-device-backend evidence."
+    },
+    {
+      "id": "US-131",
+      "epic": "EPIC-13-DJXML-INTEROP",
+      "verify": "DJXML-to-Android E2E",
+      "status": "blocked",
+      "evidence": [
+        "djxml-policy-unit",
+        "samplelib-real-djxml",
+        "real-core-e2e"
+      ],
+      "gap": "Real Sample Lib adapter, production sync, and canonical playlist identity/order qualify; Android-to-real-backend traversal still lacks an attached target plus validated real-device-backend evidence."
+    },
+    {
+      "id": "US-132",
+      "epic": "EPIC-13-DJXML-INTEROP",
+      "verify": "playlist round-trip E2E",
+      "status": "blocked",
+      "evidence": [
+        "djxml-policy-unit",
+        "samplelib-real-djxml",
+        "real-core-e2e"
+      ],
+      "gap": "Real Sample Lib adapter, production sync, and canonical playlist identity/order qualify; Android-to-real-backend traversal still lacks an attached target plus validated real-device-backend evidence."
+    },
+    {
+      "id": "US-140",
+      "epic": "EPIC-14-ANALYSIS-RELATED",
+      "verify": "analysis presentation test",
+      "status": "pass",
+      "evidence": [
+        "analysis-unit"
+      ]
+    },
+    {
+      "id": "US-141",
+      "epic": "EPIC-14-ANALYSIS-RELATED",
+      "verify": "related-track provider test",
+      "status": "pass",
+      "evidence": [
+        "analysis-lane-c-host"
+      ]
+    },
+    {
+      "id": "US-142",
+      "epic": "EPIC-14-ANALYSIS-RELATED",
+      "verify": "missing-analysis state test",
+      "status": "pass",
+      "evidence": [
+        "analysis-unit"
+      ]
+    },
+    {
+      "id": "US-143",
+      "epic": "EPIC-14-ANALYSIS-RELATED",
+      "verify": "suggestion provenance UI test",
+      "status": "pass",
+      "evidence": [
+        "analysis-unit"
+      ]
+    },
+    {
+      "id": "US-144",
+      "epic": "EPIC-14-ANALYSIS-RELATED",
+      "verify": "multi-kind candidate fixture test",
+      "status": "partial",
+      "evidence": [
+        "analysis-lane-c-host",
+        "analysis-device"
+      ],
+      "gap": "BPM/key/cue/loop/region/related kinds are covered through transport and BPM/key/cue/loop/region/stem/related at core/UI, but the current analysis-candidate/v1 transport contract deliberately has no stem kind; the decoder fails that unsupported wire shape closed rather than inventing it."
+    },
+    {
+      "id": "US-145",
+      "epic": "EPIC-14-ANALYSIS-RELATED",
+      "verify": "transcript marker overlay test",
+      "status": "pass",
+      "evidence": [
+        "analysis-unit"
+      ]
+    },
+    {
+      "id": "US-146",
+      "epic": "EPIC-14-ANALYSIS-RELATED",
+      "verify": "accept reject canonicalization test",
+      "status": "partial",
+      "evidence": [
+        "analysis-lane-c-host",
+        "analysis-device"
+      ],
+      "gap": "Journal-only acceptance and APPLIED/NO_OP receipt-gated canonicalization pass on the host, including stale/unknown fail-closed behavior; explicit accept/reject UI instrumentation compiles but is blocked by device availability."
+    },
+    {
+      "id": "US-147",
+      "epic": "EPIC-14-ANALYSIS-RELATED",
+      "verify": "offline suggestion review test",
+      "status": "pass",
+      "evidence": [
+        "analysis-unit"
+      ]
+    },
+    {
+      "id": "US-148",
+      "epic": "EPIC-14-ANALYSIS-RELATED",
+      "verify": "partial capability matrix test",
+      "status": "pass",
+      "evidence": [
+        "analysis-unit"
+      ]
+    },
+    {
+      "id": "US-149",
+      "epic": "EPIC-14-ANALYSIS-RELATED",
+      "verify": "safety suggestion priority UI test",
+      "status": "pass",
+      "evidence": [
+        "analysis-unit"
+      ]
+    },
+    {
+      "id": "US-150",
+      "epic": "EPIC-15-ANDROID-MEDIA-INTEGRATION",
+      "verify": "media session instrumentation test",
+      "status": "blocked",
+      "evidence": [
+        "system-media-device"
+      ],
+      "gap": "Media3 service wiring exists, but no real-device MediaSession/Bluetooth evidence is available."
+    },
+    {
+      "id": "US-151",
+      "epic": "EPIC-15-ANDROID-MEDIA-INTEGRATION",
+      "verify": "media key test",
+      "status": "blocked",
+      "evidence": [
+        "system-media-device"
+      ],
+      "gap": "Media3 service wiring exists, but no real-device MediaSession/Bluetooth evidence is available."
+    },
+    {
+      "id": "US-152",
+      "epic": "EPIC-15-ANDROID-MEDIA-INTEGRATION",
+      "verify": "focus transition test",
+      "status": "pass",
+      "evidence": [
+        "audio-focus-unit"
+      ]
+    },
+    {
+      "id": "US-160",
+      "epic": "EPIC-16-DEBUG-HARNESS",
+      "verify": "debug provider selector test",
+      "status": "blocked",
+      "evidence": [
+        "androidtest-compile",
+        "debug-harness-device"
+      ],
+      "gap": "Dedicated debug-harness instrumentation compiles and covers provider/failure injection plus journal/receipt inspection, but cannot execute without an attached Android device."
+    },
+    {
+      "id": "US-161",
+      "epic": "EPIC-16-DEBUG-HARNESS",
+      "verify": "state injector test",
+      "status": "blocked",
+      "evidence": [
+        "androidtest-compile",
+        "debug-harness-device"
+      ],
+      "gap": "Dedicated debug-harness instrumentation compiles and covers provider/failure injection plus journal/receipt inspection, but cannot execute without an attached Android device."
+    },
+    {
+      "id": "US-162",
+      "epic": "EPIC-16-DEBUG-HARNESS",
+      "verify": "journal inspector UI test",
+      "status": "blocked",
+      "evidence": [
+        "androidtest-compile",
+        "debug-harness-device"
+      ],
+      "gap": "Dedicated debug-harness instrumentation compiles and covers provider/failure injection plus journal/receipt inspection, but cannot execute without an attached Android device."
+    },
+    {
+      "id": "US-163",
+      "epic": "EPIC-16-DEBUG-HARNESS",
+      "verify": "release variant test",
+      "status": "pass",
+      "evidence": [
+        "debug-harness-release-exclusion"
+      ]
+    },
+    {
+      "id": "US-170",
+      "epic": "EPIC-17-ACCESSIBILITY-PERFORMANCE",
+      "verify": "semantics test",
+      "status": "blocked",
+      "evidence": [
+        "androidtest-compile",
+        "a11y-shell-device",
+        "a11y-library-device",
+        "cues-device",
+        "loops-device"
+      ],
+      "gap": "TalkBack-oriented semantics assertions compile across primary surfaces, but no Android target is attached to execute traversal/semantics behavior."
+    },
+    {
+      "id": "US-171",
+      "epic": "EPIC-17-ACCESSIBILITY-PERFORMANCE",
+      "verify": "scaled-font screenshot test",
+      "status": "blocked",
+      "evidence": [
+        "androidtest-compile",
+        "scaled-font-device"
+      ],
+      "gap": "The 2x font-scale test now requires essential navigation/search actions to remain displayed and compiles, but cannot execute without an attached Android target."
+    },
+    {
+      "id": "US-172",
+      "epic": "EPIC-17-ACCESSIBILITY-PERFORMANCE",
+      "verify": "10000-track benchmark",
+      "status": "partial",
+      "evidence": [
+        "performance-10k-unit",
+        "androidtest-compile",
+        "performance-device-gate"
+      ],
+      "gap": "10,000-track deterministic host logic passes and a thresholded device interaction gate is implemented/compiled, but no device timing has been observed."
+    },
+    {
+      "id": "US-173",
+      "epic": "EPIC-17-ACCESSIBILITY-PERFORMANCE",
+      "verify": "frame-time benchmark",
+      "status": "blocked",
+      "evidence": [
+        "androidtest-compile",
+        "performance-device-gate"
+      ],
+      "gap": "A thresholded FrameMetrics waveform gesture gate is implemented and compiles, but no attached Android target exists to produce frame-time evidence."
+    },
+    {
+      "id": "US-180",
+      "epic": "EPIC-18-PARITY-E2E",
+      "verify": "parity matrix validator",
+      "status": "pass",
+      "evidence": [
+        "parity-validator"
+      ]
+    },
+    {
+      "id": "US-181",
+      "epic": "EPIC-18-PARITY-E2E",
+      "verify": "device plus backend suite",
+      "status": "blocked",
+      "evidence": [
+        "samplelib-real-djxml",
+        "real-core-e2e"
+      ],
+      "gap": "Real Sample Lib adapter, sync facade, and playlist authority qualify, but no actual Android -> real Sample Lib traversal has produced the required validated device-backend evidence packet."
+    },
+    {
+      "id": "US-182",
+      "epic": "EPIC-18-PARITY-E2E",
+      "verify": "resilience suite",
+      "status": "partial",
+      "evidence": [
+        "resilience-host-integration",
+        "conflict-unit",
+        "samplelib-fake-http",
+        "real-core-e2e"
+      ],
+      "gap": "Offline/reconnect/process-death resilience passes at integrated host/fake-backend tiers; the required real-device plus real-backend traversal remains blocked."
+    }
+  ],
+  "excluded_stories": [
+    {
+      "id": "US-190",
+      "epic": "EPIC-19-PACKAGING-RELEASE",
+      "verify": "artifact hash build test",
+      "reason": "EPIC-19 is downstream of EPIC-18 and cannot be a prerequisite for its own parity gate."
+    },
+    {
+      "id": "US-191",
+      "epic": "EPIC-19-PACKAGING-RELEASE",
+      "verify": "migration upgrade test",
+      "reason": "EPIC-19 is downstream of EPIC-18 and cannot be a prerequisite for its own parity gate."
+    },
+    {
+      "id": "US-192",
+      "epic": "EPIC-19-PACKAGING-RELEASE",
+      "verify": "release metadata test",
+      "reason": "EPIC-19 is downstream of EPIC-18 and cannot be a prerequisite for its own parity gate."
+    }
+  ]
+}
