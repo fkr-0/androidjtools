@@ -153,7 +153,15 @@ class WaveformScreenTest {
         .joinToString(separator = "") { it.text }
 
     private fun assertGridBpm(expected: String) {
-        compose.waitForIdle()
+        compose.waitUntil(timeoutMillis = 3_000) {
+            runCatching {
+                compose.onNodeWithTag("grid-bpm-input")
+                    .fetchSemanticsNode()
+                    .config[SemanticsProperties.EditableText]
+                    .text
+                    .contains(expected)
+            }.getOrDefault(false)
+        }
         val actual = compose.onNodeWithTag("grid-bpm-input")
             .fetchSemanticsNode()
             .config[SemanticsProperties.EditableText]

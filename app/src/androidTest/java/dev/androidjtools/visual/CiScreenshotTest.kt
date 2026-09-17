@@ -13,6 +13,7 @@ import dev.androidjtools.playback.InMemoryQueueStateStore
 import dev.androidjtools.playback.PlayerQueueController
 import dev.androidjtools.ui.theme.AndroidDjToolsTheme
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -89,10 +90,16 @@ class CiScreenshotTest {
         }
         bitmap.recycle()
         assertTrue("Screenshot $name was empty", output.length() > PNG_HEADER_BYTES)
+        val header = ByteArray(PNG_SIGNATURE.size)
+        FileInputStream(output).use { stream ->
+            check(stream.read(header) == header.size) { "Screenshot $name was too small for a PNG header" }
+        }
+        assertTrue("Screenshot $name did not contain a PNG signature on-device", header.contentEquals(PNG_SIGNATURE))
     }
 
     private companion object {
         const val OUTPUT_DIRECTORY = "ui-screenshots"
         const val PNG_HEADER_BYTES = 24L
+        val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.androidjtools.fixture.FixtureAppProviders
@@ -36,6 +37,7 @@ class LaneAVisualParityTest {
         }
 
         compose.onNodeWithTag("library-track-list").performScrollToIndex(2)
+        compose.onNodeWithTag("track-row-trk-001").performScrollTo()
         compose.onNodeWithTag("track-artwork-trk-001").assertIsDisplayed()
         compose.onNodeWithTag("track-metadata-trk-001")
             .assertIsDisplayed()

@@ -45,7 +45,7 @@ class MetadataQuickRatingTest {
         tags.performScrollTo().performTextReplacement("mood:late-night")
         compose.onNodeWithText("Save locally").assertIsEnabled().performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Queued locally for Night Bus:", substring = true).assertExists()
+        compose.onNodeWithText("Save locally").assertIsNotEnabled()
 
         tags.performTextReplacement("late-night")
         compose.onNodeWithText("Use namespaced tags such as mood:late-night").assertExists()

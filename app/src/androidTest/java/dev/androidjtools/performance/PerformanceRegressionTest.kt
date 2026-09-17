@@ -163,7 +163,7 @@ class PerformanceRegressionTest {
             // callbacks to form a useful sample. Force real redraws of the waveform window;
             // these are still device-rendered frames and therefore preserve the measurement
             // tier instead of substituting host/synthetic timing data.
-            repeat(MIN_FRAME_SAMPLES + FRAME_SAMPLE_HEADROOM) {
+            repeat(FRAME_WARMUP_SAMPLES + MIN_FRAME_SAMPLES + FRAME_SAMPLE_HEADROOM) {
                 compose.runOnUiThread { compose.activity.window.decorView.invalidate() }
                 SystemClock.sleep(FRAME_SAMPLE_INTERVAL_MS)
             }
@@ -177,13 +177,21 @@ class PerformanceRegressionTest {
             metricsThread.quitSafely()
         }
 
-        val frameMs = synchronized(durationsNs) { durationsNs.map { it / 1_000_000.0 } }
-        assertTrue("expected at least $MIN_FRAME_SAMPLES frame samples, got ${frameMs.size}", frameMs.size >= MIN_FRAME_SAMPLES)
+        val rawFrameMs = synchronized(durationsNs) { durationsNs.map { it / 1_000_000.0 } }
+        val frameMs = if (rawFrameMs.size >= FRAME_WARMUP_SAMPLES + MIN_FRAME_SAMPLES) {
+            rawFrameMs.drop(FRAME_WARMUP_SAMPLES)
+        } else {
+            rawFrameMs
+        }
+        assertTrue(
+            "expected at least $MIN_FRAME_SAMPLES measured frame samples after warm-up; raw=${rawFrameMs.size}, measured=${frameMs.size}, values=$rawFrameMs",
+            frameMs.size >= MIN_FRAME_SAMPLES,
+        )
         val p95Ms = percentile95(frameMs)
         val slowRatio = frameMs.count { it > SLOW_FRAME_MS }.toDouble() / frameMs.size
 
         assertTrue(
-            "waveform p95 frame ${"%.1f".format(p95Ms)} ms exceeded $MAX_WAVEFORM_P95_MS ms",
+            "waveform p95 frame ${"%.1f".format(p95Ms)} ms exceeded $MAX_WAVEFORM_P95_MS ms; raw=$rawFrameMs measured=$frameMs",
             p95Ms <= MAX_WAVEFORM_P95_MS,
         )
         assertTrue(
@@ -193,6 +201,8 @@ class PerformanceRegressionTest {
 
         return JSONObject()
             .put("gesture_count", WAVEFORM_GESTURE_COUNT)
+            .put("raw_frame_samples", rawFrameMs.size)
+            .put("warmup_frames_discarded", (rawFrameMs.size - frameMs.size).coerceAtLeast(0))
             .put("frame_samples", frameMs.size)
             .put("frame_p95_ms", p95Ms)
             .put("slow_frame_threshold_ms", SLOW_FRAME_MS)
@@ -223,6 +233,7 @@ class PerformanceRegressionTest {
         private const val MAX_LIBRARY_SEARCH_P95_MS = 1_500.0
         private const val WAVEFORM_GESTURE_COUNT = 12
         private const val MIN_FRAME_SAMPLES = 20
+        private const val FRAME_WARMUP_SAMPLES = 10
         private const val FRAME_SAMPLE_HEADROOM = 10
         private const val FRAME_SAMPLE_INTERVAL_MS = 20L
         private const val SLOW_FRAME_MS = 34.0

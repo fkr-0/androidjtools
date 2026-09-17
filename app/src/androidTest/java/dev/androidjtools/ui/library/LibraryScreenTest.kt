@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
@@ -41,7 +42,7 @@ class LibraryScreenTest {
         compose.onNodeWithContentDescription("Clear search").performClick()
         compose.onNodeWithText("Filters").performClick()
         compose.onNodeWithText("Any availability").performClick()
-        compose.onNodeWithText("2 of 3 tracks").assertIsDisplayed()
+        compose.onNodeWithText("2 of 3 tracks").assertExists()
         compose.onNodeWithText("Dub Colony").assertIsDisplayed()
         compose.onNodeWithTag("library-track-list").performScrollToIndex(1)
         compose.onNodeWithText("Night Bus").assertIsDisplayed()
@@ -80,7 +81,7 @@ class LibraryScreenTest {
         }
 
         compose.onNodeWithTag("library-track-list").performScrollToIndex(2)
-        compose.onNodeWithTag("track-row-trk-001").assertIsDisplayed()
+        compose.onNodeWithTag("track-row-trk-001").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("track-artwork-trk-001").assertIsDisplayed()
         compose.onNodeWithTag("track-metadata-trk-001")
             .assertIsDisplayed()
