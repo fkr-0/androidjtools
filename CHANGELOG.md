@@ -4,7 +4,23 @@ All notable changes to Android DJ Tools are documented here.
 
 ## Unreleased
 
-No unreleased changes are documented after `v0.1.1` yet.
+No unreleased changes are documented after `v0.1.2` yet.
+
+## 0.1.2 - 2026-09-18
+
+Playback repair release.
+
+### Fixed
+
+- The shipping launcher no longer wires the state-only fixture playback provider. It now discovers the phone's local music through Android MediaStore and resolves stable device-media track IDs to playable content URIs.
+- Library, detail, waveform, queue, and offline Play actions now reach a real Media3/ExoPlayer transport with audio focus, becoming-noisy handling, seek, pause/resume, and live position publication.
+- Android 13+ now requests `READ_MEDIA_AUDIO`; Android 9-12 use the legacy read-audio permission path. Permission denial is surfaced as an explicit provider error instead of presenting simulated playable tracks.
+
+### Verification
+
+- Fixture providers remain isolated for deterministic UI and instrumentation tests.
+- Added JVM regression coverage proving that a resolved track causes the playback engine to load and start the requested URI, while an unresolved track cannot report itself as playing.
+- The normal release gate still requires JVM tests, instrumentation-test compilation, lint, APK assembly, hosted API-35 conformance, and version/tag consistency before GitHub Release publication.
 
 ## 0.1.1 - 2026-09-17
 

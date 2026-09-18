@@ -1,9 +1,13 @@
 package dev.androidjtools.shell
 
-import android.content.Context
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,73 +25,62 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.androidjtools.AndroidDjToolsApp
 import dev.androidjtools.core.provider.AppProviders
-import dev.androidjtools.core.provider.ProviderSelectionStore
 import dev.androidjtools.core.provider.ProviderUiState
-import dev.androidjtools.fixture.FixtureAppProviders
+import dev.androidjtools.device.DeviceMediaProviderBundle
 import dev.androidjtools.playback.PlayerQueueController
 import dev.androidjtools.playback.SharedPreferencesQueueStateStore
 import dev.androidjtools.ui.theme.AndroidDjToolsTheme
 
 class AndroidDjToolsActivity : ComponentActivity() {
+    private lateinit var deviceProviders: DeviceMediaProviderBundle
+    private val audioPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (::deviceProviders.isInitialized) deviceProviders.refresh(granted)
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        deviceProviders = DeviceMediaProviderBundle.create(this)
+        val providers = deviceProviders.providers
+        val permission = requiredAudioPermission()
+        val permissionGranted = ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+        deviceProviders.refresh(permissionGranted)
+        if (!permissionGranted) audioPermissionLauncher.launch(permission)
 
-        val selectionStore = SharedPreferencesProviderSelectionStore(this)
-        val registry = AppProviderRegistry.fixtureOnly()
-        val selectedProviderId = selectionStore.selectedProviderId()
-        val resolved = registry.resolve(selectedProviderId)
-        if (selectedProviderId != resolved.id) {
-            selectionStore.selectProvider(resolved.id)
-        }
         val playerQueueController = PlayerQueueController(
-            playback = resolved.providers.playback,
+            playback = providers.playback,
             store = SharedPreferencesQueueStateStore(this),
         )
 
         setContent {
             AndroidDjToolsTheme {
-                ProviderAwareShell(resolved.providers, playerQueueController)
+                ProviderAwareShell(providers, playerQueueController)
             }
         }
     }
-}
 
-private data class ResolvedProvider(
-    val id: String,
-    val providers: AppProviders,
-)
-
-private class AppProviderRegistry(
-    private val factories: Map<String, () -> AppProviders>,
-    private val defaultProviderId: String,
-) {
-    fun resolve(requestedId: String?): ResolvedProvider {
-        val id = requestedId?.takeIf(factories::containsKey) ?: defaultProviderId
-        return ResolvedProvider(id, factories.getValue(id).invoke())
+    override fun onResume() {
+        super.onResume()
+        if (::deviceProviders.isInitialized) {
+            val permission = requiredAudioPermission()
+            deviceProviders.refresh(
+                ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED,
+            )
+        }
     }
 
-    companion object {
-        fun fixtureOnly() = AppProviderRegistry(
-            factories = mapOf(FixtureAppProviders.PROVIDER_ID to { FixtureAppProviders.create() }),
-            defaultProviderId = FixtureAppProviders.PROVIDER_ID,
-        )
+    override fun onDestroy() {
+        if (::deviceProviders.isInitialized) deviceProviders.close()
+        super.onDestroy()
     }
 }
 
-private class SharedPreferencesProviderSelectionStore(context: Context) : ProviderSelectionStore {
-    private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-
-    override fun selectedProviderId(): String? = preferences.getString(KEY_SELECTED_PROVIDER_ID, null)
-
-    override fun selectProvider(id: String) {
-        preferences.edit().putString(KEY_SELECTED_PROVIDER_ID, id).apply()
+private fun requiredAudioPermission(): String =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
     }
-
-    private companion object {
-        const val PREFERENCES_NAME = "android-dj-tools-provider-selection"
-        const val KEY_SELECTED_PROVIDER_ID = "selected-provider-id"
-    }
-}
 
 @Composable
 private fun ProviderAwareShell(

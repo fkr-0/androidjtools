@@ -50,6 +50,7 @@ interface PlaybackProvider {
     fun play(trackId: String)
     fun toggle()
     fun seek(positionMs: Long)
+    fun release() = Unit
 }
 
 interface PlaylistProvider {
