@@ -15,6 +15,7 @@ Playback repair release.
 - The shipping launcher no longer wires the state-only fixture playback provider. It now discovers the phone's local music through Android MediaStore and resolves stable device-media track IDs to playable content URIs.
 - Library, detail, waveform, queue, and offline Play actions now reach a real Media3/ExoPlayer transport with audio focus, becoming-noisy handling, seek, pause/resume, and live position publication.
 - Android 13+ now requests `READ_MEDIA_AUDIO`; Android 9-12 use the legacy read-audio permission path. Permission denial is surfaced as an explicit provider error instead of presenting simulated playable tracks.
+- Hosted screenshot extraction now copies PNG bytes directly through binary-safe `adb exec-out` instead of an Android/base64 round-trip that could corrupt CI extraction after the screenshot test had already passed.
 
 ### Verification
 
