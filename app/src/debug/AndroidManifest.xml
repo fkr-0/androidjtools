@@ -5,15 +5,7 @@
         android:label="Android DJ Tools (Debug)"
         tools:replace="android:label">
         <activity
-            android:name=".shell.AndroidDjToolsActivity"
-            tools:node="remove" />
-        <activity
             android:name=".debug.DebugHarnessActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:exported="false" />
     </application>
 </manifest>

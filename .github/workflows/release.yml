@@ -92,7 +92,7 @@ jobs:
           test -n "$run_id"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
-      - name: Download the APK produced by the successful tag CI run
+      - name: Download the release APK produced by the successful tag CI run
         if: steps.release.outputs.publish == 'true'
         shell: bash
         env:
@@ -103,14 +103,14 @@ jobs:
           set -euo pipefail
           mkdir -p release-artifacts/download
           gh run download "$CI_RUN_ID" \
-            --name "androidjtools-v${VERSION}-debug-apk" \
+            --name "androidjtools-v${VERSION}-release-apk" \
             --dir release-artifacts/download
 
           apk="$(find release-artifacts/download -type f -name '*.apk' -print -quit)"
           test -n "$apk"
           test -s "$apk"
-          install -m 0644 "$apk" "release-artifacts/androidjtools-v${VERSION}-debug.apk"
-          (cd release-artifacts && sha256sum "androidjtools-v${VERSION}-debug.apk" > SHA256SUMS)
+          install -m 0644 "$apk" "release-artifacts/androidjtools-v${VERSION}.apk"
+          (cd release-artifacts && sha256sum "androidjtools-v${VERSION}.apk" > SHA256SUMS)
 
       - name: Write release provenance
         if: steps.release.outputs.publish == 'true'
@@ -129,13 +129,16 @@ jobs:
           import os
           from pathlib import Path
 
-          apk = Path('release-artifacts') / f"androidjtools-v{os.environ['VERSION']}-debug.apk"
+          apk = Path('release-artifacts') / f"androidjtools-v{os.environ['VERSION']}.apk"
           payload = {
               'schema': 'androidjtools.github-release-provenance/v1',
               'tag': os.environ['TAG'],
               'git_revision': os.environ['TESTED_SHA'],
               'android_ci_run_id': int(os.environ['ANDROID_CI_RUN_ID']),
               'api35_e2e_run_id': int(os.environ['E2E_RUN_ID']),
+              'build_type': 'release',
+              'launcher': 'dev.androidjtools.shell.AndroidDjToolsActivity',
+              'signing_profile': 'development',
               'artifact': {
                   'name': apk.name,
                   'size_bytes': apk.stat().st_size,
@@ -163,7 +166,7 @@ jobs:
           fi
 
           gh release create "$TAG" \
-            "release-artifacts/androidjtools-v${VERSION}-debug.apk" \
+            "release-artifacts/androidjtools-v${VERSION}.apk" \
             "release-artifacts/SHA256SUMS" \
             "release-artifacts/release-provenance.json" \
             --verify-tag \

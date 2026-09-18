@@ -4,7 +4,23 @@ All notable changes to Android DJ Tools are documented here.
 
 ## Unreleased
 
-No unreleased changes are documented after `v0.1.2` yet.
+No unreleased changes are documented after `v0.1.3` yet.
+
+## 0.1.3 - 2026-09-18
+
+Production-launcher and audible-playback packaging repair.
+
+### Fixed
+
+- The normal debug launcher no longer replaces the app with the dogfood harness. The harness remains internal to debug builds, but ordinary launches now use the real Android DJ Tools activity.
+- Removed the provider/debug status overlay from the production activity. Library/runtime state remains represented by the normal screens instead of a developer banner pinned over the UI.
+- The primary downloadable APK is now built from the `release` variant, so it uses the real MediaStore library and Media3/ExoPlayer playback path instead of fixture playback.
+
+### Release packaging
+
+- CI now assembles both variants, verifies the release APK launches `AndroidDjToolsActivity`, rejects any release APK containing `DebugHarnessActivity`, verifies the APK signature, and uploads the release APK as the primary artifact.
+- GitHub Release publication now attaches `androidjtools-vVERSION.apk` from the release artifact; the debug APK remains a secondary CI-only diagnostic artifact.
+- The release variant is non-debuggable and currently uses Android's development signing configuration for sideload installation. This is a production-UI/runtime build, not a Play Store signing setup.
 
 ## 0.1.2 - 2026-09-18
 

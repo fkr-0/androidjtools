@@ -68,13 +68,74 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Test, lint, compile instrumentation tests, and build APK
-        run: ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug :app:assembleDebug --stacktrace
+      - name: Test, lint, compile instrumentation tests, and build APKs
+        run: ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease --stacktrace
 
-      - name: Record APK checksum
-        run: sha256sum app/build/outputs/apk/debug/app-debug.apk
+      - name: Verify production launcher and record APK checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_apk=app/build/outputs/apk/release/app-release.apk
+          debug_apk=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$release_apk"
+          test -s "$debug_apk"
 
-      - name: Upload debug APK
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          apkanalyzer_bin="$(command -v apkanalyzer || true)"
+          apksigner_bin="$(command -v apksigner || true)"
+          if [[ -z "$apkanalyzer_bin" && -n "$sdk_root" ]]; then
+            apkanalyzer_bin="$(find "$sdk_root/cmdline-tools" -type f -name apkanalyzer -print 2>/dev/null | sort -V | tail -n1)"
+          fi
+          if [[ -z "$apksigner_bin" && -n "$sdk_root" ]]; then
+            apksigner_bin="$(find "$sdk_root/build-tools" -type f -name apksigner -print 2>/dev/null | sort -V | tail -n1)"
+          fi
+          test -x "$apkanalyzer_bin"
+          test -x "$apksigner_bin"
+
+          "$apkanalyzer_bin" manifest print "$release_apk" > /tmp/release-manifest.xml
+          "$apkanalyzer_bin" manifest print "$debug_apk" > /tmp/debug-manifest.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+
+          ANDROID = "{http://schemas.android.com/apk/res/android}"
+          EXPECTED = "dev.androidjtools.shell.AndroidDjToolsActivity"
+          DEBUG_HARNESS = "dev.androidjtools.debug.DebugHarnessActivity"
+
+          def launchers(path):
+              root = ET.parse(path).getroot()
+              result = []
+              for activity in root.findall("./application/activity"):
+                  name = activity.get(ANDROID + "name")
+                  for intent_filter in activity.findall("intent-filter"):
+                      actions = {item.get(ANDROID + "name") for item in intent_filter.findall("action")}
+                      categories = {item.get(ANDROID + "name") for item in intent_filter.findall("category")}
+                      if "android.intent.action.MAIN" in actions and "android.intent.category.LAUNCHER" in categories:
+                          result.append(name)
+              return result, {activity.get(ANDROID + "name") for activity in root.findall("./application/activity")}
+
+          release_launchers, release_activities = launchers("/tmp/release-manifest.xml")
+          debug_launchers, _ = launchers("/tmp/debug-manifest.xml")
+          if release_launchers != [EXPECTED]:
+              raise SystemExit(f"unexpected release launcher(s): {release_launchers}")
+          if DEBUG_HARNESS in release_activities:
+              raise SystemExit("debug harness leaked into release APK")
+          if debug_launchers != [EXPECTED]:
+              raise SystemExit(f"debug APK must also launch the real app, got: {debug_launchers}")
+          PY
+
+          test "$("$apkanalyzer_bin" manifest debuggable "$release_apk")" = "false"
+          "$apksigner_bin" verify "$release_apk"
+          sha256sum "$release_apk" "$debug_apk"
+
+      - name: Upload primary release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: androidjtools-v${{ steps.app_version.outputs.version }}-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload secondary debug APK
         uses: actions/upload-artifact@v4
         with:
           name: androidjtools-v${{ steps.app_version.outputs.version }}-debug-apk

@@ -11,8 +11,8 @@ android {
         applicationId = "dev.androidjtools"
         minSdk = 28
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.1.2"
+        versionCode = 4
+        versionName = "0.1.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
@@ -23,7 +23,9 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
+            isDebuggable = false
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
