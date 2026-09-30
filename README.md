@@ -4,9 +4,9 @@ Android DJ Tools is a cloudless Android DJ-library preparation client for Sample
 
 ## Status
 
-`v0.1.1` is the current patch preview. It integrates the post-0.1.0 preparation, offline/sync, analysis-advisory, parity, and CI screenshot lanes while keeping Sample Lib as the canonical metadata authority. The sync protocol remains versioned under `contracts/`, deterministic fake-server qualification lives under `test-server/`, and the Android application lives under `app/`.
+`v0.1.3` is the current patch preview. It keeps the post-0.1.0 preparation, offline/sync, analysis-advisory, parity, and CI screenshot lanes while repairing the production launcher and real MediaStore/Media3 playback packaging introduced in `v0.1.2`/`v0.1.3`. Sample Lib remains the canonical metadata authority. The sync protocol stays versioned under `contracts/`, deterministic fake-server qualification lives under `test-server/`, and the Android application lives under `app/`.
 
-The release intentionally distinguishes fixture/fake-server, real Sample Lib, CI-emulator, and local physical-device evidence. See `CHANGELOG.md` and `docs/release/v0.1.1.md` for the exact release boundary.
+The release intentionally distinguishes fixture/fake-server, real Sample Lib, CI-emulator, and local physical-device evidence. See `CHANGELOG.md` and `docs/release/v0.1.3.md` for the current review boundary.
 
 ## Build
 
@@ -20,13 +20,13 @@ Run the release checks from the repository root:
 
     python -m pip install -r test-server/requirements-test.txt
     PYTHONDONTWRITEBYTECODE=1 PYTHONWARNINGS='error::ResourceWarning' python -m unittest discover -s test-server -p 'test_*.py' -v
-    JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug :app:assembleDebug
+    JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
 
-The local debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+The local review APKs are `app/build/outputs/apk/debug/app-debug.apk` and `app/build/outputs/apk/release/app-release.apk`. The release variant is non-debuggable and currently development-signed for sideload review.
 
 ## Continuous integration
 
-GitHub Actions runs the protocol and Android release checks on `main`, pull requests, SemVer-style `v*` tags, and manual dispatch. Successful runs upload the debug APK as a workflow artifact.
+GitHub Actions runs the protocol and Android release checks on `main`, pull requests, SemVer-style `v*` tags, and manual dispatch. Successful runs upload the non-debuggable release APK as the primary artifact and the debug APK as a secondary diagnostic artifact; API-35 emulator conformance and screenshot jobs remain separate evidence tiers.
 
 Documentation is built with MkDocs and deployed by GitHub Actions to <https://androiddjtools.fkr.dev/>.
 
