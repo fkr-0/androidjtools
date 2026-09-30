@@ -14,6 +14,7 @@ import dev.androidjtools.device.mediaUriForDeviceTrack
 import dev.androidjtools.live.AndroidMidiInputRouter
 import dev.androidjtools.live.LivePerformanceController
 import dev.androidjtools.live.Media3LiveAudioEngine
+import dev.androidjtools.live.NativeAaudioLiveAudioEngine
 import dev.androidjtools.playback.PlayerQueueController
 import dev.androidjtools.playback.SharedPreferencesQueueStateStore
 import dev.androidjtools.ui.theme.AndroidDjToolsTheme
@@ -40,14 +41,19 @@ class AndroidDjToolsActivity : ComponentActivity() {
             playback = providers.playback,
             store = SharedPreferencesQueueStateStore(this),
         )
-        val liveEngine = Media3LiveAudioEngine(
+        val onLivePosition: (dev.androidjtools.live.DeckId, Long) -> Unit = { deck, positionMs ->
+            if (::livePerformanceController.isInitialized) {
+                livePerformanceController.reportPosition(deck, positionMs)
+            }
+        }
+        val liveEngine = NativeAaudioLiveAudioEngine.createOrNull(
             context = this,
             mediaUriResolver = ::mediaUriForDeviceTrack,
-            onPosition = { deck, positionMs ->
-                if (::livePerformanceController.isInitialized) {
-                    livePerformanceController.reportPosition(deck, positionMs)
-                }
-            },
+            onPosition = onLivePosition,
+        ) ?: Media3LiveAudioEngine(
+            context = this,
+            mediaUriResolver = ::mediaUriForDeviceTrack,
+            onPosition = onLivePosition,
         )
         livePerformanceController = LivePerformanceController(liveEngine)
         midiInputRouter = AndroidMidiInputRouter(this, livePerformanceController).also { it.start() }
