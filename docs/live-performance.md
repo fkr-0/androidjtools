@@ -22,16 +22,16 @@ When the active provider has no BPM/beat-grid metadata, the Live screen exposes 
 
 `LiveAudioEngine` is the real-time boundary. Calls from the controller must return quickly and hand work to their engine rather than blocking the UI thread.
 
-`Media3LiveAudioEngine` is the compatibility backend used by the current device-media runtime. It provides actual independent A/B playback, gain, playback-rate sync, seeking, position reporting, and A/B loop enforcement.
+`Media3LiveAudioEngine` is the compatibility backend used by the current device-media runtime. It provides actual independent A/B playback, gain, playback-rate sync, seeking, position reporting, A/B loop enforcement, and an audible per-deck PCM effects chain.
 
-`LiveDspRack` implements the four requested effects as an allocation-free, in-place PCM processor:
+`Media3LiveDspAudioProcessor` inserts `LiveDspRack` into each deck's Media3 audio sink. The adapter reuses its scratch storage after warm-up and accepts both 16-bit and float PCM. `LiveDspRack` implements the four requested effects as an in-place processor:
 
 - filter: one-pole low-pass with normalized cutoff
 - echo: bounded feedback delay
 - flanger: modulated short delay
 - gate: threshold attenuation
 
-The PCM rack is deliberately not claimed as audible in the Media3 compatibility backend. The production low-latency target is a native AAudio/OpenSL ES implementation of `LiveAudioEngine` that feeds decoded PCM through `LiveDspRack` (or a native equivalent) in the audio callback. No AAudio/OpenSL ES toolchain is configured in this checkout, so that backend remains the release blocker for a strict end-to-end sub-10-ms audio-I/O claim.
+The production low-latency target remains a direct native AAudio/OpenSL ES implementation of `LiveAudioEngine`. This project does not yet configure an external-native build or a direct native engine; an NDK is present on this host but is outside the configured `ANDROID_HOME` SDK tree, and no device AAudio/OpenSL qualification lane is wired here. The current Media3 backend ultimately writes through Android's platform audio sink and now exercises the requested FX end to end, but it is not presented as proof of a direct AAudio/OpenSL ES path or a sub-10-ms audio-I/O round trip.
 
 ## MIDI defaults
 

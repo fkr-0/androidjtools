@@ -8,16 +8,19 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 
 /**
  * Two-deck Android compatibility engine.
  *
  * The live controller is deliberately independent of Media3 so a native AAudio/OpenSL ES backend can
  * implement [LiveAudioEngine] without changing UI/control semantics. This implementation provides
- * actual dual-source playback, gain, tempo-rate changes and A/B loop enforcement for device media.
- * FX state is retained by the controller but is not inserted into Media3's PCM path here; production
- * low-latency DSP belongs in the native backend.
+ * actual dual-source playback, gain, tempo-rate changes, A/B loop enforcement and per-deck PCM DSP
+ * for device media. The controller remains backend-independent so a direct native AAudio/OpenSL ES
+ * implementation can replace this compatibility backend without changing UI/control semantics.
  */
 class Media3LiveAudioEngine(
     context: Context,
@@ -29,8 +32,20 @@ class Media3LiveAudioEngine(
         .setUsage(C.USAGE_MEDIA)
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
         .build()
-    private val players = DeckId.entries.associateWith {
-        ExoPlayer.Builder(context.applicationContext).build().apply {
+    private val dspProcessors = DeckId.entries.associateWith { Media3LiveDspAudioProcessor() }
+    private val players = DeckId.entries.associateWith { deck ->
+        val renderersFactory = object : DefaultRenderersFactory(context.applicationContext) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): AudioSink = DefaultAudioSink.Builder(context)
+                .setAudioProcessors(arrayOf(dspProcessors.getValue(deck)))
+                .setEnableFloatOutput(enableFloatOutput)
+                .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                .build()
+        }
+        ExoPlayer.Builder(context.applicationContext, renderersFactory).build().apply {
             setAudioAttributes(audioAttributes, false)
         }
     }
@@ -98,8 +113,7 @@ class Media3LiveAudioEngine(
     }
 
     override fun setEffect(deck: DeckId, type: LiveEffectType, state: LiveEffectState) {
-        // The compatibility engine intentionally does not pretend Media3 exposes the native live-DSP
-        // chain. Controller/UI state remains authoritative and the native backend consumes this call.
+        dspProcessors.getValue(deck).setEffect(type, state)
     }
 
     override fun release() {
