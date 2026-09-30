@@ -26,24 +26,40 @@ class Media3LiveAudioEngine(
     context: Context,
     private val mediaUriResolver: (String) -> String?,
     private val onPosition: (DeckId, Long) -> Unit = { _, _ -> },
+    private val nativeMixer: NativeAaudioMixer? = null,
 ) : LiveAudioEngine {
     private val handler = Handler(Looper.getMainLooper())
     private val audioAttributes = AudioAttributes.Builder()
         .setUsage(C.USAGE_MEDIA)
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
         .build()
-    private val dspProcessors = DeckId.entries.associateWith { Media3LiveDspAudioProcessor() }
+    private val dspProcessors = if (nativeMixer == null) {
+        DeckId.entries.associateWith { Media3LiveDspAudioProcessor() }
+    } else {
+        emptyMap()
+    }
+    private val nativeProcessors = nativeMixer?.let { mixer ->
+        DeckId.entries.associateWith { deck -> NativeAaudioOutputProcessor(deck, mixer) }
+    }.orEmpty()
     private val players = DeckId.entries.associateWith { deck ->
         val renderersFactory = object : DefaultRenderersFactory(context.applicationContext) {
             override fun buildAudioSink(
                 context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
-            ): AudioSink = DefaultAudioSink.Builder(context)
-                .setAudioProcessors(arrayOf(dspProcessors.getValue(deck)))
-                .setEnableFloatOutput(enableFloatOutput)
-                .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                .build()
+            ): AudioSink {
+                val builder = DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                if (nativeMixer != null) {
+                    builder.setAudioProcessorChain(
+                        NativeAaudioProcessorChain(nativeProcessors.getValue(deck)),
+                    )
+                } else {
+                    builder.setAudioProcessors(arrayOf(dspProcessors.getValue(deck)))
+                }
+                return builder.build()
+            }
         }
         ExoPlayer.Builder(context.applicationContext, renderersFactory).build().apply {
             setAudioAttributes(audioAttributes, false)
@@ -84,7 +100,13 @@ class Media3LiveAudioEngine(
 
     override fun setPlaying(deck: DeckId, playing: Boolean) {
         val player = players.getValue(deck)
-        if (playing) player.play() else player.pause()
+        if (playing) {
+            player.play()
+            nativeMixer?.setPlaying(deck, true)
+        } else {
+            nativeMixer?.setPlaying(deck, false)
+            player.pause()
+        }
     }
 
     override fun seek(deck: DeckId, positionMs: Long) {
@@ -99,7 +121,9 @@ class Media3LiveAudioEngine(
     }
 
     override fun setGain(deck: DeckId, gain: Float) {
-        players.getValue(deck).volume = gain.coerceIn(0f, 1f)
+        val normalized = gain.coerceIn(0f, 1f)
+        players.getValue(deck).volume = normalized
+        nativeMixer?.setGain(deck, normalized)
     }
 
     override fun setLoop(deck: DeckId, loop: LiveLoop?) {
@@ -113,7 +137,8 @@ class Media3LiveAudioEngine(
     }
 
     override fun setEffect(deck: DeckId, type: LiveEffectType, state: LiveEffectState) {
-        dspProcessors.getValue(deck).setEffect(type, state)
+        dspProcessors[deck]?.setEffect(type, state)
+        nativeProcessors[deck]?.setEffect(type, state)
     }
 
     override fun release() {
@@ -121,7 +146,10 @@ class Media3LiveAudioEngine(
         released = true
         handler.removeCallbacks(ticker)
         players.values.forEach(ExoPlayer::release)
+        nativeMixer?.close()
     }
+
+    fun nativeStats(): NativeAaudioStats? = nativeMixer?.stats()
 
     private companion object {
         const val POSITION_POLL_MS = 16L

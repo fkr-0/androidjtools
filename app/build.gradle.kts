@@ -6,6 +6,8 @@ plugins {
 android {
     namespace = "dev.androidjtools"
     compileSdk = 35
+    ndkVersion = "25.0.8775105"
+    System.getenv("ANDROID_NDK_HOME")?.takeIf { it.isNotBlank() }?.let { ndkPath = it }
 
     defaultConfig {
         applicationId = "dev.androidjtools"
@@ -38,6 +40,12 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     packaging.resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+
+    externalNativeBuild {
+        ndkBuild {
+            path = file("src/main/cpp/Android.mk")
+        }
+    }
 }
 
 dependencies {

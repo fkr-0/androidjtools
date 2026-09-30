@@ -22,7 +22,9 @@ When the active provider has no BPM/beat-grid metadata, the Live screen exposes 
 
 `LiveAudioEngine` is the real-time boundary. Calls from the controller must return quickly and hand work to their engine rather than blocking the UI thread.
 
-`Media3LiveAudioEngine` is the compatibility backend used by the current device-media runtime. It provides actual independent A/B playback, gain, playback-rate sync, seeking, position reporting, A/B loop enforcement, and an audible per-deck PCM effects chain.
+`NativeAaudioLiveAudioEngine` is preferred on API 26+ when a low-latency AAudio stream can be opened. Media3 remains the decoder/timeline authority, then the processor order is silence-skip → Sonic tempo/pitch → live DSP → AAudio. The platform AudioTrack is fed silence only to preserve Media3's playback clock, so audible PCM is rendered by AAudio after BPM-sync tempo processing.
+
+`Media3LiveAudioEngine` remains the automatic compatibility fallback. It provides actual independent A/B playback, gain, playback-rate sync, seeking, position reporting, A/B loop enforcement, and an audible per-deck PCM effects chain through the platform AudioTrack.
 
 `Media3LiveDspAudioProcessor` inserts `LiveDspRack` into each deck's Media3 audio sink. The adapter reuses its scratch storage after warm-up and accepts both 16-bit and float PCM. `LiveDspRack` implements the four requested effects as an in-place processor:
 
@@ -31,7 +33,7 @@ When the active provider has no BPM/beat-grid metadata, the Live screen exposes 
 - flanger: modulated short delay
 - gate: threshold attenuation
 
-The production low-latency target remains a direct native AAudio/OpenSL ES implementation of `LiveAudioEngine`. This project does not yet configure an external-native build or a direct native engine; an NDK is present on this host but is outside the configured `ANDROID_HOME` SDK tree, and no device AAudio/OpenSL qualification lane is wired here. The current Media3 backend ultimately writes through Android's platform audio sink and now exercises the requested FX end to end, but it is not presented as proof of a direct AAudio/OpenSL ES path or a sub-10-ms audio-I/O round trip.
+The native library requests AAudio low-latency performance mode and exclusive sharing first, falling back to shared AAudio when exclusive mode is unavailable. Because the app's minimum API is 28, OpenSL ES is not required as an API-level fallback; devices that cannot open AAudio fall back to the Media3/AudioTrack engine instead. AAudio xrun, underrun, and dropped-frame counters are exposed for device qualification. This architecture establishes the direct native output path, but a strict end-to-end latency claim still requires attached-device measurement.
 
 ## MIDI defaults
 
