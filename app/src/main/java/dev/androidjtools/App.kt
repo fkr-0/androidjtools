@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Sync
@@ -29,10 +30,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dev.androidjtools.core.provider.AppProviders
+import dev.androidjtools.live.LivePerformanceController
 import dev.androidjtools.playback.PlayerQueueController
 import dev.androidjtools.ui.analysis.AnalysisScreen
 import dev.androidjtools.ui.collections.CollectionsScreen
 import dev.androidjtools.ui.library.LibraryScreen
+import dev.androidjtools.ui.live.LivePerformanceScreen
 import dev.androidjtools.ui.offline.OfflineScreen
 import dev.androidjtools.ui.player.PlayerHost
 import dev.androidjtools.ui.sync.SyncScreen
@@ -44,6 +47,7 @@ private data class Destination(val route: String, val label: String)
 fun AndroidDjToolsApp(
     providers: AppProviders,
     playerQueueController: PlayerQueueController? = null,
+    livePerformanceController: LivePerformanceController? = null,
 ) {
     val nav = rememberNavController()
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
@@ -51,6 +55,7 @@ fun AndroidDjToolsApp(
         Destination("library", "Library"),
         Destination("collections", "Lists"),
         Destination("waveform", "Prep"),
+        Destination("live", "Live"),
         Destination("analysis", "Suggest"),
         Destination("offline", "Offline"),
         Destination("sync", "Sync"),
@@ -88,8 +93,9 @@ fun AndroidDjToolsApp(
                                     0 -> Icons.Default.LibraryMusic
                                     1 -> Icons.AutoMirrored.Filled.QueueMusic
                                     2 -> Icons.Default.GraphicEq
-                                    3 -> Icons.Default.Lightbulb
-                                    4 -> Icons.Default.CloudOff
+                                    3 -> Icons.Default.Tune
+                                    4 -> Icons.Default.Lightbulb
+                                    5 -> Icons.Default.CloudOff
                                     else -> Icons.Default.Sync
                                 }
                                 Icon(image, contentDescription = destination.label)
@@ -105,6 +111,10 @@ fun AndroidDjToolsApp(
             composable("library") { LibraryScreen(providers) }
             composable("collections") { CollectionsScreen(providers) }
             composable("waveform") { WaveformScreen(providers) }
+            composable("live") {
+                livePerformanceController?.let { LivePerformanceScreen(providers, it) }
+                    ?: Text("Live performance is unavailable in this runtime.")
+            }
             composable("analysis") { AnalysisScreen(providers) }
             composable("offline") { OfflineScreen(providers) }
             composable("sync") { SyncScreen(providers) }

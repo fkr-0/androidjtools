@@ -10,12 +10,18 @@ import androidx.activity.compose.setContent
 import androidx.core.content.ContextCompat
 import dev.androidjtools.AndroidDjToolsApp
 import dev.androidjtools.device.DeviceMediaProviderBundle
+import dev.androidjtools.device.mediaUriForDeviceTrack
+import dev.androidjtools.live.AndroidMidiInputRouter
+import dev.androidjtools.live.LivePerformanceController
+import dev.androidjtools.live.Media3LiveAudioEngine
 import dev.androidjtools.playback.PlayerQueueController
 import dev.androidjtools.playback.SharedPreferencesQueueStateStore
 import dev.androidjtools.ui.theme.AndroidDjToolsTheme
 
 class AndroidDjToolsActivity : ComponentActivity() {
     private lateinit var deviceProviders: DeviceMediaProviderBundle
+    private lateinit var livePerformanceController: LivePerformanceController
+    private lateinit var midiInputRouter: AndroidMidiInputRouter
     private val audioPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (::deviceProviders.isInitialized) deviceProviders.refresh(granted)
@@ -34,10 +40,21 @@ class AndroidDjToolsActivity : ComponentActivity() {
             playback = providers.playback,
             store = SharedPreferencesQueueStateStore(this),
         )
+        val liveEngine = Media3LiveAudioEngine(
+            context = this,
+            mediaUriResolver = ::mediaUriForDeviceTrack,
+            onPosition = { deck, positionMs ->
+                if (::livePerformanceController.isInitialized) {
+                    livePerformanceController.reportPosition(deck, positionMs)
+                }
+            },
+        )
+        livePerformanceController = LivePerformanceController(liveEngine)
+        midiInputRouter = AndroidMidiInputRouter(this, livePerformanceController).also { it.start() }
 
         setContent {
             AndroidDjToolsTheme {
-                AndroidDjToolsApp(providers, playerQueueController)
+                AndroidDjToolsApp(providers, playerQueueController, livePerformanceController)
             }
         }
     }
@@ -53,6 +70,8 @@ class AndroidDjToolsActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (::midiInputRouter.isInitialized) midiInputRouter.close()
+        if (::livePerformanceController.isInitialized) livePerformanceController.release()
         if (::deviceProviders.isInitialized) deviceProviders.close()
         super.onDestroy()
     }
