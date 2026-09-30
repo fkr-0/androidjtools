@@ -1,6 +1,34 @@
 # Wave Three preflight evidence snapshot
 
-Canonical OCP task: `ANDROIDJTOOLS-WAVE3-PARALLEL-OBSERVER-20260915`
+Canonical durable OCP task: `ANDROIDJTOOLS-WAVE3-PARALLEL-OBS-20260927`
+
+Historical predecessor: `ANDROIDJTOOLS-WAVE3-PARALLEL-OBSERVER-20260915`.
+
+## 2026-09-27 evidence refresh
+
+| Item | Exact identity / observed state |
+| --- | --- |
+| workspace | `ws-29fe5ce01a58c90621e8f5ca53e95ef8`, branch `main`, HEAD `131b33ef3118882e7aa414f9b245be10a5ef37c7` |
+| dispatch attempt | `95b655e7492249f1a82c95c996919810` |
+| observer OCP | `ANDROIDJTOOLS-WAVE3-PARALLEL-OBS-20260927`, `dispatched`, prompt `androidjtools-wave3-parallel-observer-v1` |
+| observer packet | `92243b66-5cd9-4e33-9f3f-a1272c8d1811`, active |
+| observer lease | `f59c7533-f956-42f2-85a8-0752380b8e07` |
+| observer claim | `4ddd2172-60c8-4076-bc9a-570d1947eac7`, scope `docs/wave3-preflight/**` |
+| accepted EPIC-10 predecessor | `ANDROIDJTOOLS-WAVE0-PROTOCOL-20260915`, `terminal / complete`; reviewed packet `f65ae278-e6ed-483e-8bb3-7ce4c26d926d`; result `docs/protocol-negotiation/decision.md` |
+| accepted EPIC-03 predecessor | `ANDROIDJTOOLS-UX-PLAYER-QUEUE-20260915`, `terminal / complete`; reviewed packet `762d1d37-e56f-42e6-bc63-ed9ba0692d78` |
+| fresh EPIC-10 execution | `ANDROIDJTOOLS-WAVE0-PROTOCOL-20260927`, `dispatched` |
+| fresh protocol convergence | `ANDROIDJTOOLS-PROTOCOL-CONVERGENCE-20260927`, `dispatched` |
+| fresh protocol synthesis | `ANDROIDJTOOLS-PROTOCOL-SYNTHESIS-20260927`, `queued` |
+| fresh EPIC-03 execution | `ANDROIDJTOOLS-UX-PLAYER-QUEUE-20260927`, `dispatched` |
+| EPIC-09 implementation task | `ANDROIDJTOOLS-WAVE3-OFFLINE-DL-20260927`, `queued`, no bound workflow packet/lease/claim observed |
+| workflow discrepancy | fresh 2026-09-27 canonical tasks above are reported unbound; this refresh therefore records OCP state and ws-bridge authority separately rather than inventing correlations |
+| current dirty evidence | 21 changed paths in shared checkout, including Media3 playback/queue files; treated as concurrent work, not accepted lifecycle evidence |
+
+Read-only/static sources inspected for this refresh: `docs/agent-workflows.yml`, `docs/epics.yml`, `docs/user-stories.yml`, all four `docs/protocol-negotiation/*.md` documents, the prior Wave Three preflight, live OCP tasks/workflow projection, workspace claims/presence, and current Kotlin provider/playback/sync/Sample-Lib seams.
+
+---
+
+## Historical 2026-09-15 evidence
 
 Snapshot time: initial 2026-09-15 14:29Z; refreshed 14:35Z (16:35 Europe/Berlin) after a concurrent Sample Lib proposal/checkpoint became durable.
 

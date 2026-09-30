@@ -2,9 +2,10 @@
 """Fail-closed Android DJ Tools UI/UX E2E runner.
 
 Host/JVM gates are always useful. Android instrumentation is executed only when
-adb exposes at least one ready device; --require-device turns device absence into
-a distinct non-zero qualification result instead of silently promoting compile
-coverage to real-device evidence.
+adb exposes at least one ready device whose API level satisfies the app minSdk;
+--require-device turns the absence of a compatible target into a distinct
+non-zero qualification result instead of silently promoting compile coverage to
+real-device evidence.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ DEFAULT_GRADLE_HOME = Path("/tmp/androidjtools-gradle")
 DEFAULT_PERFORMANCE_JSON = ROOT / "artifacts" / "e2e" / "device-performance.json"
 DEBUG_APPLICATION_ID = "dev.androidjtools.debug"
 DEVICE_PERFORMANCE_FILE = "files/epic17-performance.json"
+APP_MIN_SDK = 28
 
 
 def parser() -> argparse.ArgumentParser:
@@ -32,7 +34,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--require-device",
         action="store_true",
-        help="exit 3 when no adb device is available; required for real-device qualification",
+        help="exit 3 when no compatible adb device is available; required for real-device qualification",
     )
     result.add_argument(
         "--skip-host",
@@ -83,10 +85,20 @@ def resolve_adb(env: dict[str, str]) -> str | None:
     return shutil.which("adb", path=env.get("PATH"))
 
 
-def adb_devices(env: dict[str, str]) -> tuple[list[str], str | None, str | None]:
+def adb_devices(
+    env: dict[str, str],
+) -> tuple[list[str], list[dict[str, Any]], str | None, str | None]:
+    """Return compatible serials plus diagnostics for every adb-visible target.
+
+    A serial in adb's device state is not necessarily runnable by this app.
+    Probe its platform SDK and only admit targets satisfying APP_MIN_SDK. Probe
+    failures and malformed SDK values stay visible in diagnostics and fail
+    closed as incompatible.
+    """
+
     adb = resolve_adb(env)
     if adb is None:
-        return [], "adb-not-found", None
+        return [], [], "adb-not-found", None
     completed = subprocess.run(
         [adb, "devices", "-l"],
         cwd=ROOT,
@@ -94,15 +106,57 @@ def adb_devices(env: dict[str, str]) -> tuple[list[str], str | None, str | None]
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        check=False,
     )
     if completed.returncode != 0:
-        return [], f"adb-failed:{completed.stderr.strip() or completed.returncode}", adb
-    serials: list[str] = []
+        return [], [], f"adb-failed:{completed.stderr.strip() or completed.returncode}", adb
+
+    compatible: list[str] = []
+    discovered: list[dict[str, Any]] = []
     for line in completed.stdout.splitlines()[1:]:
         fields = line.split()
-        if len(fields) >= 2 and fields[1] == "device":
-            serials.append(fields[0])
-    return serials, None, adb
+        if len(fields) < 2:
+            continue
+        serial, state = fields[0], fields[1]
+        record: dict[str, Any] = {"serial": serial, "state": state, "compatible": False}
+
+        if state != "device":
+            record["reason"] = f"adb-state-{state}"
+            discovered.append(record)
+            continue
+
+        sdk_probe = subprocess.run(
+            [adb, "-s", serial, "shell", "getprop", "ro.build.version.sdk"],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if sdk_probe.returncode != 0:
+            record["reason"] = f"sdk-probe-failed:{sdk_probe.stderr.strip() or sdk_probe.returncode}"
+            discovered.append(record)
+            continue
+
+        try:
+            api_level = int(sdk_probe.stdout.strip())
+        except ValueError:
+            record["reason"] = f"sdk-probe-invalid:{sdk_probe.stdout.strip() or 'empty'}"
+            discovered.append(record)
+            continue
+
+        record["api_level"] = api_level
+        if api_level < APP_MIN_SDK:
+            record["reason"] = f"api-{api_level}-below-min-sdk-{APP_MIN_SDK}"
+            discovered.append(record)
+            continue
+
+        record["compatible"] = True
+        compatible.append(serial)
+        discovered.append(record)
+
+    return compatible, discovered, None, adb
 
 
 def write_result(path: Path | None, payload: dict[str, Any]) -> None:
@@ -178,7 +232,7 @@ def main() -> int:
         "schema": "androidjtools.ui-e2e/v1",
         "root": str(ROOT),
         "host": {"status": "skipped" if args.skip_host else "pending"},
-        "device": {"required": args.require_device},
+        "device": {"required": args.require_device, "min_sdk": APP_MIN_SDK},
         "instrumentation": {"status": "not-run"},
     }
 
@@ -201,11 +255,13 @@ def main() -> int:
             write_result(args.json_out, result)
             return 1
 
-    devices, device_error, adb = adb_devices(env)
+    devices, discovered, device_error, adb = adb_devices(env)
     result["device"].update(
         {
             "serials": devices,
             "count": len(devices),
+            "discovered": discovered,
+            "discovered_count": len(discovered),
             "status": "available" if devices else "unavailable",
             "error": device_error,
             "adb": adb,
@@ -215,11 +271,11 @@ def main() -> int:
     if not devices:
         result["instrumentation"] = {
             "status": "not-run",
-            "reason": device_error or "no-ready-adb-device",
+            "reason": device_error or "no-compatible-adb-device",
         }
         result["qualification"] = "blocked-no-device" if args.require_device else "host-qualified-device-pending"
         write_result(args.json_out, result)
-        print("Android instrumentation not run: no ready adb device.", file=sys.stderr)
+        print("Android instrumentation not run: no compatible adb device.", file=sys.stderr)
         return 3 if args.require_device else 0
 
     instrumentation = run(

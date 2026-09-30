@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 STORIES_PATH = ROOT / "docs" / "user-stories.yml"
 OUTPUT_PATH = ROOT / "docs" / "parity" / "parity.json"
 TASK_ID = "ANDROIDJTOOLS-WAVE5-PARITY-E2E-20260915"
-OBSERVED_AT = "2026-09-17T10:57:00Z"
+OBSERVED_AT = "2026-09-29T04:25:00Z"
 
 STORY_RE = re.compile(
     r"^\s*-\s*\{id:\s*(US-\d+),\s*epic:\s*([^,]+),.*?verify:\s*([^}]+)\}\s*$"
@@ -84,7 +84,7 @@ EVIDENCE = {
             "-Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.library.LibraryScreenTest"
         ),
         refs=["app/src/androidTest/java/dev/androidjtools/ui/library/LibraryScreenTest.kt"],
-        result="Not run: adb reported no attached devices.",
+        result="Not run: no compatible minSdk 28+ Android target is available; SDK adb sees one GT-I8190 at API 22, below app minSdk 28.",
     ),
     "playback-unit": evidence(
         tier="fixture",
@@ -109,7 +109,7 @@ EVIDENCE = {
             "-Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.player.PlayerScreenTest"
         ),
         refs=["app/src/androidTest/java/dev/androidjtools/ui/player/PlayerScreenTest.kt"],
-        result="Not run: adb reported no attached devices.",
+        result="Not run: no compatible minSdk 28+ Android target is available; SDK adb sees one GT-I8190 at API 22, below app minSdk 28.",
     ),
     "waveform-unit": evidence(
         tier="fixture",
@@ -134,7 +134,7 @@ EVIDENCE = {
             "-Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.waveform.WaveformScreenTest"
         ),
         refs=["app/src/androidTest/java/dev/androidjtools/ui/waveform/WaveformScreenTest.kt"],
-        result="Not run: adb reported no attached devices.",
+        result="Not run: no compatible minSdk 28+ Android target is available; SDK adb sees one GT-I8190 at API 22, below app minSdk 28.",
     ),
     "beatgrid-unit": evidence(
         tier="fixture",
@@ -159,7 +159,7 @@ EVIDENCE = {
             "-Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.prep.beatgrid.BeatGridEditorTest"
         ),
         refs=["app/src/androidTest/java/dev/androidjtools/prep/beatgrid/BeatGridEditorTest.kt"],
-        result="Instrumentation source compiles in the fresh host gate; execution remains blocked because adb reports no attached device.",
+        result="Instrumentation source compiles in the fresh host gate; execution remains blocked because no compatible minSdk 28+ Android target is available.",
     ),
     "cues-unit": evidence(
         tier="fixture",
@@ -188,7 +188,7 @@ EVIDENCE = {
             "-Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.prep.cues.CueEditorSemanticsTest"
         ),
         refs=["app/src/androidTest/java/dev/androidjtools/prep/cues/CueEditorSemanticsTest.kt"],
-        result="Not run: adb reported no attached devices.",
+        result="Not run: no compatible minSdk 28+ Android target is available; SDK adb sees one GT-I8190 at API 22, below app minSdk 28.",
     ),
     "loops-unit": evidence(
         tier="fixture",
@@ -213,7 +213,7 @@ EVIDENCE = {
             "-Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.prep.loops.LoopEditorSemanticsTest"
         ),
         refs=["app/src/androidTest/java/dev/androidjtools/prep/loops/LoopEditorSemanticsTest.kt"],
-        result="Not run: adb reported no attached devices.",
+        result="Not run: no compatible minSdk 28+ Android target is available; SDK adb sees one GT-I8190 at API 22, below app minSdk 28.",
     ),
     "metadata-unit": evidence(
         tier="fixture",
@@ -250,7 +250,7 @@ EVIDENCE = {
             "-Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.metadata.MetadataQuickRatingTest"
         ),
         refs=["app/src/androidTest/java/dev/androidjtools/ui/metadata/MetadataQuickRatingTest.kt"],
-        result="One-tap five-star rating and namespaced-tag UI instrumentation exists and compiles; SDK adb reports zero attached devices, so it has not executed.",
+        result="One-tap five-star rating and namespaced-tag UI instrumentation exists and compiles; no compatible minSdk 28+ Android target is available, so it has not executed.",
     ),
     "namespaced-tag-roundtrip": evidence(
         tier="fake_backend",
@@ -296,7 +296,7 @@ EVIDENCE = {
             "-Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.collections.CollectionsScreenTest"
         ),
         refs=["app/src/androidTest/java/dev/androidjtools/ui/collections/CollectionsScreenTest.kt"],
-        result="Not run: adb reported no attached devices.",
+        result="Not run: no compatible minSdk 28+ Android target is available; SDK adb sees one GT-I8190 at API 22, below app minSdk 28.",
     ),
     "offline-unit": evidence(
         tier="fixture",
@@ -382,7 +382,11 @@ EVIDENCE = {
         status="pass",
         environment="local-real-sample-lib",
         command="python3 e2e/djxml/qualify_samplelib.py --require-real-sync",
-        refs=["e2e/djxml/qualify_samplelib.py", "/home/user/code/sample-lab/third_party/sample-lib"],
+        refs=[
+            "e2e/djxml/qualify_samplelib.py",
+            "/home/user/code/sample-lab/third_party/sample-lib",
+            "artifacts/e2e/samplelib-real-r21.json",
+        ],
         result=(
             "Fresh --require-real-sync qualification passed against the real Sample Lib checkout: adapter and playlist-authority tests pass, "
             "stable asset/cue/loop/region/tag semantics are preserved, canonical playlist identity/order is present, and production "
@@ -436,7 +440,7 @@ EVIDENCE = {
             "-Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.analysis.AnalysisAssistantContentTest"
         ),
         refs=["app/src/androidTest/java/dev/androidjtools/ui/analysis/AnalysisAssistantContentTest.kt"],
-        result="Not run: adb reported no attached devices.",
+        result="Not run: no compatible minSdk 28+ Android target is available; SDK adb sees one GT-I8190 at API 22, below app minSdk 28.",
     ),
     "audio-focus-unit": evidence(
         tier="fixture",
@@ -472,8 +476,17 @@ EVIDENCE = {
         refs=[
             "e2e/ui/run_ui_e2e.py",
             "app/src/androidTest/java/dev/androidjtools/e2e/AppShellE2ETest.kt",
+            "artifacts/e2e/conformance-20260929-r21-host.json",
+            "artifacts/e2e/conformance-20260929-r21-emulator.json",
+            "artifacts/e2e/ui-e2e.json",
         ],
-        result="Fresh host gate passes unit tests, Android-test compilation, lint and assemble; instrumentation remains blocked because adb reports no attached device.",
+        result=(
+            "Fresh 2026-09-29 R21 host conformance passes ledger integrity, architecture, 39 backend/protocol tests, "
+            "debug+release assembly, release isolation, unit tests, Android-test compilation and lint. The emulator "
+            "profile then fails closed only at the required device gate: SDK adb sees one API-22 GT-I8190 in device "
+            "state, with zero minSdk-28-compatible targets. Instrumentation remains "
+            "blocked rather than promoted from compile coverage."
+        ),
     ),
     "lane-a-visual-device": evidence(
         tier="emulator_or_real_device",
@@ -489,7 +502,7 @@ EVIDENCE = {
         ],
         result=(
             "Lane A added device-rendered PNG evidence for US-011 and US-040/043 plus semantic assertions for "
-            "artwork/compact metadata. The complete Android-test source set compiles, but zero attached devices means "
+            "artwork/compact metadata. The complete Android-test source set compiles, but no compatible minSdk 28+ Android target means "
             "these visual assertions have not executed."
         ),
     ),
@@ -546,7 +559,7 @@ EVIDENCE = {
             "-Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.a11y.ScaledFontNavigationTest"
         ),
         refs=["app/src/androidTest/java/dev/androidjtools/a11y/ScaledFontNavigationTest.kt"],
-        result="The 2x font-scale navigation/discoverability instrumentation exists and compiles; execution remains blocked by device absence.",
+        result="The 2x font-scale navigation/discoverability instrumentation exists and compiles; execution remains blocked because no compatible minSdk 28+ Android target is available.",
     ),
     "debug-harness-release-exclusion": evidence(
         tier="release_artifact",
@@ -557,7 +570,7 @@ EVIDENCE = {
             "./gradlew :app:assembleDebug :app:assembleRelease --no-daemon --console=plain && "
             "python3 app/src/debug/verify_debug_harness.py "
             "--debug-apk app/build/outputs/apk/debug/app-debug.apk "
-            "--release-apk app/build/outputs/apk/release/app-release-unsigned.apk"
+            "--release-apk app/build/outputs/apk/release/app-release.apk"
         ),
         refs=[
             "app/src/debug/verify_debug_harness.py",
@@ -565,9 +578,8 @@ EVIDENCE = {
             "app/src/debug/assets/debug-harness-contract.json",
         ],
         result=(
-            "Fresh release build and APK inspection passed: DebugHarnessActivity and debug-harness-contract.json "
-            "are present in debug and absent from release. Release APK sha256 "
-            "3974f1e0debd6080d78bec32745fb5d8440c4e11becb4b0787bafa7a9e0b0d6c."
+            "Fresh release build and APK inspection passed: the real launcher is retained in both variants, "
+            "while DebugHarnessActivity and debug-harness-contract.json are present only in debug."
         ),
     ),
     "a11y-shell-device": evidence(
@@ -581,7 +593,7 @@ EVIDENCE = {
         refs=["app/src/androidTest/java/dev/androidjtools/a11y/TalkBackSemanticsTest.kt"],
         result=(
             "Primary shell/library/waveform accessibility semantics assertions exist and compile in the full "
-            "Android-test source set, but no attached Android target exists to execute them."
+            "Android-test source set, but no compatible minSdk 28+ Android target exists to execute them."
         ),
     ),
     "a11y-library-device": evidence(
@@ -595,7 +607,7 @@ EVIDENCE = {
             "-Pandroid.testInstrumentationRunnerArguments.class=dev.androidjtools.ui.library.LibraryScreenTest"
         ),
         refs=["app/src/androidTest/java/dev/androidjtools/ui/library/LibraryScreenTest.kt::keyControlsHaveAccessibilitySemantics"],
-        result="Semantics assertion exists but was not run because adb reported no attached devices.",
+        result="Semantics assertion exists but was not run because no compatible minSdk 28+ Android target is available.",
     ),
     "performance-10k-unit": evidence(
         tier="fixture",
@@ -622,7 +634,7 @@ EVIDENCE = {
             "A reproducible Android instrumentation regression tier now compiles: it measures 10,000-track "
             "initial/search latency and Window FrameMetrics during waveform gestures with explicit fail-closed "
             "thresholds, then emits device JSON. The SDK adb probe resolved /opt/android-sdk/platform-tools/adb "
-            "but found zero attached devices, so no timing result is claimed."
+            "but found no compatible minSdk 28+ Android target, so no timing result is claimed."
         ),
     ),
     "resilience-host-integration": evidence(
@@ -647,6 +659,27 @@ EVIDENCE = {
             "fake HTTP/protocol suite passed 36/36; real-device traversal remains separate."
         ),
     ),
+    "host-conformance-current": evidence(
+        tier="host_static",
+        status="pass",
+        environment="host+adb",
+        command="python3 e2e/parity/run_conformance.py --profile host --report artifacts/e2e/conformance-20260929-r21-host.json",
+        refs=[
+            "e2e/parity/run_conformance.py",
+            "e2e/ui/run_ui_e2e.py",
+            "e2e/ui/test_run_ui_e2e.py",
+            "artifacts/e2e/conformance-20260929-r21-host.json",
+            "artifacts/e2e/ui-e2e.json",
+        ],
+        result=(
+            "Fresh 2026-09-29 R21 host conformance passes every host-profile gate: ledger integrity, provider boundary, "
+            "39 backend/protocol tests, debug/release APK assembly, debug-harness release exclusion, and the UI host "
+            "gate. The repaired UI runner probes Android API levels before instrumentation, classifies the API-22 "
+            "GT-I8190 as incompatible with minSdk 28, and leaves device instrumentation pending instead of launching "
+            "connectedDebugAndroidTest against an unusable target. Six focused runner tests pass, and --require-device "
+            "still exits 3 when no compatible target exists."
+        ),
+    ),
     "parity-validator": evidence(
         tier="hosted_ci_compatible",
         status="pass",
@@ -659,21 +692,37 @@ EVIDENCE = {
         tier="real_device_plus_real_backend",
         status="blocked",
         environment="android-device+real-sample-lib",
-        command="python3 e2e/parity/run_core_e2e.py --require-real",
-        refs=["e2e/parity/run_core_e2e.py"],
+        command=(
+            "python3 e2e/parity/run_core_e2e.py --require-real "
+            "--sample-lib-root /home/user/code/sample-lab/third_party/sample-lib "
+            "--device-backend-evidence artifacts/e2e/real-device-backend.json"
+        ),
+        refs=[
+            "e2e/parity/run_core_e2e.py",
+            "artifacts/e2e/real-core-r21.json",
+        ],
         result=(
-            "Fresh real-core probe reports the real Sample Lib server side fully qualified, but no attached Android "
-            "device and no androidjtools.real-device-backend-evidence/v1 packet from an actual Android -> real "
-            "Sample Lib pair/pull/push/receipt/reconnect traversal are available. Device presence alone is rejected."
+            "Fresh 2026-09-29 R21 real-core probe passes the real Sample Lib adapter/playlist authority checks and "
+            "finds all required production sync routes. SDK adb sees one API-22 device in device state, but no "
+            "validated Android -> real Sample Lib pair/pull/push/receipt/reconnect evidence packet exists; "
+            "qualification is blocked by android_real_backend_evidence_missing."
         ),
     ),
     "hosted-ci": evidence(
         tier="hosted_ci",
-        status="missing",
-        environment="hosted-ci",
-        command=None,
-        refs=[],
-        result="No hosted-CI EPIC-18 execution evidence was available in this run.",
+        status="fail",
+        environment="github-actions-api35",
+        command="gh run view 35383205247 --json conclusion,jobs,url,headSha,event",
+        refs=[
+            "https://github.com/fkr-0/androidjtools/actions/runs/35383205247",
+            "artifacts/e2e/e2e-closure-20260927-host.json",
+        ],
+        result=(
+            "Hosted API-35 conformance on revision 131b33ef3118882e7aa414f9b245be10a5ef37c7 failed "
+            "at debug-harness release exclusion after ledger integrity, architecture, backend contracts, and APK "
+            "builds passed. The preserved dirty E2E seam now targets app-release.apk instead of the obsolete "
+            "app-release-unsigned.apk, and the 2026-09-27 local host conformance run passes that repaired verifier."
+        ),
     ),
 }
 
@@ -699,18 +748,18 @@ assign(story_ids(4), "pass", ["architecture-provider-boundary"])
 
 # EPIC-01 library
 assign(story_ids(10), "partial", ["library-unit", "library-device"], "Dense-list logic is covered; actual device interaction remains unexecuted.")
-assign(story_ids(11), "blocked", ["androidtest-compile", "lane-a-visual-device"], "Artwork/compact-metadata semantic and PNG capture assertions now exist and compile, but no Android target is attached to render the visual evidence.")
-assign(story_ids(12, 13, 14), "blocked", ["library-device"], "Matching Compose instrumentation exists but no Android device is attached.")
+assign(story_ids(11), "blocked", ["androidtest-compile", "lane-a-visual-device"], "Artwork/compact-metadata semantic and PNG capture assertions now exist and compile, but no compatible minSdk 28+ Android target is available to render the visual evidence.")
+assign(story_ids(12, 13, 14), "blocked", ["library-device"], "Matching Compose instrumentation exists but no compatible minSdk 28+ Android target is available.")
 
 # EPIC-02 search/filter
 assign(story_ids(20, 21, 22, 23), "pass", ["library-unit"])
 
 # EPIC-03 playback/queue
-assign(story_ids(30, 31), "blocked", ["player-device"], "The user-facing playback surfaces require instrumentation evidence; no Android device is attached.")
+assign(story_ids(30, 31), "blocked", ["player-device"], "The user-facing playback surfaces require instrumentation evidence; no compatible minSdk 28+ Android target is available.")
 assign(story_ids(32, 33, 34), "pass", ["playback-unit"])
 
 # EPIC-04 waveform
-assign(story_ids(40), "blocked", ["waveform-device", "lane-a-visual-device"], "Waveform density/render and device-rendered overview/detail/overlay evidence exist, but no Android target is attached.")
+assign(story_ids(40), "blocked", ["waveform-device", "lane-a-visual-device"], "Waveform density/render and device-rendered overview/detail/overlay evidence exist, but no compatible minSdk 28+ Android target is available.")
 assign(story_ids(41, 42), "partial", ["waveform-unit", "waveform-device"], "Deterministic model behavior passes; gesture/render instrumentation remains blocked by device availability.")
 assign(story_ids(43), "partial", ["waveform-unit", "waveform-device", "lane-a-visual-device"], "Overlay model behavior passes and device-rendered canonical/candidate legend evidence exists, but Android execution remains blocked by device availability.")
 
@@ -721,7 +770,7 @@ assign(story_ids(53, 54), "pass", ["cues-unit", "loops-unit"])
 assign(story_ids(55), "partial", ["resilience-host-integration", "cues-device", "loops-device"], "Cue/loop preparation now survives durable journaling, process recreation, reconnect and authoritative receipt at the host/backend tier; the integrated offline editor interaction still has not run on an Android target.")
 
 # EPIC-06 beatgrid
-assign(story_ids(60), "partial", ["beatgrid-unit", "beatgrid-device"], "Beat-grid model/editor semantics pass on the host; rendered device interaction remains blocked by device absence.")
+assign(story_ids(60), "partial", ["beatgrid-unit", "beatgrid-device"], "Beat-grid model/editor semantics pass on the host; rendered device interaction remains blocked because no compatible minSdk 28+ Android target is available.")
 assign(story_ids(61), "pass", ["beatgrid-unit"])
 assign(story_ids(62), "pass", ["beatgrid-unit"])
 assign(story_ids(63), "pass", ["beatgrid-unit", "cues-unit"])
@@ -773,10 +822,10 @@ assign(story_ids(160, 161, 162), "blocked", ["androidtest-compile", "debug-harne
 assign(story_ids(163), "pass", ["debug-harness-release-exclusion"])
 
 # EPIC-17 accessibility/performance
-assign(story_ids(170), "blocked", ["androidtest-compile", "a11y-shell-device", "a11y-library-device", "cues-device", "loops-device"], "TalkBack-oriented semantics assertions compile across primary surfaces, but no Android target is attached to execute traversal/semantics behavior.")
-assign(story_ids(171), "blocked", ["androidtest-compile", "scaled-font-device"], "The 2x font-scale test now requires essential navigation/search actions to remain displayed and compiles, but cannot execute without an attached Android target.")
+assign(story_ids(170), "blocked", ["androidtest-compile", "a11y-shell-device", "a11y-library-device", "cues-device", "loops-device"], "TalkBack-oriented semantics assertions compile across primary surfaces, but no compatible minSdk 28+ Android target is available to execute traversal/semantics behavior.")
+assign(story_ids(171), "blocked", ["androidtest-compile", "scaled-font-device"], "The 2x font-scale test now requires essential navigation/search actions to remain displayed and compiles, but cannot execute without a compatible minSdk 28+ Android target.")
 assign(story_ids(172), "partial", ["performance-10k-unit", "androidtest-compile", "performance-device-gate"], "10,000-track deterministic host logic passes and a thresholded device interaction gate is implemented/compiled, but no device timing has been observed.")
-assign(story_ids(173), "blocked", ["androidtest-compile", "performance-device-gate"], "A thresholded FrameMetrics waveform gesture gate is implemented and compiles, but no attached Android target exists to produce frame-time evidence.")
+assign(story_ids(173), "blocked", ["androidtest-compile", "performance-device-gate"], "A thresholded FrameMetrics waveform gesture gate is implemented and compiles, but no compatible minSdk 28+ Android target exists to produce frame-time evidence.")
 
 # EPIC-18 parity acceptance itself
 assign(story_ids(180), "pass", ["parity-validator"])
@@ -834,8 +883,8 @@ def main() -> int:
             "dependency_acceptance_waived_for_qualification": False,
             "ocp_authenticated_binding_obtained": False,
             "authority_note": (
-                "This refresh runs through the authenticated project manager under workflow packet "
-                "a0655a7e-9ced-4145-acd6-301b2cbbc3bd and its active path claim; no separate canonical OCP task binding is asserted. "
+                "This refresh continues the operator-requested E2E closure represented by workflow packet "
+                "350d4281-cc88-4d67-ab5b-9eae87a0dff4, which is awaiting independent review. "
                 "The execution waiver still does not promote red evidence."
             ),
         },
@@ -867,11 +916,11 @@ def main() -> int:
         "environment": {
             "host_java": "17 (explicit /usr/lib/jvm/java-17-openjdk; system default 26.0.2.1 is incompatible with this Gradle/Kotlin toolchain)",
             "gradle_user_home": "$PWD/.gradle-local (repository-local isolated writable cache for the fresh integrated gate)",
-            "android_device": "blocked: /opt/android-sdk/platform-tools/adb is healthy but reports zero attached devices; /usr/bin/adb is ignored because its host libusb linkage is broken",
+            "android_device": "blocked for app instrumentation: SDK adb sees one GT-I8190/API 22 target in device state, below app minSdk 28. No compatible Android target is available.",
             "real_sample_lib": "/home/user/code/sample-lab/third_party/sample-lib",
             "real_sample_lib_sync": "qualified: /v1/sync/hello, /v1/sync/pair, /v1/sync/pull, /v1/sync/push and receipt routes present",
             "real_sample_lib_playlist_authority": "qualified: canonical playlist identity/order tests pass",
-            "hosted_ci": "not observed in this run",
+            "hosted_ci": "latest recorded API-35 run 35383205247 failed at the historical debug-harness release-path mismatch; current local release exclusion verifier passes",
         },
         "status_counts": status_counts,
         "evidence": EVIDENCE,

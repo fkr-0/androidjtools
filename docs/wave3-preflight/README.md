@@ -1,6 +1,71 @@
 # Wave Three guarded implementation preflight
 
-Canonical OCP task: `ANDROIDJTOOLS-WAVE3-PARALLEL-OBSERVER-20260915`
+Canonical durable OCP task: `ANDROIDJTOOLS-WAVE3-PARALLEL-OBS-20260927`
+
+Historical predecessor: `ANDROIDJTOOLS-WAVE3-PARALLEL-OBSERVER-20260915` (`terminal / complete`, independently reviewed).
+
+## 2026-09-27 current-state refresh
+
+Snapshot: 2026-09-27 17:04Z (19:04 Europe/Berlin). This refresh is docs-only. It does not create or imply a Wave Three implementation claim.
+
+### Facts
+
+- Current observer OCP `ANDROIDJTOOLS-WAVE3-PARALLEL-OBS-20260927` is `dispatched` from dispatch attempt `95b655e7492249f1a82c95c996919810`, but the OCP/workflow projection initially reported it unbound.
+- The authorized docs-only workflow packet for this execution is `92243b66-5cd9-4e33-9f3f-a1272c8d1811`; active lease `f59c7533-f956-42f2-85a8-0752380b8e07`; claim `4ddd2172-60c8-4076-bc9a-570d1947eac7`; write scope is exactly `docs/wave3-preflight/**`.
+- The September 15 EPIC-10 authority is durable: `ANDROIDJTOOLS-WAVE0-PROTOCOL-20260915` is `terminal / complete` and cites the independently reviewed protocol-synthesis packet `f65ae278-e6ed-483e-8bb3-7ce4c26d926d` plus `docs/protocol-negotiation/decision.md`.
+- The September 15 EPIC-03 authority is also durable: `ANDROIDJTOOLS-UX-PLAYER-QUEUE-20260915` is `terminal / complete` with independent review evidence and packet `762d1d37-e56f-42e6-bc63-ed9ba0692d78`.
+- Fresh September 27 work is nevertheless in flight: `ANDROIDJTOOLS-WAVE0-PROTOCOL-20260927` is `dispatched`, `ANDROIDJTOOLS-PROTOCOL-CONVERGENCE-20260927` is `dispatched`, and `ANDROIDJTOOLS-UX-PLAYER-QUEUE-20260927` is `dispatched`. These tasks are currently unbound in the workflow projection.
+- `ANDROIDJTOOLS-PROTOCOL-SYNTHESIS-20260927` is `queued`; `ANDROIDJTOOLS-WAVE3-OFFLINE-DL-20260927` is `queued`. No current EPIC-09/11/12/13 implementation packet, lease, or path claim was found.
+- The current checkout contains concurrent playback/Media3/queue changes. They are evidence of active implementation work, not independent lifecycle acceptance.
+
+### Current prerequisite matrix
+
+| Concern | Current OCP identity | Current lifecycle | Workflow packet / claim | Gate consequence |
+| --- | --- | --- | --- | --- |
+| Observer/preflight | `ANDROIDJTOOLS-WAVE3-PARALLEL-OBS-20260927` | `dispatched` | packet `92243b66-5cd9-4e33-9f3f-a1272c8d1811`; lease `f59c7533-f956-42f2-85a8-0752380b8e07`; claim `4ddd2172-60c8-4076-bc9a-570d1947eac7` | docs-only work legal; no implementation claims |
+| EPIC-10 accepted predecessor | `ANDROIDJTOOLS-WAVE0-PROTOCOL-20260915` | `terminal / complete` | reviewed packet `f65ae278-e6ed-483e-8bb3-7ce4c26d926d` | durable accepted baseline exists |
+| EPIC-10 fresh execution | `ANDROIDJTOOLS-WAVE0-PROTOCOL-20260927` + `ANDROIDJTOOLS-PROTOCOL-CONVERGENCE-20260927` | both `dispatched` | no bound current packet/claim in projection | treat protocol as reopened/in-flight until lifecycle resolves or explicitly defers to accepted baseline |
+| EPIC-03 accepted predecessor | `ANDROIDJTOOLS-UX-PLAYER-QUEUE-20260915` | `terminal / complete` | reviewed packet `762d1d37-e56f-42e6-bc63-ed9ba0692d78` | durable accepted baseline exists |
+| EPIC-03 fresh execution | `ANDROIDJTOOLS-UX-PLAYER-QUEUE-20260927` | `dispatched` | no bound current packet/claim in projection | EPIC-09 should not assume concurrent dirty playback work is accepted |
+| EPIC-09 implementation | `ANDROIDJTOOLS-WAVE3-OFFLINE-DL-20260927` | `queued` | no packet/lease/claim | not executable from this observer task |
+| EPIC-11 / EPIC-12 / EPIC-13 | no separately authorized current implementation task found | none | none | docs-only; await explicit implementation admission |
+
+### Wave Three legal-start table
+
+| Epic | Dependencies | Current gate | Earliest legal start | Exact proposed write scope | Executable acceptance focus |
+| --- | --- | --- | --- | --- | --- |
+| `EPIC-11-MUTATION-JOURNAL-CONFLICTS` | EPIC-10 | accepted 2026-09-15 baseline exists, but 2026-09-27 protocol/convergence work is in flight | after the fresh protocol/convergence tasks terminate complete or explicitly preserve the reviewed 2026-09-15 decision, and a separate EPIC-11 packet/claim is admitted | `app/src/main/java/**/sync/journal/**`, `app/src/main/java/**/sync/conflict/**`, mirrored tests only | durable-before-success; exact-ID/body replay; receipt-gated compaction; deterministic safe-merge matrix; side-by-side unsafe conflicts; process-death at pre-send, ambiguous-send, receipt-persist and migration points |
+| `EPIC-12-SAMPLELIB-INTEGRATION` | EPIC-10 | same fresh protocol gate; no implementation packet | after protocol authority is stable and a separate EPIC-12 packet owns `remote/samplelib/**` + fake-server Sample Lib scope | `app/src/main/java/**/remote/samplelib/**`, `test-server/samplelib/**`, mirrored remote-client tests | explicit pairing/health; opaque-cursor pull; journal push + authoritative receipts; reconnect; auth/version failures; fake-vs-real Sample Lib qualification |
+| `EPIC-09-OFFLINE-DOWNLOADS` | EPIC-03 + EPIC-10 | reviewed predecessors exist, but fresh protocol and player tasks are active; queued implementation task has no workflow authority | after both fresh dependency executions are accepted or explicitly preserve prior reviewed baselines, then admit/reserve the existing EPIC-09 task without minting a replacement identity | `app/src/main/java/**/offline/download/**` + mirrored tests; playback/provider packages consume-only unless a separate narrow coordination claim exists | WorkManager scheduler over durable transfer state; process-death/reboot resume; range+validator+hash integrity; durable pinning; pin-safe quota eviction; real playback-provider airplane-mode acceptance |
+| `EPIC-13-DJXML-INTEROP` | EPIC-12 (and EPIC-10 transitively) | EPIC-12 not implemented/accepted | only after EPIC-12 real Sample Lib qualification, then separate EPIC-13 admission | `app/src/main/java/**/interop/**`, `e2e/djxml/**` | Android mutation -> receipt -> Sample Lib -> DJXML export; DJXML import -> Sample Lib commit -> cursor pull; canonical asset/playlist/crate identity and ordering round trip |
+
+### Provider/contract seams and migration risks
+
+The September 15 detailed design below remains directionally valid, but current code has advanced: Media3 playback and a persisted `PlayerQueueController` now exist in the dirty checkout. EPIC-09 must consume that established playback/provider path rather than create a second player or path-based cache authority. The fresh player task must finish before those dirty bytes become lifecycle evidence.
+
+For EPIC-11/12, the decisive seam remains the reviewed sync decision: the journal owns durable intent before success, the remote client transports opaque cursors and mutation envelopes, and only authoritative receipts permit compaction. Migration risk remains highest around revision-token representation, capability negotiation, cursor/reset semantics, and any provider API extension outside the epic's narrow package scope. Such extensions require an explicit coordination claim; they must not be hidden inside a Wave Three implementation packet.
+
+For EPIC-13, DJXML remains downstream exchange through Sample Lib. Android must map stable canonical asset/entity IDs to DJXML bridge identities through Sample Lib; filesystem paths are never authority. Playlist/crate import/export must preserve ordering and identity without allowing DJXML to bypass journal/receipt semantics.
+
+### Recommended canonical dispatch order
+
+1. Finish or explicitly supersede/defer the fresh 2026-09-27 EPIC-10 protocol/convergence tasks.
+2. Finish or explicitly preserve the reviewed baseline for the fresh 2026-09-27 EPIC-03 player task.
+3. Admit separate implementation packets for EPIC-11 and EPIC-12 once EPIC-10 is stable; their write scopes are non-overlapping.
+4. Admit/reserve the existing `ANDROIDJTOOLS-WAVE3-OFFLINE-DL-20260927` identity only after both EPIC-10 and EPIC-03 are stable.
+5. Admit EPIC-13 only after EPIC-12 reaches accepted real-Sample-Lib qualification.
+
+### Explicit blockers and next lifecycle actions
+
+- **Blocker:** fresh protocol/convergence tasks are active and unbound in the workflow projection. **Action:** complete their native lifecycle or explicitly record that the reviewed 2026-09-15 decision remains canonical.
+- **Blocker:** fresh player task is active with concurrent dirty playback bytes but no bound workflow packet/claim in the projection. **Action:** finish native lifecycle and independent review before EPIC-09 consumes it as accepted evidence.
+- **Blocker:** EPIC-09 queued task has no workflow packet/lease/claim. **Action:** when dependencies clear, admit/reserve the existing OCP identity; do not create a replacement task.
+- **Blocker:** EPIC-11/12/13 have no separately authorized implementation packet/claim. **Action:** admit only after hard dependencies clear, with the non-overlapping scopes above.
+- **Blocker:** real Sample Lib qualification evidence is absent from this observer run. **Action:** EPIC-12 must distinguish deterministic fake-server success from real endpoint/pairing/receipt evidence; EPIC-13 waits for the latter.
+
+---
+
+## Historical 2026-09-15 snapshot
 
 Observed control-plane snapshot: initial 2026-09-15 14:29Z, refreshed at 14:35Z (16:35 Europe/Berlin) after the Sample Lib authority proposal landed.
 
