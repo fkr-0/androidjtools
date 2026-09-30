@@ -1,0 +1,145 @@
+{
+  "schema": "androidjtools.release-path-audit/v1",
+  "audited_at": "2026-09-29T07:20:00+02:00",
+  "head": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "branch": "main",
+  "scope": "evidence-first audit after v0.1.1 convergence; preserve active owner edits; no tag/push/release mutation; only isolated evidence written",
+  "version_state": {
+    "current_version_name": "0.1.3",
+    "current_version_code": 4,
+    "head_tag": "v0.1.3",
+    "head_tag_matches_metadata": true,
+    "changelog_current_release_present": true,
+    "v0_1_1_local_tag": false,
+    "v0_1_1_remote_tag": false,
+    "v0_1_1_github_release": false,
+    "interpretation": "v0.1.1 was release-preparation state and was superseded before tag publication; current canonical release metadata is v0.1.3"
+  },
+  "ci_contract": {
+    "android_ci_tag_trigger": "push tags v*",
+    "metadata_gate": "pushed tag must equal v${versionName}; CHANGELOG must contain matching release section",
+    "primary_artifact": "androidjtools-v${version}-release-apk",
+    "secondary_artifact": "androidjtools-v${version}-debug-apk",
+    "release_asset": "androidjtools-v${version}.apk",
+    "publisher_trigger": "workflow_run completion of Android CI",
+    "publisher_requires": [
+      "successful Android CI push run",
+      "version-matched tag at exact tested SHA",
+      "successful same-SHA Android E2E Conformance push",
+      "release tag not already published"
+    ],
+    "metadata_defect_reproduced": false
+  },
+  "hosted_state": {
+    "android_ci_tag_run": {
+      "run_id": 35383826202,
+      "head_sha": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+      "conclusion": "failure",
+      "verify_and_build_apk_job": "success",
+      "render_android_ui_screenshots_job": "failure"
+    },
+    "android_e2e_conformance": {
+      "run_id": 35383205247,
+      "head_sha": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+      "conclusion": "failure",
+      "connected_api35_job": "failure"
+    },
+    "publish_runs_at_head": [
+      {
+        "run_id": 35384576697,
+        "conclusion": "skipped"
+      },
+      {
+        "run_id": 35384113643,
+        "conclusion": "skipped"
+      }
+    ],
+    "assessment": "The release publisher is fail-closed as designed. Package/build/signature/artifact upload succeeded, while screenshot and same-SHA E2E qualification did not."
+  },
+  "publication": {
+    "current_release": "v0.1.3",
+    "published_at": "2026-09-18T19:05:25Z",
+    "assets": [
+      {
+        "name": "androidjtools-v0.1.3.apk",
+        "size_bytes": 49543371
+      },
+      {
+        "name": "SHA256SUMS",
+        "size_bytes": 91
+      },
+      {
+        "name": "release-provenance.json",
+        "size_bytes": 1131
+      }
+    ],
+    "release_object_verified_via_github": true,
+    "v0_1_1_release_object": false,
+    "note": "A direct re-download/hash refresh of the 49.5 MB published APK was attempted during this audit but interrupted due slow transfer; same-day prior audit r21 records published SHA-256 2a0c49c5fd5f063fa960ea8af83b21de144a05cab645eec69ebf4df70948e9c4."
+  },
+  "local_artifact": {
+    "path": "app/build/outputs/apk/release/app-release.apk",
+    "size_bytes": 49559755,
+    "sha256": "495a644922a672e451ef62654f1c01ed48c4ff74bba79311115e3fc217fd37c3",
+    "debuggable": false,
+    "signature_scheme_v2": true,
+    "signer_dn": "C=US, O=Android, CN=Android Debug",
+    "launcher": "dev.androidjtools.shell.AndroidDjToolsActivity",
+    "debug_harness_present_in_manifest": false,
+    "allow_backup": true,
+    "assessment": "valid non-debuggable sideload/development release build; not production-store signed and not canonical for publication because the worktree is dirty"
+  },
+  "storage_upgrade": {
+    "queue_snapshot_key": "queue-snapshot-v1",
+    "mutation_journal": {
+      "current_format_version": 2,
+      "v1_decode_migration_present": true,
+      "future_versions_fail_closed": true,
+      "focused_test": "passed"
+    },
+    "offline_download_store": {
+      "storage": "Java Properties per asset",
+      "explicit_schema_version": false,
+      "migration_contract": false,
+      "focused_integration_test": "passed",
+      "residual_risk": "future persisted-field changes need an explicit version/migration boundary"
+    },
+    "gradle_command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:testDebugUnitTest --tests dev.androidjtools.sync.journal.MutationJournalTest --tests dev.androidjtools.offline.download.OfflinePlaybackIntegrationTest --no-daemon --stacktrace",
+    "result": "BUILD SUCCESSFUL"
+  },
+  "release_variant_security": {
+    "is_debuggable": false,
+    "release_signing": "Android debug/development certificate",
+    "release_signature_verified": true,
+    "debug_harness_exclusion_ci_gated": true,
+    "allow_backup": true,
+    "assessment": "appropriate for sideload review; Play/store production signing and stricter backup policy remain separate hardening work"
+  },
+  "tgtext": {
+    "doctor_ok": true,
+    "version": "0.3.1",
+    "file_send_supported": true,
+    "command_contract": "tgtext file PATH [CAPTION...]",
+    "audited_default_upload_limit_bytes": 52428800,
+    "local_apk_size_bytes": 49559755,
+    "local_apk_headroom_bytes": 2869045,
+    "published_apk_size_bytes": 49543371,
+    "published_apk_headroom_bytes": 2885429,
+    "deliverable": true,
+    "sent_by_this_audit": false,
+    "assessment": "Both current local and published v0.1.3 APK sizes fit the existing 50 MiB tgtext document ceiling; use the published v0.1.3 asset for canonical delivery while the worktree is dirty."
+  },
+  "warnings": [
+    "AGP 8.5.2 reports compileSdk 35 is newer than its certified compileSdk 34 range.",
+    "Automatic release publication would remain blocked until hosted Android CI and same-SHA E2E gates are green.",
+    "OfflineDownloadStore has no explicit persisted schema version/migration contract."
+  ],
+  "mutations": {
+    "ci_or_release_metadata_changed": false,
+    "tag_created_or_moved": false,
+    "pushed": false,
+    "github_release_created_or_modified": false,
+    "tgtext_file_sent": false,
+    "evidence_file_added": "evidence/release/release-path-audit-20260929-r24.json"
+  }
+}

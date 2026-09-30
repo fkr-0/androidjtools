@@ -1,0 +1,131 @@
+{
+  "schema": "androidjtools.release-path-audit/v1",
+  "audited_at": "2026-09-29T06:21:00+02:00",
+  "head": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "branch": "main",
+  "scope": "evidence-first audit after v0.1.1 convergence; no tag/push/release mutation; no CI metadata rewrite without reproduced defect",
+  "version_state": {
+    "current_version_name": "0.1.3",
+    "current_version_code": 4,
+    "current_tag": "v0.1.3",
+    "head_is_v0_1_3": true,
+    "v0_1_1_local_tag": false,
+    "v0_1_1_remote_tag": false,
+    "v0_1_1_github_release": false,
+    "local_tags": ["v0.1.0", "v0.1.2", "v0.1.3"],
+    "remote_tags": ["v0.1.0", "v0.1.2", "v0.1.3"]
+  },
+  "ci_contract": {
+    "android_ci_tag_trigger": "push tags v*",
+    "tag_metadata_gate": "tag name must equal v${versionName}; changelog must contain matching release section",
+    "primary_artifact": "androidjtools-v${version}-release-apk",
+    "secondary_artifact": "androidjtools-v${version}-debug-apk",
+    "release_asset": "androidjtools-v${version}.apk",
+    "publisher_trigger": "workflow_run completion of Android CI",
+    "publisher_requires": [
+      "Android CI workflow conclusion success for a push",
+      "version-matched tag at the exact tested SHA",
+      "successful same-SHA Android E2E Conformance push",
+      "GitHub Release for the tag must not already exist"
+    ],
+    "metadata_defect_reproduced": false
+  },
+  "hosted_state": {
+    "android_ci": {
+      "run_id": 35383826202,
+      "head_sha": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+      "conclusion": "failure",
+      "verify_and_build_apk_job": "success",
+      "render_android_ui_screenshots_job": "failure"
+    },
+    "android_e2e_conformance": {
+      "run_id": 35383205247,
+      "head_sha": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+      "conclusion": "failure",
+      "connected_api35_job": "failure"
+    },
+    "publish_workflow_runs_at_head": [
+      {"run_id": 35384576697, "conclusion": "skipped"},
+      {"run_id": 35384113643, "conclusion": "skipped"}
+    ],
+    "assessment": "The automatic release publisher is correctly fail-closed under the declared contract. Current hosted failures are in screenshot/E2E qualification tiers, not APK build/package metadata."
+  },
+  "publication": {
+    "tag": "v0.1.3",
+    "published_at": "2026-09-18T19:05:25Z",
+    "assets": [
+      "androidjtools-v0.1.3.apk",
+      "SHA256SUMS",
+      "release-provenance.json"
+    ],
+    "artifact_size_bytes": 49543371,
+    "artifact_sha256": "2a0c49c5fd5f063fa960ea8af83b21de144a05cab645eec69ebf4df70948e9c4",
+    "provenance_schema": "androidjtools.manual-release-provenance/v2",
+    "gate_override": true,
+    "overridden_gates": [
+      "Android E2E Conformance run 35383205247 concluded failure",
+      "Android CI screenshot job in run 35383205223 was in progress at publication"
+    ]
+  },
+  "local_artifact": {
+    "path": "app/build/outputs/apk/release/app-release.apk",
+    "size_bytes": 49559755,
+    "sha256": "495a644922a672e451ef62654f1c01ed48c4ff74bba79311115e3fc217fd37c3",
+    "byte_identical_to_published": false,
+    "debuggable": false,
+    "signer": "Android Debug certificate",
+    "assessment": "valid sideload/development release artifact; not store-production signing; dirty worktree means it is not the canonical published artifact"
+  },
+  "release_variant_security": {
+    "build_type_debuggable": false,
+    "debug_harness_exclusion_is_ci_gated": true,
+    "signature_is_ci_verified": true,
+    "signing_profile": "debug/development",
+    "allow_backup": true,
+    "assessment": "appropriate for sideload review only; production-store signing and a stricter backup policy remain separate hardening concerns"
+  },
+  "storage_upgrade": {
+    "queue_snapshot_key": "queue-snapshot-v1",
+    "mutation_journal": {
+      "current_format_version": 2,
+      "accepted_read_versions": [1, 2],
+      "v1_decode_migration": true,
+      "future_versions_fail_closed": true,
+      "atomic_temp_file_replace": true
+    },
+    "offline_download_store": {
+      "explicit_schema_version": false,
+      "migration_contract": false,
+      "assessment": "no versioned migration boundary is declared for the Java Properties store"
+    },
+    "fresh_test_attempt": {
+      "result": "inconclusive_host_environment",
+      "first_attempt": "failed before tests because the shared Gradle cache could not create dependency directories",
+      "isolated_cache_attempt": "Gradle wrapper distribution download was too slow and was interrupted; no product-test failure was observed"
+    },
+    "previous_same_day_evidence": "evidence/release-audit-20260929-r18.json records MutationJournalTest + OfflinePlaybackIntegrationTest BUILD SUCCESSFUL"
+  },
+  "tgtext": {
+    "doctor_ok": true,
+    "version": "0.3.1",
+    "file_send_supported": true,
+    "command_contract": "tgtext file PATH [CAPTION...]",
+    "configured_upload_limit_bytes": 52428800,
+    "upload_limit_override_present": false,
+    "local_apk_size_bytes": 49559755,
+    "local_apk_headroom_bytes": 2869045,
+    "published_apk_size_bytes": 49543371,
+    "published_apk_headroom_bytes": 2885429,
+    "deliverable": true,
+    "sent_by_this_audit": false,
+    "assessment": "Both the published v0.1.3 APK and current local release APK fit the active default 50 MiB tgtext document ceiling. Prefer the published asset for canonical delivery because the worktree is dirty."
+  },
+  "mutations": {
+    "ci_or_release_metadata_changed": false,
+    "evidence_file_added": "evidence/release/release-path-audit-20260929-r21.json",
+    "tag_created_or_moved": false,
+    "pushed": false,
+    "github_release_created_or_modified": false,
+    "tgtext_file_sent": false
+  }
+}

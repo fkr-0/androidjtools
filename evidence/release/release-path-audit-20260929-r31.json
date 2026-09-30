@@ -1,0 +1,204 @@
+{
+  "schema": "androidjtools.release-path-audit/v1",
+  "audited_at": "2026-09-29T10:49:00+02:00",
+  "head": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "branch": "main",
+  "scope": "evidence-first v0.1.1 convergence audit; preserve all active owner edits; no tag/push/release/tgtext send; only isolated audit evidence written",
+  "owner_reconciliation": {
+    "active_external_claims": [
+      {
+        "owner": "ANDROIDJTOOLS-E2E-CLOSURE-R31-20260929",
+        "paths": [
+          "artifacts/e2e/conformance-emulator-r31-20260929.json",
+          "artifacts/e2e/conformance-r31-20260929.json",
+          "artifacts/e2e/real-core-r31-20260929.json",
+          "artifacts/e2e/samplelib-real-r31-20260929.json",
+          "artifacts/e2e/strict-qualification-r31-20260929.json",
+          "artifacts/e2e/ui-runner-tests-r31.txt"
+        ]
+      },
+      {
+        "owner": "ANDROIDJTOOLS-E2E-CLOSURE-R31-20260929",
+        "paths": [
+          "docs/parity/README.md",
+          "docs/parity/parity.json"
+        ]
+      }
+    ],
+    "unrelated_packet_reserved_then_cleanly_released": {
+      "packet_id": "47d6c3b8-f64c-4ad5-91e2-f535c17beb20",
+      "title": "EPIC-00 Android application foundation and fixture-first shell",
+      "writes_performed": false
+    }
+  },
+  "version_state": {
+    "current_version_name": "0.1.3",
+    "current_version_code": 4,
+    "head_tag": "v0.1.3",
+    "local_tags": [
+      "v0.1.0",
+      "v0.1.2",
+      "v0.1.3"
+    ],
+    "remote_tags": [
+      "v0.1.0",
+      "v0.1.2",
+      "v0.1.3"
+    ],
+    "v0_1_1_local_tag": false,
+    "v0_1_1_remote_tag": false,
+    "v0_1_1_github_release": false,
+    "changelog_sections": [
+      "0.1.3",
+      "0.1.2",
+      "0.1.1",
+      "0.1.0"
+    ],
+    "assessment": "v0.1.1 was a release-preparation state superseded before tag publication; current canonical metadata/tag/release line is v0.1.3"
+  },
+  "ci_contract": {
+    "android_ci_triggers": [
+      "push main",
+      "push v*",
+      "pull_request main",
+      "workflow_dispatch"
+    ],
+    "tag_gate": "GITHUB_REF_NAME must equal v${versionName}; CHANGELOG must contain matching version",
+    "build_gate": [
+      "protocol tests",
+      "JVM tests",
+      "instrumentation source compilation",
+      "lint",
+      "assembleDebug",
+      "assembleRelease",
+      "release launcher inspection",
+      "debug-harness exclusion",
+      "debuggable=false",
+      "signature verification"
+    ],
+    "primary_artifact": "androidjtools-v${version}-release-apk -> app/build/outputs/apk/release/app-release.apk",
+    "secondary_artifact": "androidjtools-v${version}-debug-apk -> app/build/outputs/apk/debug/app-debug.apk",
+    "release_asset": "androidjtools-v${version}.apk",
+    "publisher_trigger": "workflow_run completion of Android CI",
+    "publisher_requires": [
+      "successful Android CI push run",
+      "version-matched tag at exact tested SHA",
+      "successful same-SHA Android E2E Conformance push",
+      "release tag not already published"
+    ],
+    "metadata_gap_found": false
+  },
+  "hosted_state": {
+    "android_ci_run_35383826202": {
+      "conclusion": "failure",
+      "verify_and_build_apk": "success",
+      "render_android_ui_screenshots": "failure",
+      "primary_release_artifact_upload_step": "success",
+      "secondary_debug_artifact_upload_step": "success"
+    },
+    "android_e2e_run_35383205247": {
+      "conclusion": "failure",
+      "connected_api35_conformance": "failure",
+      "evidence_upload": "success"
+    },
+    "publisher_runs_at_head": [
+      {
+        "run_id": 35384576697,
+        "conclusion": "skipped"
+      },
+      {
+        "run_id": 35384113643,
+        "conclusion": "skipped"
+      }
+    ],
+    "assessment": "publication gate remains fail-closed because hosted screenshot/E2E qualification is not green for this SHA"
+  },
+  "publication": {
+    "canonical_release": "v0.1.3",
+    "published_at": "2026-09-18T19:05:25Z",
+    "assets": [
+      {
+        "name": "androidjtools-v0.1.3.apk",
+        "size_bytes": 49543371
+      },
+      {
+        "name": "release-provenance.json",
+        "size_bytes": 1131
+      },
+      {
+        "name": "SHA256SUMS",
+        "size_bytes": 91
+      }
+    ],
+    "v0_1_1_release_object": false
+  },
+  "local_artifact": {
+    "path": "app/build/outputs/apk/release/app-release.apk",
+    "size_bytes": 49559755,
+    "sha256": "495a644922a672e451ef62654f1c01ed48c4ff74bba79311115e3fc217fd37c3",
+    "debuggable": false,
+    "signature_scheme_v2": true,
+    "signer_dn": "C=US, O=Android, CN=Android Debug",
+    "provenance_caveat": "built from the current dirty worktree; valid for local sideload review but not interchangeable with the published v0.1.3 release asset"
+  },
+  "storage_upgrade": {
+    "queue_snapshot": {
+      "key": "queue-snapshot-v1",
+      "explicit_schema_version": false,
+      "load_behavior": "malformed/incompatible JSON returns null"
+    },
+    "mutation_journal": {
+      "current_format_version": 2,
+      "accepted_read_versions": [
+        1,
+        2
+      ],
+      "v1_decode_migration_present": true,
+      "future_versions_fail_closed": true
+    },
+    "offline_download_store": {
+      "storage": "Java Properties per asset",
+      "explicit_schema_version": false,
+      "migration_contract": false,
+      "residual_risk": "future persisted-field changes need an explicit version/migration boundary"
+    },
+    "focused_verification": {
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:testDebugUnitTest --tests dev.androidjtools.sync.journal.MutationJournalTest --tests dev.androidjtools.offline.download.OfflinePlaybackIntegrationTest --no-daemon --stacktrace",
+      "result": "BUILD SUCCESSFUL"
+    }
+  },
+  "release_variant_security": {
+    "is_debuggable": false,
+    "minify_enabled": false,
+    "signing_profile": "Android debug/development certificate",
+    "signature_verified": true,
+    "debug_harness_exclusion_ci_gated": true,
+    "allow_backup": true,
+    "assessment": "appropriate for sideload/review; not production-store signing; backup policy remains permissive"
+  },
+  "tgtext": {
+    "doctor_ok": true,
+    "version": "0.3.1",
+    "file_send_supported": true,
+    "local_apk_size_bytes": 49559755,
+    "prior_same_day_audited_default_upload_limit_bytes": 52428800,
+    "estimated_headroom_bytes": 2869045,
+    "deliverable": true,
+    "sent_by_this_audit": false,
+    "recommendation": "deliver the published v0.1.3 asset rather than the dirty-worktree APK when canonical provenance matters"
+  },
+  "warnings": [
+    "AGP 8.5.2 warns compileSdk 35 exceeds its certified compileSdk 34 range.",
+    "Hosted Android CI screenshot and same-SHA API-35 E2E gates are failing, so automatic publication remains blocked for this SHA.",
+    "OfflineDownloadStore has no explicit persisted schema version/migration contract.",
+    "Release build uses Android development/debug signing and android:allowBackup=true."
+  ],
+  "mutations": {
+    "ci_or_release_metadata_changed": false,
+    "tag_created_or_moved": false,
+    "pushed": false,
+    "github_release_created_or_modified": false,
+    "tgtext_file_sent": false,
+    "evidence_file_added": "evidence/release/release-path-audit-20260929-r31.json"
+  }
+}

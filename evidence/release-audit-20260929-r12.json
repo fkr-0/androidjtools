@@ -1,0 +1,126 @@
+{
+  "schema": "androidjtools.release-audit/v1",
+  "audited_at": "2026-09-29T02:37:47+02:00",
+  "workspace": {
+    "branch": "main",
+    "head": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+    "origin_main_verified_via_github": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+    "dirty_tree_preserved": true,
+    "source_or_ci_files_modified_by_this_audit": []
+  },
+  "release_state": {
+    "current_version_name": "0.1.3",
+    "current_version_code": 4,
+    "current_tag": "v0.1.3",
+    "current_tag_type": "annotated",
+    "current_tag_target_commit": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+    "tags_seen_locally": [
+      "v0.1.3",
+      "v0.1.2",
+      "v0.1.0"
+    ],
+    "v0_1_1_tag_present": false,
+    "changelog_has_0_1_1": true,
+    "interpretation": "v0.1.1 exists as release-preparation/changelog history but was superseded before tagging; current release metadata is v0.1.3."
+  },
+  "ci_and_publication": {
+    "android_ci_tag_run": {
+      "id": 35383826202,
+      "overall_conclusion": "failure",
+      "core_verify_and_build_apk_job": "success",
+      "screenshot_job": "failure"
+    },
+    "api35_e2e_run": {
+      "id": 35383205247,
+      "conclusion": "failure"
+    },
+    "current_release_workflow_contract": {
+      "trigger": "workflow_run of Android CI",
+      "requires": [
+        "successful Android CI push run",
+        "version-matched tag on tested SHA",
+        "successful same-SHA Android E2E Conformance push run"
+      ],
+      "asset_source": "androidjtools-v${version}-release-apk",
+      "published_apk_name": "androidjtools-v${version}.apk",
+      "overwrite_policy": "refuse if GitHub Release tag already exists"
+    },
+    "github_release_v0_1_3": {
+      "published": true,
+      "release_id": 391721047,
+      "published_at": "2026-09-18T19:05:25Z",
+      "apk": {
+        "name": "androidjtools-v0.1.3.apk",
+        "size_bytes": 49543371,
+        "sha256": "2a0c49c5fd5f063fa960ea8af83b21de144a05cab645eec69ebf4df70948e9c4"
+      },
+      "supporting_assets": [
+        "SHA256SUMS",
+        "release-provenance.json"
+      ],
+      "provenance_note": "Published release body records a temporary API-35 gate override. The current strict automated publisher would not have published this SHA because hosted screenshot/E2E gates were not green."
+    }
+  },
+  "upgrade_storage_schema": {
+    "mutation_journal": {
+      "current_format_version": 2,
+      "v1_migration_code_present": true,
+      "v1_migration_test_present": true,
+      "focused_test_result": "pass"
+    },
+    "queue_state": {
+      "storage": "SharedPreferences",
+      "explicit_schema_version_observed": false
+    },
+    "offline_download_metadata": {
+      "storage": "per-asset Java Properties records",
+      "explicit_schema_version_observed": false,
+      "explicit_migration_contract_observed": false,
+      "reconstruction_integration_test_result": "pass",
+      "residual_risk": "Future persisted-field changes need an explicit version/migration contract."
+    }
+  },
+  "release_variant_security": {
+    "gradle_release_debuggable": false,
+    "signing_profile": "debug/development signing",
+    "local_release_apk": {
+      "path": "app/build/outputs/apk/release/app-release.apk",
+      "size_bytes": 49559755,
+      "sha256": "495a644922a672e451ef62654f1c01ed48c4ff74bba79311115e3fc217fd37c3",
+      "debuggable": false,
+      "launcher_observed": "dev.androidjtools.shell.AndroidDjToolsActivity",
+      "apk_signature_verify": "pass",
+      "signature_scheme_v2": true,
+      "provenance_caveat": "This local APK comes from the current dirty workspace and is not interchangeable with the published v0.1.3 asset."
+    },
+    "assessment": "Suitable for sideload/review only; not Play Store production signing."
+  },
+  "tgtext": {
+    "doctor_ok": true,
+    "version": "0.3.1",
+    "file_send_supported": true,
+    "local_upload_limit_override_found": false,
+    "documented_default_upload_limit_bytes": 52428800,
+    "published_apk_size_bytes": 49543371,
+    "published_apk_fits_default_limit": true,
+    "local_apk_size_bytes": 49559755,
+    "local_apk_fits_default_limit": true,
+    "file_sent_by_this_audit": false
+  },
+  "verification": {
+    "metadata_gate": "pass",
+    "focused_storage_tests": {
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:testDebugUnitTest --tests 'dev.androidjtools.sync.journal.MutationJournalTest' --tests 'dev.androidjtools.offline.download.OfflinePlaybackIntegrationTest' --stacktrace",
+      "exit_code": 0,
+      "warning": "AGP 8.5.2 is certified through compileSdk 34 while project uses compileSdk 35"
+    },
+    "local_apk_security_checks": "pass"
+  },
+  "audit_decision": {
+    "ci_or_release_metadata_patch_applied": false,
+    "reason": "No unclaimed CI/release metadata defect was reproduced. Existing publication mismatch is historical evidence: manual v0.1.3 override versus stricter current workflow.",
+    "tags_created_moved_or_pushed": false,
+    "github_release_modified": false,
+    "tgtext_file_sent": false
+  }
+}

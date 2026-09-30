@@ -1,0 +1,129 @@
+{
+  "schema": "androidjtools.release-path-audit/v1",
+  "canonical_task": "ANDROIDJTOOLS-RELEASE-QA-R35-20260929",
+  "observed_at": "2026-09-29T10:06:00Z",
+  "workspace": {
+    "head": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+    "branch": "main",
+    "dirty": true,
+    "active_release_claim": "61fd2995-8598-4c89-8bb4-912d1b787eb3",
+    "concurrent_claims": [
+      {
+        "owner": "chatgpt-conformance-r35",
+        "paths": [
+          ".ws-bridge/agent-checkpoints/ANDROIDJTOOLS-CONFORMANCE-E2E-R35-20260929.json",
+          "docs/parity/README.md",
+          "docs/parity/parity.json"
+        ],
+        "overlap_with_release_scope": false
+      }
+    ]
+  },
+  "version_changelog_tags": {
+    "current_version_name": "0.1.3",
+    "current_version_code": 4,
+    "changelog_current_release": "0.1.3",
+    "local_tags": [
+      "v0.1.0",
+      "v0.1.2",
+      "v0.1.3"
+    ],
+    "remote_tags": [
+      "v0.1.0",
+      "v0.1.2",
+      "v0.1.3"
+    ],
+    "v0_1_1_tag_present": false,
+    "assessment": "v0.1.1 was prepared but never tagged; v0.1.3 is the canonical release line. No conflicting tag was created or moved."
+  },
+  "github_release": {
+    "tag": "v0.1.3",
+    "published_at": "2026-09-18T19:05:25Z",
+    "source_revision": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+    "primary_asset": {
+      "name": "androidjtools-v0.1.3.apk",
+      "size_bytes": 49543371,
+      "sha256": "2a0c49c5fd5f063fa960ea8af83b21de144a05cab645eec69ebf4df70948e9c4"
+    },
+    "provenance_assets": [
+      "release-provenance.json",
+      "SHA256SUMS"
+    ],
+    "publication_note": "Existing release records an explicit temporary API-35 gate override; do not reinterpret it as strict automated gate success."
+  },
+  "ci_release_path": {
+    "android_ci_tag_trigger": "push tags v*",
+    "metadata_gate": "tag must equal v${versionName} and CHANGELOG must contain that version",
+    "primary_artifact": "androidjtools-v${version}-release-apk -> app/build/outputs/apk/release/app-release.apk",
+    "secondary_artifact": "androidjtools-v${version}-debug-apk -> app/build/outputs/apk/debug/app-debug.apk",
+    "github_release_asset": "androidjtools-v${version}.apk",
+    "publisher_requires": [
+      "successful Android CI push run",
+      "matching version tag at tested SHA",
+      "successful same-SHA Android E2E Conformance push",
+      "no existing GitHub Release for the tag"
+    ],
+    "latest_head_android_ci_run": {
+      "run_id": 35383826202,
+      "conclusion": "failure",
+      "build_job": "success",
+      "screenshot_job": "failure",
+      "exact_failure": "UI instrumentation passed, then e2e/ui/run_ci_screenshots.sh rejected artifacts/ui-screenshots/01-library.png as invalid PNG"
+    },
+    "metadata_defect_reproduced": false,
+    "assessment": "Release metadata/build/upload steps are green. Current hosted failure is in the UI screenshot evidence path, outside this release-metadata lane and not a justification for a CI metadata patch."
+  },
+  "storage_upgrade": {
+    "queue_snapshot": {
+      "storage": "SharedPreferences",
+      "key_contract": "queue-snapshot-v1",
+      "explicit_schema_version": false,
+      "incompatible_payload_behavior": "load returns null / fails closed"
+    },
+    "mutation_journal": {
+      "current_format_version": 2,
+      "accepted_read_versions": [
+        1,
+        2
+      ],
+      "v1_migration_present": true,
+      "future_versions_fail_closed": true
+    },
+    "offline_download_store": {
+      "storage": "Java Properties per asset",
+      "explicit_schema_version": false,
+      "migration_contract": false,
+      "residual_risk": "Future persisted-field changes need an explicit schema/migration boundary."
+    }
+  },
+  "release_variant_security": {
+    "is_debuggable": false,
+    "minify_enabled": false,
+    "signing_profile": "Android debug/development signing config",
+    "debug_harness_exclusion_ci_gated": true,
+    "android_allow_backup": true,
+    "assessment": "Suitable for sideload/review, not production-store signing."
+  },
+  "tgtext_delivery": {
+    "latest_canonical_artifact": "published v0.1.3 APK",
+    "artifact_size_bytes": 49543371,
+    "recent_existing_tgtext_evidence": "release-path-audit-20260929-r34.json reports tgtext doctor OK, tgtext 0.3.1 file-send support, and 52,428,800-byte default limit",
+    "fits_reported_default_limit": true,
+    "sent_by_this_audit": false,
+    "assessment": "The canonical v0.1.3 APK remains deliverable through the existing tgtext file workflow based on unchanged artifact size/hash and the immediately preceding live tgtext qualification."
+  },
+  "mutations": {
+    "ci_or_release_metadata_changed": false,
+    "tags_changed": false,
+    "pushed": false,
+    "github_release_changed": false,
+    "existing_dirty_files_changed": false,
+    "evidence_file_added": "evidence/release/release-path-audit-20260929-r35.json"
+  },
+  "warnings": [
+    "Current HEAD Android CI is not fully green because screenshot PNG validation fails after instrumentation succeeds.",
+    "OfflineDownloadStore still lacks an explicit persisted schema version/migration contract.",
+    "Release build is development-signed and android:allowBackup=true.",
+    "The worktree is substantially dirty; no existing dirty file was changed by this audit."
+  ]
+}

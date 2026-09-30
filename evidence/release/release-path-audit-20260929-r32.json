@@ -1,0 +1,176 @@
+{
+  "schema": "androidjtools.release-path-audit/v1",
+  "audited_at": "2026-09-29T11:14:05+02:00",
+  "head": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "branch": "main",
+  "scope": "Evidence-first Android DJ Tools release-path audit after v0.1.1 convergence. Existing dirty work preserved. No tag, push, GitHub release mutation, or tgtext send.",
+  "owner_reconciliation": {
+    "active_project_presence_at_preflight": [],
+    "active_path_claims_at_preflight": [],
+    "worktree_dirty": true,
+    "mutation_policy": "Only this new evidence file was claimed/written."
+  },
+  "version_changelog_tags": {
+    "version_name": "0.1.3",
+    "version_code": 4,
+    "changelog_current_release": "0.1.3",
+    "changelog_contains_v0_1_1": true,
+    "tags_at_head": [
+      "v0.1.3"
+    ],
+    "local_tags": [
+      "v0.1.0",
+      "v0.1.2",
+      "v0.1.3"
+    ],
+    "remote_tags": [
+      "v0.1.0",
+      "v0.1.2",
+      "v0.1.3"
+    ],
+    "v0_1_1_local_tag": false,
+    "v0_1_1_remote_tag": false,
+    "assessment": "v0.1.1 remained a prepared changelog/version milestone but was never published as a tag; current canonical release line is v0.1.3."
+  },
+  "ci_release_path": {
+    "android_ci_tag_trigger": "push tags v*",
+    "tag_consistency_gate": "GITHUB_REF_NAME must equal v${versionName}, and CHANGELOG must contain the version.",
+    "primary_ci_artifact": "androidjtools-v${version}-release-apk -> app/build/outputs/apk/release/app-release.apk",
+    "secondary_ci_artifact": "androidjtools-v${version}-debug-apk -> app/build/outputs/apk/debug/app-debug.apk",
+    "github_release_asset_name": "androidjtools-v${version}.apk",
+    "publisher_trigger": "workflow_run completion of Android CI",
+    "publisher_fail_closed_requirements": [
+      "successful Android CI push run",
+      "matching v${versionName} tag at the exact tested SHA",
+      "successful same-SHA Android E2E Conformance push run",
+      "no pre-existing GitHub Release for the tag"
+    ],
+    "current_head_hosted_runs": {
+      "android_ci_35383826202": {
+        "conclusion": "failure",
+        "verify_and_build_apk": "success",
+        "render_android_ui_screenshots": "failure"
+      },
+      "android_e2e_35383205247": {
+        "conclusion": "failure"
+      },
+      "publisher_runs": [
+        {
+          "run_id": 35384576697,
+          "conclusion": "skipped"
+        },
+        {
+          "run_id": 35384113643,
+          "conclusion": "skipped"
+        }
+      ]
+    },
+    "metadata_defect_reproduced": false,
+    "assessment": "Current automated release workflow remains fail-closed for this SHA; no unclaimed CI/release workflow metadata patch is justified."
+  },
+  "published_release": {
+    "tag": "v0.1.3",
+    "published_at": "2026-09-18T19:05:25Z",
+    "git_revision": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+    "assets": [
+      {
+        "name": "androidjtools-v0.1.3.apk",
+        "size_bytes": 49543371,
+        "sha256": "2a0c49c5fd5f063fa960ea8af83b21de144a05cab645eec69ebf4df70948e9c4"
+      },
+      {
+        "name": "release-provenance.json",
+        "size_bytes": 1131
+      },
+      {
+        "name": "SHA256SUMS",
+        "size_bytes": 91
+      }
+    ],
+    "provenance_schema": "androidjtools.manual-release-provenance/v2",
+    "gate_override": true,
+    "overridden_gates": [
+      "Android E2E Conformance run 35383205247 concluded failure.",
+      "Android CI run 35383205223 screenshot job was still in progress at publication."
+    ],
+    "assessment": "The published artifact is hash-pinned to the current HEAD and records its exception explicitly, but it was manually published outside the current strict automated gate."
+  },
+  "local_release_artifact": {
+    "path": "app/build/outputs/apk/release/app-release.apk",
+    "size_bytes": 49559755,
+    "sha256": "495a644922a672e451ef62654f1c01ed48c4ff74bba79311115e3fc217fd37c3",
+    "debuggable": false,
+    "signer_dn": "C=US, O=Android, CN=Android Debug",
+    "canonical_release_asset": false,
+    "reason": "Built from the current dirty worktree; suitable for local sideload review only."
+  },
+  "storage_upgrade": {
+    "queue_snapshot": {
+      "key": "queue-snapshot-v1",
+      "explicit_schema_version": false,
+      "compatibility_behavior": "Malformed/incompatible JSON returns null."
+    },
+    "mutation_journal": {
+      "current_format_version": 2,
+      "accepted_read_versions": [
+        1,
+        2
+      ],
+      "v1_migration_present": true,
+      "future_versions_fail_closed": true
+    },
+    "offline_download_store": {
+      "storage": "Java Properties per asset",
+      "explicit_schema_version": false,
+      "migration_contract": false,
+      "residual_risk": "Future persisted-field changes need an explicit schema/migration boundary."
+    },
+    "focused_verification": {
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:testDebugUnitTest --tests dev.androidjtools.sync.journal.MutationJournalTest --tests dev.androidjtools.offline.download.OfflinePlaybackIntegrationTest --no-daemon --console=plain",
+      "result": "BUILD SUCCESSFUL in 11s",
+      "exit_code": 0
+    }
+  },
+  "release_variant_security": {
+    "is_debuggable": false,
+    "signing_profile": "Android debug/development certificate",
+    "signature_verified": true,
+    "minify_enabled": false,
+    "debug_harness_exclusion_ci_gated": true,
+    "allow_backup": true,
+    "assessment": "Appropriate for sideload/review; not production-store signing. Backup policy remains permissive."
+  },
+  "tgtext": {
+    "doctor_ok": true,
+    "version": "0.3.1",
+    "file_send_supported": true,
+    "command_contract": "tgtext file PATH [CAPTION...]",
+    "default_upload_limit_bytes_from_existing_release_audit": 52428800,
+    "published_apk_size_bytes": 49543371,
+    "local_apk_size_bytes": 49559755,
+    "published_apk_fits_default_limit": true,
+    "local_apk_fits_default_limit": true,
+    "canonical_delivery_choice": "published v0.1.3 asset",
+    "sent_by_this_audit": false
+  },
+  "documentation_observation": {
+    "gap": "docs/release/v0.1.3.md describes the nominal first-review gate but does not mention that the published v0.1.3 release used a manual gate override.",
+    "action": "Not modified because the file is already untracked owner work in the dirty tree; the exception is preserved in published release-provenance.json and this audit evidence."
+  },
+  "warnings": [
+    "AGP 8.5.2 warns compileSdk 35 exceeds its certified compileSdk 34 range.",
+    "Hosted screenshot and same-SHA API-35 E2E gates are not green for HEAD.",
+    "OfflineDownloadStore lacks an explicit persisted schema version/migration contract.",
+    "Release uses Android development/debug signing and android:allowBackup=true.",
+    "Published v0.1.3 used an explicit manual gate override; do not infer that it passed the current strict automated publisher gate."
+  ],
+  "mutations": {
+    "ci_or_release_metadata_changed": false,
+    "existing_dirty_files_changed": false,
+    "evidence_file_added": "evidence/release/release-path-audit-20260929-r32.json",
+    "tag_created_or_moved": false,
+    "pushed": false,
+    "github_release_created_or_modified": false,
+    "tgtext_file_sent": false
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "schema": "androidjtools.release-path-audit/v1",
+  "canonical_task": "current release path audit after v0.1.1 convergence",
+  "observed_at": "2026-09-29T14:42:40Z",
+  "workspace": {
+    "branch": "main",
+    "head": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+    "origin_main": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+    "dirty": true,
+    "release_lane_claim_conflict": false,
+    "evidence_claim_id": "7e9eef50-2c15-4219-a18c-7fa3c2fc6c98"
+  },
+  "version_changelog_tags": {
+    "version_name": "0.1.3",
+    "version_code": 4,
+    "changelog_current_release": "0.1.3",
+    "local_tags": [
+      "v0.1.0",
+      "v0.1.2",
+      "v0.1.3"
+    ],
+    "remote_tags": [
+      "v0.1.0",
+      "v0.1.2",
+      "v0.1.3"
+    ],
+    "head_tag": "v0.1.3",
+    "v0_1_1_tag_present": false,
+    "v0_1_3_tag_target": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+    "assessment": "v0.1.1 remains historical release metadata only. Current canonical release line is v0.1.3; no tag mutation is appropriate."
+  },
+  "ci_release_path": {
+    "android_ci_trigger": "push main; push v* tags; pull_request main; workflow_dispatch",
+    "metadata_gate": "versionName/versionCode parse; CHANGELOG contains version; tag builds require GITHUB_REF_NAME == v${versionName}",
+    "primary_ci_artifact": "androidjtools-v${version}-release-apk -> app/build/outputs/apk/release/app-release.apk",
+    "secondary_ci_artifact": "androidjtools-v${version}-debug-apk -> app/build/outputs/apk/debug/app-debug.apk",
+    "publisher": {
+      "workflow": ".github/workflows/release.yml",
+      "trigger": "successful Android CI workflow_run",
+      "requires_exact_version_tag_at_tested_sha": true,
+      "requires_same_sha_successful_android_e2e_push": true,
+      "published_apk_name": "androidjtools-v${version}.apk",
+      "additional_assets": [
+        "SHA256SUMS",
+        "release-provenance.json"
+      ],
+      "refuses_existing_release_overwrite": true
+    },
+    "hosted_head_state": {
+      "android_ci_run_id": 35383826202,
+      "verify_and_build_job_id": 105725964019,
+      "verify_and_build_conclusion": "success",
+      "screenshot_job_id": 105726981805,
+      "screenshot_job_conclusion": "failure",
+      "android_ci_conclusion": "failure",
+      "same_sha_e2e_run_id": 35383205247,
+      "same_sha_e2e_conclusion": "failure",
+      "strict_automatic_publication_open": false
+    },
+    "metadata_defect_reproduced": false
+  },
+  "github_release": {
+    "tag": "v0.1.3",
+    "published_at": "2026-09-18T19:05:25Z",
+    "git_revision": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+    "artifact": {
+      "name": "androidjtools-v0.1.3.apk",
+      "size_bytes": 49543371,
+      "sha256": "2a0c49c5fd5f063fa960ea8af83b21de144a05cab645eec69ebf4df70948e9c4"
+    },
+    "provenance": {
+      "schema": "androidjtools.manual-release-provenance/v2",
+      "gate_override": true,
+      "source_android_ci_run_id": 35383205223,
+      "overridden_android_e2e_run_id": 35383205247,
+      "debuggable": false,
+      "debug_harness_present": false,
+      "signing_profile": "development"
+    },
+    "assessment": "Published v0.1.3 is immutable and explicitly records a manual gate override; it is not evidence that the current strict automatic publisher gate passed."
+  },
+  "upgrade_storage_schema": {
+    "queue_snapshot": {
+      "storage": "SharedPreferences",
+      "key": "queue-snapshot-v1",
+      "explicit_schema_version": false,
+      "malformed_or_incompatible_behavior": "load returns null"
+    },
+    "mutation_journal": {
+      "current_format_version": 2,
+      "accepted_read_versions": [
+        1,
+        2
+      ],
+      "v1_migration_present": true,
+      "writes_current_version_atomically": true,
+      "future_versions_fail_closed": true
+    },
+    "offline_download_store": {
+      "storage": "Java Properties per asset",
+      "explicit_schema_version": false,
+      "migration_contract": false,
+      "invalid_record_behavior": "loadRecord runCatching failure drops the record",
+      "residual_risk": "Persisted property-shape changes have no explicit migration boundary."
+    }
+  },
+  "release_variant_security": {
+    "local_artifact": "app/build/outputs/apk/release/app-release.apk",
+    "local_artifact_size_bytes": 49559755,
+    "local_artifact_sha256": "495a644922a672e451ef62654f1c01ed48c4ff74bba79311115e3fc217fd37c3",
+    "debuggable": false,
+    "signer": "Android Debug/development certificate",
+    "minify_enabled": false,
+    "android_allow_backup": true,
+    "ci_gates_debug_harness_absence": true,
+    "assessment": "Suitable for sideload/review, not store-signing or hardened production distribution."
+  },
+  "local_verification": {
+    "apk_security_inspection": "pass",
+    "focused_gradle_tests": {
+      "status": "blocked_by_host_environment",
+      "attempted": [
+        "MutationJournalTest",
+        "OfflinePlaybackIntegrationTest"
+      ],
+      "reason": "~/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin is root-owned; Gradle cannot create dependency-cache child directories.",
+      "product_regression_claimed": false
+    }
+  },
+  "tgtext_delivery": {
+    "doctor_ok": true,
+    "version": "0.3.1",
+    "interface": "tgtext-owner-channel/v1",
+    "file_send_supported": true,
+    "previously_verified_effective_upload_ceiling_bytes": 52428800,
+    "published_apk_size_bytes": 49543371,
+    "current_local_apk_size_bytes": 49559755,
+    "published_apk_fits_verified_ceiling": true,
+    "current_local_apk_fits_verified_ceiling": true,
+    "send_performed": false,
+    "assessment": "Current tgtext doctor confirms file-send support; both the immutable published APK and current local release APK remain below the previously verified effective 50 MiB upload ceiling."
+  },
+  "mutations": {
+    "source_changed": false,
+    "ci_or_release_metadata_changed": false,
+    "tags_changed": false,
+    "pushed": false,
+    "github_release_changed": false,
+    "tgtext_send_performed": false,
+    "evidence_file_added": "evidence/release/release-path-audit-20260929-r39.json"
+  },
+  "warnings": [
+    "Current HEAD Android CI is red only because the Android 15 screenshot job fails; verify-and-build is green.",
+    "Same-SHA Android E2E Conformance is red, so the strict automatic release publisher remains closed.",
+    "OfflineDownloadStore still lacks an explicit persisted schema version/migration contract.",
+    "Release uses development/debug signing and android:allowBackup=true.",
+    "Focused local Gradle retest is blocked by root-owned Gradle cache directories.",
+    "The dirty-worktree local APK is not the immutable published v0.1.3 asset."
+  ]
+}
