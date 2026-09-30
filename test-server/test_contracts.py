@@ -48,17 +48,22 @@ class SyncContractSchemaTests(unittest.TestCase):
             "limits": copy.deepcopy(self.protocol["limits_defaults"]),
         }
 
-    def test_protocol_repaired_in_place_uses_opaque_revisions_and_namespaced_endpoints(self) -> None:
+    def test_protocol_v1_uses_opaque_revisions_and_namespaced_endpoints(self) -> None:
         self.assertEqual(1, self.protocol["version"])
         self.assertEqual(["1"], self.protocol["protocol_versions"])
         self.assertEqual("opaque_string", self.protocol["authority"]["entity_revision_kind"])
         self.assertEqual("diagnostic_monotonic_integer", self.protocol["authority"]["server_change_revision_kind"])
         self.assertFalse(self.protocol["mutation"]["generic_crud_allowed"])
+        self.assertEqual("/v1/sync/pair", self.protocol["http"]["pair"])
         self.assertTrue(self.protocol["http"]["hello"].startswith("/v1/sync/"))
+        self.assertTrue(self.protocol["pairing"]["operator_action_required"])
+        self.assertEqual("server_derived_principal_with_client_installation_bound_into_credential", self.protocol["pairing"]["credential_binding"])
         self.assertFalse(self.protocol["negotiation"]["silent_downgrade_allowed"])
 
     def test_hello_pull_push_cursor_expired_and_receipt_examples_validate(self) -> None:
         messages = [
+            {"type": "pairing_request", "client_id": "android-client", "installation_id": "device-installation", "pairing_code": "482913"},
+            {"type": "pairing_accepted", "server_id": "sample-lib", "principal_id": "principal-1", "installation_id": "device-installation", "access_token": "fixture-token", "scopes": ["sync.read", "sync.write"]},
             {"type": "hello_request", "protocol_versions": ["1"], "client_id": "android-client", "installation_id": "device-installation", "capabilities": ["pull.cursor.v1"]},
             self.hello_accepted(),
             {"type": "hello_incompatible", "error": {"code": "incompatible_protocol", "message": "No mutually supported protocol version."}, "requested_versions": ["2"], "supported_versions": ["1"]},
@@ -133,9 +138,43 @@ class SyncContractSchemaTests(unittest.TestCase):
         self.assertEqual(set(self.protocol["receipt_outcomes"]), {r["outcome"] for r in receipts})
         self.validate({"type": "push_response", "protocol_version": "1", "receipts": receipts, "server_change_revision": 8})
 
+    def test_observed_sample_lib_baseline_is_machine_recorded_and_schema_compatible(self) -> None:
+        baseline = self.protocol["observed_sample_lib_baseline_2026_09_27"]
+        self.assertEqual(["interval.editor_state.replace"], baseline["mutations"])
+        self.assertIn("playlist", baseline["pull"])
+        self.assertIn("playlist_item", baseline["pull"])
+        self.assertEqual("canonical_v1", baseline["playlists"])
+        self.assertEqual([], baseline["analysis"])
+        self.assertFalse(baseline["websocket_events_implemented"])
+        production_like = self.hello_accepted()
+        production_like["capabilities"] = {
+            "pull": baseline["pull"],
+            "mutations": baseline["mutations"],
+            "playlists": baseline["playlists"],
+            "analysis": baseline["analysis"],
+            "media": baseline["media"],
+        }
+        self.validate(production_like)
+
+    def test_current_sample_lib_conformance_gaps_are_machine_recorded_without_expanding_live_capabilities(self) -> None:
+        baseline = self.protocol["observed_sample_lib_baseline_2026_09_27"]
+        gaps = self.protocol["observed_sample_lib_conformance_2026_09_28"]
+        self.assertEqual(31_536_000, gaps["mutation_replay_horizon_advertised_seconds"])
+        self.assertFalse(gaps["mutation_replay_horizon_age_enforced"])
+        self.assertFalse(gaps["access_token_expiry_claim_present"])
+        self.assertFalse(gaps["credential_rotation_protocol_defined"])
+        self.assertFalse(gaps["credential_revocation_protocol_defined"])
+        self.assertEqual("O_n_synced_entities", gaps["cursor_state_growth"])
+        self.assertFalse(gaps["additional_mutation_families_advertised"])
+        self.assertFalse(gaps["analysis_sync_capabilities_advertised"])
+        self.assertFalse(gaps["websocket_events_implemented"])
+        self.assertEqual(["interval.editor_state.replace"], baseline["mutations"])
+        self.assertEqual([], baseline["analysis"])
+        self.assertGreater(len(self.protocol["capabilities"]["mutations"]), len(baseline["mutations"]))
+
     def test_capability_negotiation_withholds_playlist_writes(self) -> None:
         caps = self.protocol["capabilities"]
-        self.assertEqual("unsupported_until_canonical_playlist_migration", caps["playlists"])
+        self.assertEqual("canonical_v1", caps["playlists"])
         self.assertNotIn("playlist.reorder", caps["mutations"])
         self.assertIn("interval.editor_state.replace", caps["mutations"])
 

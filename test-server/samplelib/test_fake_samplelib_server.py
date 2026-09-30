@@ -95,7 +95,7 @@ class AuthenticatedSampleLibFakeTests(unittest.TestCase):
         }
         _, hello = self.post("/v1/sync/hello", hello_request, auth=True)
         self.assertEqual(paired["server_id"], hello["server_id"])
-        self.assertEqual("unsupported_until_canonical_playlist_migration", hello["capabilities"]["playlists"])
+        self.assertEqual("canonical_v1", hello["capabilities"]["playlists"])
 
         self.post("/__samplelib__/revoke", {})
         request = urllib.request.Request(

@@ -2,9 +2,9 @@
 
 Status: negotiated protocol proposal for synthesis mediator integration
 
-Canonical OCP task: `ANDROIDJTOOLS-PROTOCOL-SAMPLELAB-OVERTONE-20260915`
+Canonical OCP task: `ANDROIDJTOOLS-PROTOCOL-SL-OVERTONE-20260927`
 
-Date: 2026-09-15
+Date: 2026-09-28
 
 ## 1. Decision
 
@@ -25,7 +25,7 @@ This negotiation deliberately extends existing contracts instead of inventing a 
 Current Android contracts already establish that:
 
 - Sample Lib is canonical for synchronized entities;
-- mutations are idempotent and carry `mutation_id`, `base_revision`, operation, payload and provenance;
+- mutations are idempotent and carry `mutation_id`, `base_revision`, operation, payload and provenance; `base_revision` is an opaque equality token, not a numeric sequence (for interval/editor state the current authority is the SHA-256 aggregate fingerprint);
 - receipts are authoritative and conflicts are explicit;
 - realtime messages are wake-up hints while cursor-based pull remains durable truth;
 - intelligence suggestions are advisory and accepted suggestions become normal sync mutations;
@@ -35,7 +35,7 @@ Current Sample Lab/Sample Lib behavior establishes that:
 
 - original audio is immutable after ingest and derived files are registered with provenance;
 - provider execution, credentials, paths, timeouts and raw diagnostics remain server-side;
-- heavy analysis is represented through durable analysis/progress records and registered result resources;
+- provider-backed analysis can persist durable `analysis_run` evidence and register derived result resources, but current heavy-worker execution is synchronous from the Sample Lib API caller's perspective; a durable queue/progress/cancellation lifecycle remains mediator/target work rather than a proven provider-native contract;
 - Overtone edit sessions are durable, idempotent handoffs; their proposal is presentation-only until accepted, and accepted results are revision/fingerprint guarded;
 - browser-facing flows are mediated through Sample Lib/Sample Lab rather than browser-to-Overtone transport.
 
@@ -50,9 +50,11 @@ Current Overtone integration establishes useful implementation precedent:
 
 ### 2.1 Current-state caveat: ComfyUI ASR/BPM
 
-The inspected Sample Lab checkout contains concrete provider paths for Demucs stem separation, Basic Pitch transcription/note evidence and Essentia MIR. It also contains ComfyUI-backed provider work for other audio workflows, but **no verified canonical ComfyUI ASR/BPM backend was found during this negotiation**.
+The 2026-09-28 Sample Lab checkout exposes concrete provider paths for Demucs stem separation, Basic Pitch transcription/note evidence and Essentia MIR; the current provider reference explicitly reports Essentia BPM/key/scale/confidence and treats heavy providers as optional brokered implementations. Sample Lab also contains ComfyUI-backed work for other audio workflows, but **no verified canonical ComfyUI ASR/BPM backend was found during this negotiation**.
 
-Therefore `analysis.speech_transcript` and `analysis.tempo` below are stable semantic capability slots. A future ComfyUI ASR or BPM workflow MAY implement them, but Android MUST treat provider availability as runtime data and MUST NOT assume that a provider named ComfyUI exists. The protocol does not make an implementation claim that the current server cannot prove.
+The inspected Overtone Sampler checkout still exposes its own runtime `analysis.bpm` capability (aubio with autocorrelation fallback). That is useful performance-side evidence, but it MUST remain behind mediation unless normalized into the same provider-neutral analysis contract; Overtone-local BPM analysis does not become durable Sample Lib metadata merely because it exists at runtime.
+
+Therefore `analysis.speech_transcript` and `analysis.tempo` below are stable semantic capability slots. Today `analysis.tempo` may be fulfilled by canonical Sample Lab/Essentia evidence, while a future ComfyUI ASR or BPM workflow MAY implement the corresponding semantic slots. Android MUST treat provider availability as runtime data and MUST NOT assume that a provider named ComfyUI, Essentia, aubio, or any other implementation exists. The protocol does not make an implementation claim that the current server cannot prove.
 
 ## 3. Authority invariants
 
@@ -117,7 +119,7 @@ schema: androidjtools.analysis-capability/v1
 capability_id: analysis.stems
 label: Stem separation
 availability: available | degraded | unavailable | unknown
-operations: [request, read, cancel]
+operations: [request, read]       # advertise cancel only when the mediator can actually honor it
 input_scopes: [asset, interval]
 output_kinds: [stem_media]
 estimated_cost: local_low | local_medium | local_high | remote_variable | unknown
@@ -154,7 +156,7 @@ capability_id: analysis.stems
 asset_id: asset_...
 interval_id: interval_... | null
 input_identity:
-  server_revision: 41
+  revision_token: opaque-equality-token
   content_sha256: optional-sha256
 state: queued | running | ready | partial | failed | cancelled | unavailable | stale
 progress:
@@ -176,6 +178,7 @@ error:
 Rules:
 
 - `job_id` MAY be an orchestration/mediator ID while `analysis_run_id` identifies the durable Sample Lib record. The mediator MUST preserve the mapping.
+- `queued`, `running`, progress and `cancelled` are mediator-level semantics unless the negotiated capability proves provider-native support. The current Sample Lib heavy-worker path is synchronous and MUST NOT be projected as cancellable merely because this DTO can represent cancellation.
 - A result MUST NOT be `ready` merely because a worker returned bytes. Required derived media/evidence MUST first be registered in Sample Lib with provenance.
 - Current bridge state `deferred` caused by provider unavailability SHOULD normalize to `unavailable` plus `status_reason`; Android does not need a provider-specific `deferred` state.
 - Provider logs, stdout/stderr, worker request bodies, worker URLs, local paths and credentials MUST NOT be copied into `error`.
@@ -192,18 +195,18 @@ kind: bpm | key | cue | loop | region | transcript_marker | related_track | mix_
 value: {}
 confidence: 0.0..1.0 | null
 source:
-  service_family: sample_intelligence | demucs | comfyui_asr | tempo_ensemble | other
+  service_family: sample_intelligence | demucs | basic_pitch | essentia | comfyui_asr | tempo_ensemble | overtone_runtime | other
   method_version: optional
   pipeline_version: optional
   parameters_digest: optional-digest
 generated_at: RFC3339
 input_identity:
-  server_revision: 41
+  revision_token: opaque-equality-token
   content_sha256: optional-sha256
 freshness:
   state: fresh | stale | unknown
   reason: optional-stable-reason
-  observed_revision: 41 | null
+  observed_revision_token: opaque-equality-token | null
 decision: proposed | accepted | rejected | superseded
 ```
 
@@ -211,7 +214,7 @@ Rules:
 
 - Candidates are advisory. `decision: accepted` is meaningful only after the associated normal sync mutation receives an authoritative receipt.
 - Multiple BPM/key/loop candidates MAY coexist. The service MUST NOT collapse half/double-tempo alternatives merely to simplify the UI.
-- Candidate input identity MUST be checked before acceptance. Revision/content drift MUST fail closed as stale; no automatic rebase is allowed.
+- Candidate input identity MUST be checked before acceptance. Revision/content drift MUST fail closed as stale; no automatic rebase is allowed. Revision tokens are compared for equality only; clients MUST NOT parse, increment, sort, or otherwise infer ordering from them.
 - A model/provider family MAY be shown as provenance, but Android code MUST NOT depend on its raw model/checkpoint/workflow identity.
 - Raw Sample Intelligence embedding vectors and index paths are server-internal.
 
@@ -283,7 +286,7 @@ evidence_refs: []
 source: <CandidateDTO.source>
 observed_at: RFC3339
 input_identity:
-  server_revision: 41
+  revision_token: opaque-equality-token
 freshness:
   state: fresh | stale | unknown
 status: active | acknowledged | resolved | stale
@@ -314,7 +317,7 @@ intent: cue.confirm_set | loop.confirm_set | marker.confirm_set
 target:
   asset_id: asset_...
   interval_id: interval_... | null
-  expected_revision: 41
+  expected_revision: opaque-equality-token
   content_sha256: optional-sha256
 proposal:
   cue:
@@ -360,7 +363,7 @@ Required semantics:
 
 1. `request_id` is requester-owned and idempotent.
 2. Replaying the same `request_id` with an identical target/proposal returns current request state. Reusing it with materially different content is a protocol conflict.
-3. The mediator validates target identity and expected revision before asking the user.
+3. The mediator validates target identity and expected opaque revision token before asking the user. For interval/editor state this is the current Sample Lib aggregate fingerprint; other entity families may use different opaque token formats.
 4. Android displays the proposal and origin and asks for explicit confirmation for durable cue/loop/marker mutation.
 5. Acceptance creates the existing normal sync mutation with a fresh `mutation_id`; `request_id`, `correlation_id` and proposal/candidate identity are placed in provenance.
 6. If Android is offline, acceptance MAY be journaled according to existing offline-first sync rules, but the mediator MUST NOT tell Overtone that the mutation is applied until the authoritative receipt arrives.
@@ -377,7 +380,7 @@ request_id: req_...
 correlation_id: corr_...
 disposition: applied | no_op | rejected_by_user | expired | conflict | failed | pending
 canonical:
-  server_revision: 42 | null
+  revision_token: opaque-equality-token | null
   asset_id: asset_...
   interval_id: interval_... | null
   value: optional-canonical-cue-loop-marker
@@ -488,7 +491,7 @@ Unknown forward-compatible event types SHOULD be ignored after envelope validati
 
 Android MAY receive:
 
-- stable asset/interval/file/resource identifiers and server revisions;
+- stable asset/interval/file/resource identifiers and opaque entity revision tokens;
 - provider-neutral capability IDs, availability, supported scopes/outputs and coarse cost class;
 - sanitized job progress, state, stable errors and correlation IDs;
 - candidates with values, confidence, provenance summary and staleness;
@@ -562,7 +565,8 @@ The synthesis mediator and participating services MUST:
 12. preserve candidate/provenance identity when a suggestion becomes a durable mutation;
 13. treat realtime events as hints, with durable cursor/readback as recovery truth;
 14. fail closed on parent identity/provenance drift;
-15. keep safety-policy authority explicit rather than inferred from provider output.
+15. keep safety-policy authority explicit rather than inferred from provider output;
+16. advertise only analysis operations the current mediator/provider path can actually honor; represent queue/progress/cancellation at the mediator layer when the underlying provider is synchronous.
 
 ### 11.2 SHOULD
 
@@ -596,14 +600,14 @@ The synthesis mediator should not be considered protocol-complete until at least
 1. **Authority gate** — an Overtone cue/loop request cannot mutate Sample Lib before explicit Android confirmation and an authoritative sync receipt.
 2. **Correlation continuity** — `request_id`/`correlation_id` survive Overtone request → Android projection → mutation provenance → receipt → requester reply.
 3. **Request replay** — identical duplicate request is idempotent; same ID with changed payload is rejected.
-4. **Conflict re-confirmation** — remote revision advances before accepted mutation; mediator emits `needs_reconfirmation` and never silently rebases.
+4. **Conflict re-confirmation** — canonical revision token changes before accepted mutation; mediator emits `needs_reconfirmation` and never silently rebases.
 5. **Offline acceptance** — Android can journal the confirmed mutation offline, but Overtone receives no false `applied` reply before sync receipt.
 6. **Request expiry** — expired offline request terminates and cannot be committed by a late tap.
-7. **Stale intelligence** — candidate generated at revision N cannot be accepted at revision N+1 without explicit rerun/reconfirmation.
+7. **Stale intelligence** — candidate generated against revision token A cannot be accepted after canonical revision changes to token B without explicit rerun/reconfirmation.
 8. **Multiple tempo candidates** — primary/half/double alternatives coexist and one accepted candidate preserves its provenance.
 9. **Demucs redaction** — stem DTO contains opaque resource/hash/role identity and no path, worker URL, CLI/model/device field.
 10. **ASR redaction** — transcript marker DTO contains semantic text/timing/provenance but no ComfyUI prompt/node/workflow/checkpoint/server details.
-11. **Provider absence** — no ComfyUI ASR/BPM backend present results in unavailable/unknown semantic capability, not a client error or hard-coded fallback.
+11. **Provider substitution/absence** — `analysis.tempo` works through a current normalized provider such as Essentia without Android branching on it; an absent ComfyUI ASR/BPM provider yields unavailable/unknown only for the unsupported semantic capability rather than a client error or hard-coded fallback.
 12. **Partial outage** — stems unavailable while tempo/other capabilities remain usable.
 13. **Evidence drift** — Sample Intelligence evidence whose parent hash/revision differs is rejected fail-closed.
 14. **Safety visibility** — warning/blocking finding remains visible even when unrelated suggestions are low confidence or rejected.
@@ -613,6 +617,7 @@ The synthesis mediator should not be considered protocol-complete until at least
 18. **Post-commit runtime failure** — Overtone runtime apply failure does not roll back the Sample Lib commit and can be retried independently.
 19. **Forward compatibility** — unknown read-only event type does not crash Android; mutation schema mismatch fails closed.
 20. **Boundary leak test** — serialized Android DTO fixtures reject/omit filesystem paths, worker endpoints, credentials, Clojure/SuperCollider runtime IDs and raw provider payloads.
+21. **Capability honesty** — a synchronous heavy-provider path does not advertise `cancel`; if a mediator adds queued/running/cancel semantics, cancellation is tested as mediator behavior and never fabricated as provider-native support.
 
 ## 13. Demands to the synthesis mediator
 
@@ -620,7 +625,7 @@ The Sample Lab / intelligence / Overtone side requires the mediator to provide:
 
 1. **One canonical mediated-action envelope**, not a special Overtone-only Android transport.
 2. **Caller-owned idempotent request IDs plus end-to-end correlation IDs**.
-3. **Sample Lib revision/content identity on every mutation-sensitive request/candidate**.
+3. **Sample Lib opaque revision-token/content identity on every mutation-sensitive request/candidate**; revision tokens are equality guards, never client-side counters.
 4. **Normal sync mutation + authoritative receipt for every accepted durable library edit**, whether proposed by a human, Sample Intelligence, Demucs/ASR/MIR output or Overtone.
 5. **Provider-neutral capability discovery** with independent degradation.
 6. **Opaque resource references and server-side resource resolution**, never host paths.
@@ -665,3 +670,27 @@ The synthesis mediator can therefore converge the Android sync and intelligence 
 > **Evidence and performance systems may propose; Sample Lib commits; Android confirms/reviews; Overtone performs.**
 
 That rule is strong enough to support Demucs, current MIR/transcription providers, Sample Intelligence and future ComfyUI ASR/BPM implementations without coupling Android to any current server language, worker topology or model runtime.
+
+## 17. Requalification — 2026-09-28
+
+The proposal was re-read against the current Android sync/intelligence contracts, current Sample Lab provider documentation/implementation, and the current Overtone convergence contract. No authority-boundary change was required.
+
+Verified current facts used by this proposal:
+
+- Android still defines Sample Lib as canonical authority, opaque equality-only entity revisions, cursor-based durable pull, idempotent mutation IDs, authoritative receipts, and advisory intelligence whose acceptance reuses the ordinary mutation path.
+- Sample Lab currently documents brokered direct provider adapters for Demucs stems, Basic Pitch note transcription and Essentia low-level MIR. Provider failures are structured capability degradation; heavy provider calls are presently synchronous and therefore do not prove native durable queue/cancel semantics.
+- Sample Lib's Sample Intelligence bridge projects path-free, identity-bound evidence and can derive deterministic musical workbench candidates from persisted analysis runs without creating another catalog authority.
+- Sample Lib's durable Overtone edit-session workflow keeps Overtone proposals presentation-only until ordinary Sample Lib save plus revision-guarded acceptance; accepted results remain retrievable even when Overtone is offline.
+- Overtone's convergence contract continues to assign assets, intervals, tags, analysis, renders, derived-file registration and provenance to Sample Lib / Sample Lab while retaining live synthesis, sequencing, playback, effects and Studio runtime behavior in Overtone.
+
+No verified canonical ComfyUI ASR/BPM provider was established by the inspected current interfaces. The semantic capability slots therefore remain intentionally provider-neutral and capability-discovered rather than making a provider-existence claim.
+
+### 17.1 Evidence paths re-read in this run
+
+The requalification above was checked against concrete current paths rather than inferred from the prior proposal:
+
+- Android: `contracts/sync/v1/protocol.json`, the intelligence v1 contract, and the sibling protocol-negotiation proposals/decision.
+- Sample Lab: `docs/compatibility-matrix.md`, `docs/limitations.md`, `docs/bridge/sample-lab-integration.md`, `docs/implementation/sample-lib/overtone-edit-tasks.md`, and the current provider wiring in `docker-compose.yml`.
+- Overtone Sampler: `docs/SAMPLE_LAB_CONVERGENCE.md`, plus the current repository architecture/integration instructions.
+
+One nuance is intentional: Sample Lab now has durable generic operation-progress/event infrastructure, but the inspected heavy-provider execution boundary remains synchronous from its API caller's perspective. Therefore Android MAY receive queued/running/cancel states only when the mediator advertises and actually implements those semantics for the negotiated capability; generic operation infrastructure alone MUST NOT be treated as proof that a specific Demucs, transcription, MIR, ASR or BPM provider is cancellable.

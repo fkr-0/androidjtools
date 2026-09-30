@@ -3,6 +3,8 @@
   "$id": "https://androidjtools.invalid/contracts/sync/v1/sync.schema.json",
   "title": "Android DJ Tools Sample Lib Sync Protocol v1 — synthesis decision",
   "oneOf": [
+    {"$ref": "#/$defs/pairing_request"},
+    {"$ref": "#/$defs/pairing_accepted"},
     {"$ref": "#/$defs/hello_request"},
     {"$ref": "#/$defs/hello_accepted"},
     {"$ref": "#/$defs/hello_incompatible"},
@@ -37,9 +39,31 @@
       "properties": {
         "pull": {"$ref": "#/$defs/capability_list"},
         "mutations": {"$ref": "#/$defs/capability_list"},
-        "playlists": {"enum": ["unsupported_until_canonical_playlist_migration", "read_only", "read_write"]},
+        "playlists": {"enum": ["unsupported_until_canonical_playlist_migration", "canonical_v1", "read_only", "read_write"]},
         "analysis": {"$ref": "#/$defs/capability_list"},
         "media": {"$ref": "#/$defs/capability_list"}
+      }
+    },
+    "pairing_request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "client_id", "installation_id", "pairing_code"],
+      "properties": {
+        "type": {"const": "pairing_request"},
+        "client_id": {"$ref": "#/$defs/non_empty_string"},
+        "installation_id": {"$ref": "#/$defs/non_empty_string"},
+        "pairing_code": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "pairing_accepted": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "server_id", "principal_id", "installation_id", "access_token", "scopes"],
+      "properties": {
+        "type": {"const": "pairing_accepted"},
+        "server_id": {"$ref": "#/$defs/non_empty_string"},
+        "principal_id": {"$ref": "#/$defs/non_empty_string"},
+        "installation_id": {"$ref": "#/$defs/non_empty_string"},
+        "access_token": {"type": "string", "minLength": 1},
+        "scopes": {"$ref": "#/$defs/capability_list"}
       }
     },
     "hello_request": {

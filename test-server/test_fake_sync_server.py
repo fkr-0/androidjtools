@@ -32,10 +32,18 @@ def push_request(item: dict) -> dict:
 
 
 class FakeSyncServerTests(unittest.TestCase):
+    def test_pairing_binds_installation_to_server_principal_and_scopes(self) -> None:
+        body = FakeSyncServer().pair({"type": "pairing_request", "client_id": "android", "installation_id": "device-1", "pairing_code": "482913"})
+        self.assertEqual("pairing_accepted", body["type"])
+        self.assertEqual("principal:fixture", body["principal_id"])
+        self.assertEqual("device-1", body["installation_id"])
+        self.assertIn("sync.write", body["scopes"])
+        Draft202012Validator(WIRE_SCHEMA).validate(body)
+
     def test_hello_advertises_generation_structured_capabilities_and_limits(self) -> None:
         body = FakeSyncServer().hello({"type": "hello_request", "protocol_versions": ["1"], "client_id": "android", "installation_id": "device", "capabilities": []})
         self.assertEqual("generation:fixture-v1", body["authority_generation"])
-        self.assertEqual("unsupported_until_canonical_playlist_migration", body["capabilities"]["playlists"])
+        self.assertEqual("canonical_v1", body["capabilities"]["playlists"])
         self.assertIn("interval.editor_state.replace", body["capabilities"]["mutations"])
         self.assertGreater(body["limits"]["tombstone_retention_seconds"], 0)
 
@@ -237,7 +245,11 @@ class FakeSyncHttpServerTests(unittest.TestCase):
         with urllib.request.urlopen(self.base_url + path, timeout=2) as response:
             return response.status, json.loads(response.read().decode("utf-8"))
 
-    def test_namespaced_http_hello_push_and_receipt_lookup(self) -> None:
+    def test_namespaced_http_pair_hello_push_and_receipt_lookup(self) -> None:
+        status, paired = self.post("/v1/sync/pair", {"type": "pairing_request", "client_id": "android-client", "installation_id": "fixture-installation", "pairing_code": "482913"})
+        self.assertEqual(200, status)
+        self.assertEqual("pairing_accepted", paired["type"])
+        self.assertEqual("fixture-installation", paired["installation_id"])
         status, hello = self.post("/v1/sync/hello", {"type": "hello_request", "protocol_versions": ["1"], "client_id": "android-client", "installation_id": "fixture-installation", "capabilities": []})
         self.assertEqual(200, status)
         self.assertEqual("hello_accepted", hello["type"])

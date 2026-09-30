@@ -210,6 +210,27 @@ class FakeSyncServer:
             return ("base_revision_must_be_null", "This create-or-ensure operation requires base_revision=null.")
         return None
 
+    def pair(self, request: dict[str, Any]) -> dict[str, Any]:
+        if self.scenario == "offline":
+            raise TransportOffline("deterministic offline scenario")
+        if self.scenario == "unavailable":
+            raise ProtocolHttpError(503, _error("unavailable", "The fake Sample Lib service is unavailable."))
+        if request.get("type") != "pairing_request":
+            raise ProtocolHttpError(400, _error("invalid_pairing_request", "Expected pairing_request."))
+        client_id = str(request.get("client_id", "")).strip()
+        installation_id = str(request.get("installation_id", "")).strip()
+        pairing_code = str(request.get("pairing_code", "")).strip()
+        if not client_id or not installation_id or not pairing_code:
+            raise ProtocolHttpError(400, _error("invalid_pairing_request", "client_id, installation_id and pairing_code are required."))
+        return {
+            "type": "pairing_accepted",
+            "server_id": self.server_id,
+            "principal_id": self.principal_id,
+            "installation_id": installation_id,
+            "access_token": "fixture-access-token",
+            "scopes": ["sync.read", "sync.write", "media.read", "analysis.read"],
+        }
+
     def hello(self, request: dict[str, Any]) -> dict[str, Any]:
         self._guard_transport()
         requested = [str(version) for version in request.get("protocol_versions", [])]
@@ -480,7 +501,9 @@ class FakeSyncHttpHandler(BaseHTTPRequestHandler):
                 self.server.engine.set_scenario(str(body.get("state", "")))
                 self._send_json(200, {"state": self.server.engine.scenario})
                 return
-            if self.path == "/v1/sync/hello":
+            if self.path == "/v1/sync/pair":
+                response = self.server.engine.pair(body)
+            elif self.path == "/v1/sync/hello":
                 response = self.server.engine.hello(body)
             elif self.path == "/v1/sync/pull":
                 response = self.server.engine.pull(body)

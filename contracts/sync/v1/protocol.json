@@ -19,6 +19,36 @@
     "authority_generation_required": true,
     "capabilities_are_operation_family_scoped": true
   },
+  "observed_sample_lib_baseline_2026_09_27": {
+    "pull": ["asset", "interval", "marker", "tag", "tag_attachment", "playlist", "playlist_item"],
+    "mutations": ["interval.editor_state.replace"],
+    "playlists": "canonical_v1",
+    "analysis": [],
+    "media": ["resource_uri", "content_hash", "range"],
+    "websocket_events_implemented": false,
+    "cursor_scaling": "signed_cursor_contains_entity_revision_state_maps_O_n"
+  },
+  "observed_sample_lib_conformance_2026_09_28": {
+    "mutation_replay_horizon_advertised_seconds": 31536000,
+    "mutation_replay_horizon_age_enforced": false,
+    "access_token_expiry_claim_present": false,
+    "credential_rotation_protocol_defined": false,
+    "credential_revocation_protocol_defined": false,
+    "cursor_state_growth": "O_n_synced_entities",
+    "additional_mutation_families_advertised": false,
+    "analysis_sync_capabilities_advertised": false,
+    "websocket_events_implemented": false
+  },
+  "pairing": {
+    "endpoint": "/v1/sync/pair",
+    "request_type": "pairing_request",
+    "accepted_type": "pairing_accepted",
+    "operator_action_required": true,
+    "credential_binding": "server_derived_principal_with_client_installation_bound_into_credential",
+    "pairing_code_is_bootstrap_secret_not_session_credential": true,
+    "access_token_required_after_pairing": true,
+    "non_loopback_transport": "authenticated_tls_or_equivalent_private_transport"
+  },
   "limits_defaults": {
     "pull_page_max": 1000,
     "push_batch_max": 100,
@@ -28,7 +58,7 @@
   "capabilities": {
     "pull": ["asset", "interval", "marker", "tag", "tag_attachment", "analysis_suggestion"],
     "mutations": ["interval.editor_state.replace", "asset.metadata.patch", "tag.ensure_attach", "tag.detach", "analysis.suggestion.accept"],
-    "playlists": "unsupported_until_canonical_playlist_migration",
+    "playlists": "canonical_v1",
     "analysis": ["suggestions.read"],
     "media": ["resource_uri", "content_hash", "range"]
   },
@@ -70,6 +100,7 @@
     "incompatible": {"endpoint": "hello", "effect": "HTTP 426 hello_incompatible"}
   },
   "http": {
+    "pair": "/v1/sync/pair",
     "hello": "/v1/sync/hello",
     "pull": "/v1/sync/pull",
     "push": "/v1/sync/push",

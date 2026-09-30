@@ -1,8 +1,47 @@
 # Sync protocol negotiation — Android / offline-first advocate
 
-Canonical OCP task: `ANDROIDJTOOLS-PROTOCOL-ANDROID-CLIENT-20260915`
+Canonical OCP task: `ANDROIDJTOOLS-PROTOCOL-ANDROID-CLIENT-20260927`
 
-Status: **decision proposal, not unilateral protocol victory**
+Status: **2026-09-28 repository-grounded Android/offline-first proposal; not unilateral protocol victory**
+
+## 2026-09-28 revalidation delta
+
+This proposal was rechecked against the current Android client, the checked-in sync/intelligence contracts, Sample Lib's live production adapter under `third_party/sample-lib/src/sample_lib/android_sync.py`, the canonical playlist migration, and Oversampler's current Sample Lab adapter.
+
+### Resolved since the earlier negotiation
+
+- The checked-in sync contract now uses **opaque string entity/base revisions** and separates them from numeric `server_change_revision`.
+- The canonical wire endpoints are now `POST /v1/sync/hello`, `POST /v1/sync/pull`, `POST /v1/sync/push`, and `GET /v1/sync/receipts/{mutation_id}`.
+- Sample Lib now has a real mobile sync façade with explicit pairing, scoped bearer credentials, stable `server_id`, `authority_generation`, integrity-protected opaque cursors, snapshot/incremental pull, principal-scoped receipt lookup, and replay-safe mutation receipts.
+- Sample Lib migration `0013_canonical_playlists.sql` establishes canonical playlist and playlist-item identities; the current Android sync server exposes them in pull and advertises `playlists: canonical_v1`.
+- Android's remote Sample Lib client already pins server identity, detects authority-generation reset, bounds pages/batches from hello, recovers ambiguous mutation delivery through receipt lookup, and verifies hash-addressed media with optional range resume.
+- Android's offline download layer already persists process-death-safe metadata keyed by canonical asset identity and keeps canonical `resourceUri` / SHA-256 separate from local cache paths.
+
+### Remaining acceptance blockers / negotiation demands
+
+1. **The real Android journal exists, but the thin presentation/domain projection still carries fixture-era numeric revisions.** `sync/journal/MutationJournal.kt` persists opaque-string `baseRevision`, immutable canonical request bodies, APPLYING/PENDING recovery and authoritative receipts with a versioned v1→v2 migration. `core/model/Domain.kt` still exposes `Long?` revision fields for thin UI/fixture models. Those presentation types MUST NOT leak back into the durable wire/journal path; the remaining hardening question is replacing the current atomic file snapshot store with the architecture-target Room transaction boundary when page projection/cursor persistence lands.
+2. **Server capability truth is narrower than the checked-in synthesis contract.** The production Sample Lib façade currently advertises only `interval.editor_state.replace` as an offline-capable mutation and no analysis sync capability. Android MUST branch on hello capabilities, not on contract aspirations or fixture providers.
+3. **Cached intelligence is client-readable, but production Sample Lib sync does not yet expose `analysis_suggestion` in its pull set.** Offline review/acceptance therefore requires either a server pull projection for advisory candidates or a deliberately separate cached intelligence feed; acceptance still MUST become a fresh normal revision-checked sync mutation and only becomes canonical after receipt.
+4. **Canonical playlists are now readable, but playlist writes/reorder are not negotiated mutations.** Android can cache/browse/pin canonical playlists offline today; offline playlist edits remain disabled until a receipt-backed ordered-collection mutation family exists.
+5. **The server's opaque cursor embeds the full entity→revision state map; a paged incremental cursor can embed both baseline and target maps.** This is fail-closed and deterministic, but cursor size and signing/JSON cost are O(N) in synced entity cardinality. Scale qualification must measure token bytes, request/response limits, CPU and 100k-entity convergence; a compact server-side change-log cursor may be required before large-library release.
+6. **Pairing is explicit but credential lifecycle remains minimal.** The current signed token has scopes and server binding, but protocol-level revocation/rotation/expiry semantics and authenticated non-loopback transport policy still need an operational decision.
+7. **WorkManager scheduling is still not a correctness boundary.** Mutation intent already has crash-safe atomic file persistence and APPLYING→PENDING recovery, while media downloads use unique WorkManager jobs plus durable partial state. The missing convergence boundary is a transactional canonical projection + pull cursor store: page changes/tombstones and `next_cursor` must commit together, independent of worker timing.
+8. **Advertised mutation replay retention is stronger than the current Sample Lib implementation.** The v1 contract/hello uses a 31,536,000-second mutation receipt replay horizon, but current receipt storage/lookup does not age-enforce that boundary. Sample Lib MUST either enforce the advertised horizon or advertise the actually guaranteed horizon. Android MUST persist the effective horizon with pairing/hello state and must not assume a mutation remains safely replayable forever; once an unresolved attempted mutation is older than the last server-guaranteed replay horizon, automatic resend stops and the client requires receipt/readback reconciliation or explicit user recovery rather than risking a duplicate apply.
+9. **Current tombstones are cursor-derived observations, not a durable deletion history.** Sample Lib's current v1 facade compares the prior cursor revision map with present canonical rows and emits a tombstone when a previously seen identity disappears. That is sufficient for a client whose cursor already contained the entity, but it does not prove historical tombstone retention for clients that were offline before the deletion or whose cursor state was lost/expired. Before Android relies on an advertised tombstone-retention horizon, Sample Lib MUST back sync-visible deletes with a durable change/tombstone feed or explicitly scope the guarantee to cursor-carried prior identity and force snapshot reset outside it. Android MUST treat `cursor_expired` as a bootstrap boundary rather than assuming a missing historical delete can be reconstructed incrementally.
+
+### Current smallest robust decision
+
+Keep the v1 core as:
+
+```text
+explicit pair + versioned hello
+  + opaque cursor pull with bounded pages + tombstones/reset
+  + durable Android mutation journal + Sample Lib mutation-id receipts
+  + canonical resource identity + hash-verified/resumable media
+  + optional WebSocket wake hints only (contracted, not currently implemented by Sample Lib sync)
+```
+
+Do **not** broaden v1 by pretending unsupported mutation families are offline-safe. Ship capability-gated correctness first; add metadata/tag/playlist/intelligence acceptance families only when Sample Lib can persist the same idempotency and revision invariants already proven by interval editor state.
 
 ## Executive decision
 
@@ -18,15 +57,7 @@ versioned REST hello
 
 The durable truth remains Sample Lib. Android owns a **projection, cache, and intent journal**, never a second canonical library database. WebSocket delivery, Android WorkManager, wall-clock timestamps, provider callbacks, and intelligence suggestions are all advisory scheduling/evidence mechanisms; none is a correctness boundary.
 
-The existing `contracts/sync/v1/*` direction is fundamentally right, but Android requests several changes before calling the wire contract production-ready:
-
-1. **Entity revisions MUST be opaque tokens, not integers.** Current Android schema/code model revisions as integers/`Long`; the real Sample Lib atomic editor contract already uses a SHA-256 revision fingerprint. A global monotonic server change sequence may be numeric, but it is distinct from an entity revision token.
-2. **Offline mutation capability MUST be advertised per entity/operation family.** Sample Lib currently has strong durable idempotency for the atomic interval editor route, but many existing POST/PATCH/DELETE routes and the Overtone bridge deliberately do not blindly retry ambiguous stateful calls. Android MUST NOT assume the generic mutation envelope makes an unsupported server route idempotent.
-3. **Pull cursor application MUST be atomic locally:** apply a page's changes/tombstones and store its `next_cursor` in the same local database transaction.
-4. **Cursor expiry/reset semantics MUST be explicit.** Tombstone retention is necessarily finite; clients older than that horizon need a safe, paged snapshot reset rather than silent data resurrection.
-5. **Media references MUST support immutable identity, final hash verification, and byte-range resume when advertised.** Durable identity is a Sample Lib resource ID/URI plus content hash, not a host path or temporary URL.
-6. **The Android mutation journal requires its own non-destructive schema migration contract.** Disposable read/media caches may be rebuilt; unresolved user intent may not be dropped because an app upgrade changed local schema.
-7. **Pairing/authentication MUST be part of the network deployment contract.** Current Sample Lib and Overtone integration defaults are intentionally loopback-oriented; exposing that trust model unchanged to a phone on a LAN is not acceptable.
+The existing `contracts/sync/v1/*` direction is now substantially implemented rather than merely aspirational. The remaining Android demands are narrower: capability truth must match the live Sample Lib façade; pull-page state and the next cursor must commit atomically in a durable Android store; unresolved mutation intent must survive process death and schema migration; large-library cursor/reset behavior must be load-tested; credential revocation/rotation and non-loopback transport policy must be operationally defined; and new offline write families must be added only when they gain the same durable receipt/revision semantics as the current interval editor mutation.
 
 These are negotiation demands, not production code edits in this lane.
 
@@ -53,7 +84,7 @@ The current executable contract already establishes the important base invariant
 - `contracts/sync/v1/sync.schema.json`
   - already bounds pull pages and push batches;
   - carries explicit changes and tombstones;
-  - currently defines entity/base revisions as integers. This is the principal wire mismatch found in this review.
+  - now represents entity/base revisions as opaque strings, matching the production Sample Lib mobile façade. The remaining revision mismatch is limited to thin Android UI/domain fixture types, not the wire contract.
 - `app/src/main/java/dev/androidjtools/core/model/Domain.kt`
   - already separates pending mutations, receipts, download state, sync state, suggestions, and canonical-looking library projections;
   - currently models `PendingMutation.baseRevision` as `Long?`, which should be treated as fixture-era shape rather than a settled cross-repository wire type.
@@ -169,25 +200,27 @@ The canonical Android state is therefore not "whatever is in Room". Room holds a
 Keep the existing v1 conceptual surface unless synthesis finds a naming collision:
 
 ```text
-POST /v1/hello
-POST /v1/pull
-POST /v1/push
+POST /v1/sync/pair
+POST /v1/sync/hello
+POST /v1/sync/pull
+POST /v1/sync/push
+GET  /v1/sync/receipts/{mutation_id}
 
 GET/HEAD <advertised Sample Lib resource endpoint>   # media, with optional Range
-WS       <optional advertised wake endpoint>         # hint only
+WS       /v1/sync/events                              # optional wake hint only
 ```
 
-A separate receipt-query endpoint is useful for diagnostics but not required for correctness if exact push replay is guaranteed. If provided, prefer:
+The receipt-query endpoint is now implemented as:
 
 ```text
-GET /v1/receipts/{mutation_id}
+GET /v1/sync/receipts/{mutation_id}
 ```
 
-and make it authorization-scoped to the paired installation/client.
+It is principal-scoped in Sample Lib and is used by the current Android client to reconcile ambiguous delivery before leaving the exact mutation pending. Exact same-ID/body replay remains the underlying idempotency invariant.
 
 ### 4.1 Hello / capability negotiation
 
-Request, extending the current shape:
+Use the currently implemented v1 envelope rather than introducing a parallel capability vocabulary:
 
 ```json
 {
@@ -195,49 +228,42 @@ Request, extending the current shape:
   "protocol_versions": ["1"],
   "client_id": "android-dj-tools",
   "installation_id": "opaque-device-installation-id",
-  "capabilities": [
-    "pull.cursor.v1",
-    "push.receipts.v1",
-    "media.range.v1",
-    "wake.websocket.v1"
-  ]
+  "capabilities": []
 }
 ```
 
-Accepted response should distinguish server-wide transport capabilities from operation families:
+The production Sample Lib shape is already concrete:
 
 ```json
 {
   "type": "hello_accepted",
   "protocol_version": "1",
   "server_id": "stable-server-installation-id",
+  "authority_generation": "opaque-generation",
   "server_change_revision": 481220,
-  "capabilities": ["pull.cursor.v1", "push.receipts.v1"],
-  "mutation_families": {
-    "interval.editor_state": {
-      "operations": ["replace"],
-      "idempotent_receipts": true,
-      "revision_kind": "opaque"
-    },
-    "playlist.membership": {
-      "operations": [],
-      "idempotent_receipts": false
-    }
+  "capabilities": {
+    "pull": ["asset", "interval", "marker", "tag", "tag_attachment", "playlist", "playlist_item"],
+    "mutations": ["interval.editor_state.replace"],
+    "playlists": "canonical_v1",
+    "analysis": [],
+    "media": ["resource_uri", "content_hash", "range"]
   },
   "limits": {
-    "pull_page_max": 1000,
-    "push_batch_max": 100
+    "pull_page_max": 500,
+    "push_batch_max": 100,
+    "tombstone_retention_seconds": 7776000,
+    "mutation_replay_horizon_seconds": 31536000
   }
 }
 ```
 
-The exact encoding of capabilities remains negotiable. The invariant does not: **Android only offers offline mutation UI for families the server explicitly declares receipt/idempotency support for.** Unsupported writes may remain online-only or unavailable.
+Capability truth is authoritative at runtime: **Android only offers offline mutation UI for operation names present in `capabilities.mutations` and only enables advisory feeds/media features actually advertised by hello.** The checked-in vocabulary may describe future operation families; it is not permission to queue them against a narrower production server.
 
 No-overlap remains explicit HTTP 426 + `hello_incompatible`. Silent guessing/downgrade is forbidden.
 
-### 4.2 Revision vocabulary — requested correction
+### 4.2 Revision vocabulary — resolved in the wire contract, still lagging in thin UI/domain types
 
-Use separate concepts:
+The production wire now uses the required separation:
 
 ```yaml
 server_change_revision: integer-or-opaque-diagnostic-high-water-mark
@@ -246,7 +272,7 @@ base_revision: opaque non-empty token, or explicit create sentinel
 cursor: opaque string owned entirely by server
 ```
 
-`entity_revision` / `base_revision` MUST NOT be constrained to an integer. The existing Sample Lib editor revision is a 64-hex fingerprint and is already a valid, production-grounded optimistic-concurrency token.
+`entity_revision` / `base_revision` are no longer constrained to an integer in the checked-in v1 wire contract or Sample Lib mobile façade. The remaining mismatch is Android's thin `core/model/Domain.kt` projection, where pending/receipt revision fields are still `Long?`; those types MUST NOT define the durable journal or wire representation.
 
 The client MUST NOT parse, increment, compare, sort, or construct an entity revision. Equality is the only portable operation.
 
@@ -261,7 +287,7 @@ Keep the existing shape, with optional reset metadata during snapshot recovery:
   "type": "pull_request",
   "protocol_version": "1",
   "cursor": "opaque-or-null",
-  "scopes": ["tracks", "intervals", "playlists", "analysis_suggestions"],
+  "scopes": ["library"],
   "limit": 500
 }
 ```
@@ -319,11 +345,11 @@ Suggested error:
     "message": "cursor predates retained change history"
   },
   "reset_required": true,
-  "server_generation": "opaque-generation"
+  "authority_generation": "opaque-generation"
 }
 ```
 
-Recovery uses `cursor = null` (or an explicitly negotiated snapshot endpoint) and paginates a coherent snapshot. The server should return a stable `snapshot_id/server_generation` on every page and mark final completion.
+Recovery now uses `cursor = null` on the same pull endpoint. Sample Lib binds every signed cursor to `authority_generation`, pull scopes and a fixed entity-revision state; a generation/scope/integrity mismatch or mid-page authority drift fails explicitly as `cursor_expired` rather than silently rebasing.
 
 Android MUST NOT delete all locally missing entities page by page. It stages/marks the snapshot generation and only prunes entities absent from the snapshot **after the final page commits**. A crash halfway through resumes/restarts the snapshot without turning the first half into false deletions.
 
@@ -568,7 +594,7 @@ bounded_canonical_readback: true
 
 The existing interval editor-state mutation already satisfies the core pattern and should be the first real family.
 
-Metadata fields can follow once their server mutation is revision-conditioned and idempotent. Playlist membership/order should wait for a stable canonical playlist identity and an explicit ordering mutation model; current crate compatibility may serve browse/interchange without pretending generic ordered-list merge is solved.
+Metadata fields can follow once their server mutation is revision-conditioned and idempotent. Canonical playlist and playlist-item identities now exist and are pull-visible, but membership/order writes should still wait for an explicit revisioned ordering mutation model; readable canonical identity does not by itself solve concurrent ordered-list mutation.
 
 Android concedes that unsupported mutation families remain online-only even when the rest of the app works offline.
 
@@ -748,7 +774,8 @@ A test library of at least 100k metadata entities should be used for bounded-mem
 | --- | --- | --- |
 | offline before request | keep durable pending; no attempt | none |
 | connection fails before known response | conservatively treat attempted mutation as possibly delivered once bytes may have left process | same-ID replay safe |
-| server commits, response lost | retry same ID/base/body | return original receipt, no duplicate apply |
+| server commits, response lost | retry same ID/base/body while within the advertised replay guarantee | return original receipt, no duplicate apply |
+| unresolved attempted mutation ages beyond advertised replay horizon | stop automatic replay; query receipt/read back authoritative state and require explicit recovery if outcome remains unknown | never advertise a replay horizon longer than durable receipt/idempotency evidence actually supports |
 | same ID, changed body | stop/rejected | deterministic idempotency collision |
 | stale base | conflict | authoritative current revision + bounded conflict/readback data |
 | HTTP 401 | `AUTH_REQUIRED`; preserve journal | no mutation applied under invalid auth |
@@ -851,7 +878,8 @@ It requires the least new machinery while solving the actual failure modes.
 - provide explicit cursor-expiry/reset behavior;
 - provide stable entity IDs and opaque per-entity revision tokens;
 - persist mutation-ID receipts atomically with each offline-capable mutation;
-- return original receipt for exact replay and reject same-ID/different-body reuse;
+- advertise mutation receipt/idempotency replay retention truthfully and enforce at least the advertised horizon;
+- return original receipt for exact replay and reject same-ID/different-body reuse within the advertised replay guarantee;
 - advertise which mutation families/operations actually satisfy this contract;
 - return explicit conflicts rather than timestamp LWW;
 - retain tombstones/change history for a documented cursor horizon;
@@ -890,7 +918,7 @@ It requires the least new machinery while solving the actual failure modes.
 - add deterministic field-level merge for explicitly negotiated safe domains;
 - add WebSocket wake hints;
 - use foreground transfer UX for user-requested large downloads where Android policy requires it;
-- add a receipt-query endpoint even though exact push replay remains the correctness path.
+- use the implemented principal-scoped receipt-query endpoint for diagnostics/recovery while preserving exact same-ID/body replay as the correctness path.
 
 ---
 
@@ -971,6 +999,15 @@ The synthesis/implementation lane should turn these into executable fake-server 
 38. one rejected mutation in a batch does not cause sibling mutations to lack individual receipts/status.
 39. diagnostics expose cursor/server fingerprints and mutation IDs/digests without credentials or raw secrets.
 40. fixture-only provider availability does not cause protocol hello to advertise an actually unavailable backend.
+41. live hello advertising only `interval.editor_state.replace` disables offline asset/tag/playlist/intelligence writes even if checked-in contracts describe future families.
+42. canonical playlist and playlist-item pull survives process death/pagination and remains locally browsable/pinnable while edit/reorder controls remain capability-disabled.
+43. signed cursor tampering returns explicit `cursor_expired`; the client never treats an invalid cursor as an empty delta.
+44. a receipt created for one paired principal is not recoverable by a differently paired principal that knows the mutation ID.
+45. measure encoded cursor bytes at 1k/10k/100k entities, including paged incremental `state` + `target_state`; fail qualification before transport/server limits are approached.
+46. mutate canonical state between snapshot pages and between incremental pages; both paths fail closed and restart without pruning unseen local rows.
+47. absence of `/v1/sync/events` on the live Sample Lib server leaves correctness unchanged: lifecycle/connectivity/manual wakes still converge through durable pull.
+48. mutation replay retention boundary: a receipt remains recoverable and exact same-ID/body replay is deduplicated through the final instant of the server-advertised horizon; once an unresolved attempted mutation is older than that guaranteed horizon, Android does not auto-resend and instead enters explicit outcome-reconciliation/recovery. A server advertising 31,536,000 seconds while failing to retain/deduplicate for that duration fails conformance.
+49. deletion-retention boundary: create entity A, let client C1 observe A, delete A, and verify C1 receives a tombstone; then repeat with client C2 whose retained cursor predates/omits A or whose cursor expires before observing the deletion. The server must either deliver the historical tombstone from a durable change feed or return explicit `cursor_expired`/snapshot-reset semantics. It must never return a successful empty incremental page that leaves stale A locally.
 
 ---
 
@@ -978,19 +1015,20 @@ The synthesis/implementation lane should turn these into executable fake-server 
 
 These are the items synthesis should resolve explicitly rather than bury in implementation:
 
-1. **Revision schema:** change v1 `revision` from integer to opaque string/token now, or version the correction before any real client ships. Android advocates correcting it now.
-2. **Server change-feed owner:** implement directly in Sample Lib or behind a thin Sample Lab facade. Android only requires that Sample Lib remains authority and the cursor/receipts are durable across facade restarts.
-3. **Cursor retention horizon:** exact duration/count policy and how the server advertises it.
-4. **Snapshot reset encoding:** reuse `POST /v1/pull` with `cursor:null` plus snapshot generation vs introduce a dedicated snapshot endpoint.
-5. **Create base revision:** explicit `null`/sentinel vs a special token. Avoid conflating a valid revision value with "does not exist".
-6. **Mutation family naming:** domain operation names such as `interval.editor_state/replace` vs generic CRUD. Android prefers bounded domain operations because they preserve atomic invariants.
-7. **Receipt lookup endpoint:** optional for correctness, valuable for support and server-side mediation.
+1. **Revision schema — resolved at wire level:** keep opaque string/token revisions. Remaining work is to prevent fixture-era `Long?` UI/domain fields from leaking into the durable journal.
+2. **Server change-feed owner — resolved for v1 implementation:** Sample Lib now owns the mobile sync façade directly; keep Sample Lab/Overtone as consumers/orchestrators rather than new sync authorities.
+3. **Cursor representation and scale:** the current signed cursor contains the complete entity→revision state map, and paged incremental cursors can contain both baseline `state` and `target_state`. This is correct but O(N) in library cardinality and can make cursor bytes, signing/JSON work and request headers/bodies very large. Decide whether v1 needs a server-side durable change log / compact cursor before large-library release.
+4. **Snapshot reset encoding — resolved:** `POST /v1/sync/pull` with `cursor:null` begins a snapshot; authority drift during paging fails closed as `cursor_expired` and restarts the snapshot.
+5. **Create base revision:** explicit `null`/sentinel vs a special token. Avoid conflating a valid revision value with "does not exist" when create-capable mutation families are added.
+6. **Mutation family expansion:** retain bounded domain operation names and add each family only with durable receipt/revision semantics; the production server currently negotiates only `interval.editor_state.replace`.
+7. **Receipt lookup — resolved surface, open retention conformance:** `/v1/sync/receipts/{mutation_id}` exists and is principal-scoped; retain it as recovery/debugging support, not as permission to mutate a frozen envelope. Current Sample Lib advertises a 31,536,000-second mutation replay horizon without age-enforcing receipt storage/lookup, so implementation must either enforce that guarantee or advertise the shorter truth before Android can rely on it operationally.
 8. **Push ordering:** whether mutations in one batch are processed sequentially in request order or only individually; dependencies between mutations should be explicit rather than inferred.
-9. **Playlist canonical model:** crates as transitional projection vs stable playlist entity with membership/order revisions.
+9. **Playlist mutation model:** canonical playlist/item identities now exist and are pull-visible; negotiate revisioned membership/order mutation semantics before enabling offline playlist edits or reorder.
 10. **Media resume endpoint:** extend existing resource routes with Range/ETag/hash semantics vs add a dedicated download surface.
 11. **Pairing credential:** per-device bearer token vs mTLS/device certificate; both must bind to stable server identity and support revocation.
 12. **Background limits:** negotiated server backoff hints (`Retry-After`) and Android batching defaults; correctness must remain independent of exact timing.
 13. **Suggestion feedback:** keep rejection local in v1 unless a separate feedback mutation family is intentionally specified.
+14. **Deletion history representation:** current Sample Lib tombstones are inferred from cursor-carried prior identity. Decide whether production v1 introduces a durable change/tombstone journal before broad offline use, or explicitly narrows retention guarantees and requires snapshot reset when historical deletion evidence cannot be reconstructed.
 
 ---
 
@@ -998,17 +1036,17 @@ These are the items synthesis should resolve explicitly rather than bury in impl
 
 Adopt **REST + opaque cursor + durable mutation journal + authoritative idempotency receipts** as the v1 correctness core, with optional WebSocket wake hints and separate hash-verified/resumable media transfer.
 
-Before freezing the current schema, make the following acceptance-blocking corrections:
+Before calling the current v1 implementation production-ready for offline Android dogfooding at scale, close the following acceptance blockers:
 
 ```yaml
 blocking:
-  - entity/base revisions become opaque tokens, not integer-only
-  - mutation capability is explicit per family/operation
-  - cursor_expired + coherent paged reset semantics are specified
-  - pull page + next_cursor atomicity is normative
-  - non-destructive mutation-journal migration is normative
-  - network pairing/auth/server identity is specified
-  - media hash/resume semantics are specified or explicitly deferred with restart-only behavior
+  - Android canonical projection/cursor store transactionally commits page data + next_cursor using opaque wire revisions; the existing mutation journal remains the durable intent path
+  - existing durable mutation journal is wired into the production sync provider and its migration/replay invariants remain covered by process-death tests
+  - Android gates offline UI strictly from live hello mutation capabilities
+  - Sample Lib exposes advisory intelligence through a durable pull/cache contract before offline candidate review is called end-to-end
+  - playlist offline writes remain disabled until a revisioned receipt-backed ordered-collection mutation family exists
+  - 100k-entity cursor/snapshot/incremental reset behavior is load-qualified
+  - credential revocation/rotation/expiry and authenticated non-loopback transport policy are operationally defined
 ```
 
 This protocol is intentionally conservative. It does not require CRDTs, a cloud service, permanent sockets, database replication, or exactly-once transport. It does require the server and phone to preserve the few durable identities that make ambiguous mobile execution recoverable: **server identity, cursor, canonical entity identity/revision, mutation identity/body, authoritative receipt, and media content hash**.

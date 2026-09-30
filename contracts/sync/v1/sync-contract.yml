@@ -16,11 +16,11 @@ principles:
   - conflicts_are_explicit
   - websocket_is_wakeup_hint_only
   - intelligence_is_advisory_until_normal_mutation_receipt
-  - playlists_remain_read_only_until_canonical_playlist_identity_exists
+  - playlist_reads_use_canonical_identity_and_writes_require_explicit_revision_checked_operation_families
 
 versioning:
   protocol_versions: ["1"]
-  repair_policy: repair_unshipped_v1_in_place
+  repair_policy: additive_or_capability_gated_v1_in_place_incompatible_changes_require_new_version
   negotiation: highest_mutually_supported_version
   no_overlap: http_426_with_hello_incompatible_body
   rule: clients_must_not_silently_downgrade_or_guess
@@ -38,6 +38,7 @@ authority:
     concurrency_authority: false
 
 endpoints:
+  pair: POST /v1/sync/pair
   hello: POST /v1/sync/hello
   pull: POST /v1/sync/pull
   push: POST /v1/sync/push
@@ -53,11 +54,22 @@ capability_negotiation:
     - tag.ensure_attach
     - tag.detach
     - analysis.suggestion.accept
-  playlists: unsupported_until_canonical_playlist_migration
+  playlists: canonical_v1
   analysis: [suggestions.read]
   media: [resource_uri, content_hash, range]
 
 client:
+  pairing:
+    request_type: pairing_request
+    response_type: pairing_accepted
+    request_fields: [client_id, installation_id, pairing_code]
+    response_fields: [server_id, principal_id, installation_id, access_token, scopes]
+    rules:
+      - explicit_operator_pairing_required
+      - pairing_code_is_bootstrap_secret_not_session_credential
+      - principal_is_server_derived_from_paired_client_and_installation
+      - client_generated_installation_id_is_bound_into_credential_and_not_retrusted_from_later_request_json
+      - access_token_is_used_for_hello_pull_push_receipt_and_media
   hello:
     request_type: hello_request
     response_types: [hello_accepted, hello_incompatible]

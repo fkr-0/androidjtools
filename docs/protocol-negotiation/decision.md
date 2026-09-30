@@ -1,10 +1,31 @@
 # Android DJ Tools sync protocol — synthesis decision
 
-Canonical OCP task: `ANDROIDJTOOLS-PROTOCOL-SYNTHESIS-20260915`
+Canonical OCP task: `ANDROIDJTOOLS-PROTOCOL-CONVERGENCE-20260927`
 
-Status: **decision implemented in the unshipped v1 contract and executable fake server**.
+Lineage: revalidates and compatibly supersedes the independently reviewed `ANDROIDJTOOLS-PROTOCOL-SYNTHESIS-20260915` decision; the earlier review remains historical evidence for the unchanged v1 invariants.
 
-This decision reconciles the Android/offline-first, Sample Lib authority, and Sample Lab/Intelligence/Overtone proposals against the current repository contracts. It does not average the proposals. Where they disagree with the existing draft, the current draft is repaired in place before it becomes a compatibility promise.
+Status: **decision revalidated on 2026-09-28 against all three substantive proposals and current Android/Sample Lib/Sample Lab/Oversampler code; protocol v1 is already implemented in the production Sample Lib adapter and must now evolve compatibly**.
+
+This decision reconciles the Android/offline-first, Sample Lib authority, and Sample Lab/Intelligence/Overtone proposals against the current repository contracts. It does not average the proposals. Where a proposal is stale relative to implemented code, current code wins; where current Sample Lib lacks the required durable semantics, the contract remains an explicit implementation requirement rather than a fabricated capability.
+
+The 2026-09-27 falsification changed one material wire detail and two migration conclusions. Android already implements opaque revisions, durable mutation replay, conflict classes, pairing/TLS guards, receipt recovery, and range/hash media handling; its production transport already calls `POST /v1/sync/pair` while the machine schema/fake omitted that endpoint. Sample Lib also already ships a narrow `android_sync` facade with pairing, signed mobile credentials, authority generation, signed opaque cursors, principal-scoped receipts, canonical playlist/playlist-item reads, and `interval.editor_state.replace`. This synthesis therefore makes pairing machine-checkable, records the observed server baseline, and replaces the obsolete "build the facade" successor with a convergence tranche for the remaining scale/capability gaps.
+
+### 2026-09-28 falsification delta
+
+All three fresh proposal artifacts are substantive and were independently checked against the current repositories rather than treated as votes. The recheck found no evidence supporting a v2 fork or an incompatible v1 rewrite. It did bound four live Sample Lib conformance gaps that the protocol must not disguise as capabilities:
+
+1. production hello still advertises only `interval.editor_state.replace` for sync writes and advertises no analysis sync capability;
+2. signed pull cursors currently carry entity-revision state maps, so cursor size/signing/JSON work grows O(N) with synced entity cardinality;
+3. hello advertises a 31,536,000-second mutation replay horizon, while current receipt lookup/storage does not age-enforce that horizon;
+4. pairing credentials are cryptographically bound to server/client/installation/scopes, but the current token claims contain no expiry and the protocol has no implemented rotation/revocation lifecycle.
+
+These are implementation/conformance gaps, not permission to weaken durable pull, receipt authority, explicit conflict handling, or capability honesty. The machine contract records them as observed facts so future tests cannot accidentally promote aspirational operation families into the live baseline.
+
+### 2026-09-28 execution evidence
+
+The synthesis lane directly revalidated the current Android client/journal, Sample Lib sync facade, and Oversampler Sample Lab adapter. With third-party pytest plugin autoload disabled to avoid an unrelated host `libtmux`/pytest incompatibility, the executable sync schema/fake suite passes **32 tests plus 28 subtests**. The production Sample Lib Android-sync API suite passes **8 tests** (one Starlette/AnyIO deprecation warning only). Android's focused remote-Sample-Lib, sync-journal, and conflict JVM tests pass under JDK 17, and Oversampler's Sample Lab adapter/convergence suites pass **16 tests / 99 assertions**. Android's current client capability-gates mutation families, preserves mutation identity across ambiguous-delivery recovery, pins server identity/generation, and verifies media integrity; the durable journal stores opaque revisions, immutable canonical request bodies, and authoritative receipts. Oversampler's current adapter marks ambiguous mutations `outcome=:unknown`, performs readback reconciliation, and explicitly does not retry the mutation itself, which is evidence against treating generic Sample Lab mutation routes as implicitly idempotent.
+
+The Android JVM gate emits only the existing Android Gradle Plugin warning that AGP 8.5.2 was tested through compileSdk 34 while this project uses compileSdk 35; it still completes successfully. The initial Sample Lib pytest invocation also required the repository package path (`PYTHONPATH=third_party/sample-lib/src`). Neither environment detail changes the wire decision, and no additional protocol change follows from this revalidation.
 
 ## 1. Authority and protocol boundary
 
@@ -13,6 +34,7 @@ Sample Lib is the sole canonical authority for sync-visible library metadata. An
 The cloudless v1 facade is deliberately narrow:
 
 ```text
+POST /v1/sync/pair                  # explicit operator bootstrap; unauthenticated only for pairing
 POST /v1/sync/hello
 POST /v1/sync/pull
 POST /v1/sync/push
@@ -25,9 +47,9 @@ Existing generic Sample Lib REST endpoints are not retroactively declared offlin
 
 ## 2. Versioning decision
 
-Keep protocol version `1`; repair it now rather than publish the known-wrong integer-revision draft and immediately introduce v2. No production client/server compatibility commitment exists yet for the draft.
+Keep protocol version `1` for the already-implemented compatible wire shapes. The 2026-09-27 inspection found production `sample_lib.android_sync` and Android transport code already speaking v1, so the older rationale that v1 was wholly unshipped is superseded. From this point, v1 changes must be additive or capability-gated; an incompatible envelope/revision/cursor semantic change requires a new negotiated version rather than silent in-place breakage. Adding the missing pairing schema is alignment with an existing v1 endpoint, not a new incompatible behavior.
 
-Hello selects the highest mutually supported version. No overlap returns HTTP 426 with `hello_incompatible`; silent downgrade is forbidden.
+Hello selects the highest mutually supported version. No overlap returns HTTP 426 with `hello_incompatible`; silent downgrade is forbidden. Optional operation families are advertised by hello and clients must obey the live subset rather than assuming every operation described by the protocol vocabulary is implemented.
 
 An accepted hello identifies both `server_id` and an opaque `authority_generation`. A generation change means the authority database/projection generation changed enough that old cursors cannot be trusted. Android must bootstrap rather than interpret the mismatch as an empty delta.
 
@@ -60,7 +82,7 @@ Hello advertises read and mutation capability by entity/operation family. The v1
 - `tag.ensure_attach` and `tag.detach` — only after journal/tombstone emission exists;
 - `analysis.suggestion.accept` — normal canonical mutation with bounded suggestion provenance.
 
-Playlist mutation is explicitly `unsupported_until_canonical_playlist_migration`. Sample Lib currently has crate/tag interoperability, not stable ordered playlist identity. Android must not advertise offline playlist writes on that basis.
+Playlist reads are `canonical_v1`: current Sample Lib exposes stable canonical playlist and playlist-item identities. That does **not** imply write support. Android must not advertise offline playlist reorder/edit until Sample Lib exposes an explicit revision-checked ordered mutation family.
 
 Each mutation contains stable `mutation_id`, target entity, opaque `base_revision` (or null only where an operation explicitly defines create semantics), operation family, bounded payload, diagnostic `created_at`, and provenance. Operation identity is not decorative: v1 binds each advertised operation to allowed entity families and a base-revision policy, and both the wire schema and runtime reject mismatches before any write:
 
@@ -106,11 +128,13 @@ Conflict DTOs carry opaque base/current revisions, stable code, merge class, and
 
 ## 7. Change journal, tombstones and retention
 
-A real Sample Lib implementation needs a change/outbox journal and durable mutation receipt ledger. Canonical write + change record + receipt must commit crash-atomically; canonical delete + tombstone must commit crash-atomically. All sync-visible write origins (local UI, imports, batch operations, Android) must emit through the same mechanism.
+Sample Lib still needs a durable change/outbox journal; its production sync adapter already persists authoritative mutation receipts in the existing operation-event ledger. Canonical write + change record + receipt must remain crash-atomic as mutation coverage broadens, and canonical delete + tombstone must commit crash-atomically. All sync-visible write origins (local UI, imports, batch operations, Android) must emit through the same convergence mechanism.
 
 The convergence feed may be compacted, but every non-expired cursor must still converge. Hello advertises effective horizons. Initial policy defaults in the contract are 90 days for cursor/tombstone retention and 365 days for mutation receipt replay; these are negotiated policy values, not protocol constants.
 
 When retention or a configured cap invalidates a cursor, the server returns `cursor_expired`. It never silently forgets a still-advertised replay guarantee.
+
+Current-production conformance note (revalidated 2026-09-28): `sample_lib.android_sync` advertises `mutation_replay_horizon_seconds = 31_536_000`, but its receipt storage/lookup path does not currently age-enforce that horizon. This is an implementation gap under the existing v1 guarantee, not a reason to change the wire contract. The server must either enforce the advertised replay horizon (including deterministic expiry semantics) or advertise the effective horizon it actually guarantees; retaining receipts longer is harmless, but silently retaining or expiring them on semantics inconsistent with hello is not.
 
 ## 8. Pairing, authentication and trust
 
@@ -119,7 +143,7 @@ Phone access requires an authentication boundary before the real adapter is enab
 Minimum v1 requirements:
 
 1. pairing is an explicit operator action;
-2. a credential binds a server-derived principal and installation rather than trusting request JSON;
+2. the client supplies a stable installation ID during explicit pairing; the server derives the principal from the paired client/installation identity and cryptographically binds both identities into the credential, so later request JSON cannot impersonate another installation;
 3. non-loopback access uses authenticated TLS or an equivalently authenticated private transport;
 4. authorization scopes include at least `sync.read`, `sync.write`, `media.read`, `analysis.read`, with `analysis.request` separate when job launch is allowed;
 5. every mutation target is re-authorized server-side;
@@ -127,7 +151,7 @@ Minimum v1 requirements:
 7. credentials never appear in cursors, resource identity, mutation provenance, logs, WebSocket messages or diagnostic exports;
 8. revocation blocks future send/read but does not silently delete the Android mutation journal.
 
-Exact credential issuance and local TLS bootstrap remain implementation choices; see bounded ambiguity below.
+Current production pairing already derives a principal from client/installation identity, signs a server-bound scoped bearer credential, and checks those identities on hello. The current credential claims have no expiry field, and no rotation/revocation protocol was found in the inspected sync façade. Exact credential expiry, rotation/revocation storage and local TLS bootstrap therefore remain implementation choices; see bounded ambiguity below.
 
 ## 9. Media and offline cache
 
@@ -204,7 +228,7 @@ The executable fake now models the decisions rather than the older assumptions:
 - all protocol responses validated against the JSON Schema;
 - machine assertions for mediated request idempotency, no conflict auto-rebase, and receipt-before-applied requester reply.
 
-This fake remains a deterministic contract test double, not proof that Sample Lib has implemented persistence/auth/journal semantics yet.
+This fake remains a deterministic contract test double. It does not prove the remaining Sample Lib change-journal scaling, retention enforcement, broader mutation-family, advisory-sync, or optional wake-stream semantics; current production pairing/auth and receipt persistence are verified separately from Sample Lib code.
 
 ## 13. Migration path
 
@@ -217,19 +241,22 @@ This fake remains a deterministic contract test double, not proof that Sample Li
 - add generation/cursor-expiry/tombstone/receipt recovery semantics;
 - make intelligence/mediation lifecycle machine-checkable.
 
-### B. Android Kotlin model follow-up
+### B. Android client convergence — already implemented and reverified
 
-The current fixture-era Kotlin domain still uses numeric fields such as `PendingMutation.baseRevision`, `MutationReceipt.authoritativeRevision` and `AnalysisSuggestion.inputRevision`. This synthesis packet is not allowed to edit `app/**`. The Android implementation owner must migrate these to an opaque revision value type before the real sync adapter is implemented and add persistence migration tests so unresolved user intent is never destructively reset.
+The current Android code has moved beyond the older fixture-era assumptions. `OpaqueRevision` is a non-empty string value type; `DurableMutationJournal` persists immutable canonical mutation bodies before delivery, recovers `APPLYING` to replayable `PENDING` after process death, and records authoritative receipts durably; `ProtocolOperationPolicy` enforces operation/entity/base-revision rules; `ConflictResolver` only auto-merges explicitly authorized disjoint safe fields; `SampleLibHttpTransport` implements `/v1/sync/pair`, bearer-authenticated hello/pull/push/receipt/media calls, rejects insecure non-loopback HTTP, constrains media fetches to the paired origin, and supports Range/If-Range resume. These are evidence, not future requirements.
 
-### C. Sample Lib persistence/auth implementation
+The remaining Android work is ordinary hardening/integration only: preserve the durable journal and projection across future storage migrations, keep background replay bounded by platform scheduling constraints, and do not weaken the protocol invariants while UI/provider work evolves.
 
-- add authority generation;
-- add sync change/tombstone journal and durable principal-scoped receipt ledger;
-- implement coherent snapshot + opaque incremental cursor;
-- wrap `interval.editor_state.replace` first, reusing existing transaction semantics;
-- add authenticated pairing/device principal and authorized media resolution;
-- make every sync-visible local mutation source emit the same journal transaction;
-- implement retention/compaction and explicit cursor/replay expiry.
+### C. Sample Lib sync-v1 convergence — canonical successor tranche
+
+The production `sample_lib.android_sync` adapter already implements pairing/device principals, authority generation, signed opaque cursors, principal-scoped durable receipts, canonical playlist reads, media capability advertisement, and `interval.editor_state.replace`. The remaining server tranche is therefore convergence, not greenfield facade work:
+
+- replace the current O(N) revision-map-in-cursor strategy with a scalable durable change/tombstone journal or equivalent cursor state while preserving opaque cursor semantics and coherent snapshots;
+- keep the existing receipt ledger/idempotency behavior authoritative and crash-safe as mutation families broaden, and make the advertised mutation replay horizon true in storage/lookup semantics (or advertise the effective guaranteed horizon instead of an unenforced policy value);
+- wrap only evidence-backed additional mutation families (`asset.metadata.patch`, tag attach/detach, then advisory acceptance) and advertise each only when actually implemented;
+- project advisory analysis candidates into sync only after a durable sanitized Sample Lib representation exists; current production hello correctly advertises no analysis capability;
+- retain canonical playlist and playlist-item reads, but do not advertise offline reorder/write until a revision-checked ordered mutation family exists;
+- implement optional WebSocket wake hints only as an optimization after durable pull remains sufficient for convergence.
 
 ### D. Narrow additional writes
 
@@ -241,7 +268,7 @@ Add stable playlist and playlist-item identities, aggregate revision and transac
 
 ## 14. Rejected alternatives
 
-- **Ship numeric revision v1, fix in v2:** rejected; the draft is unshipped and contradicts a real Sample Lib opaque revision transaction already in use.
+- **Reintroduce numeric entity revisions or silently reinterpret v1 revisions:** rejected; deployed Android/Sample Lib v1 already uses opaque revision tokens, and changing that meaning in place would break an implemented compatibility boundary.
 - **Generic CRUD mutation envelope:** rejected; current Sample Lib routes do not share uniform idempotency/concurrency semantics.
 - **WebSocket replication as authority:** rejected; Android cannot guarantee continuous socket consumption. WS is only a wake hint followed by durable pull.
 - **Timestamp last-write-wins:** rejected; device clocks are not concurrency authority and would lose structural edits/order.
@@ -260,21 +287,31 @@ The protocol shape is now bounded enough for implementation. These details remai
 2. exact SQLite schema/compaction strategy for Sample Lib change and receipt ledgers, provided crash-atomic invariants hold;
 3. exact opaque cursor encoding/signing and coherent snapshot implementation;
 4. exact signed/authorized resource-fetch URL mechanism and Range/validator implementation;
-5. canonical playlist schema/order operation model and DJXML migration, which gates playlist writes;
-6. exact Kotlin opaque-revision wrapper and Room/local-journal schema migration;
+5. canonical playlist ordering/write operation model and DJXML interoperability rules, which gate playlist writes but not canonical reads;
+6. exact future Room/local-journal migration mechanics when the durable Android sync store evolves; the current Kotlin opaque-revision wrapper already exists and is not an open protocol question;
 7. future ASR provider implementation; semantic contract exists, provider availability is not asserted;
 8. whether receipt lookup remains mandatory in production — exact push replay is correctness-sufficient, but lookup is retained as recommended recovery/support surface.
 
 None of these ambiguities justifies returning to integer revisions, generic CRUD, unauthenticated phone access, WebSocket authority, or model-specific Android coupling.
 
-## 16. Acceptance decision
+## 16. Proposal dispositions and bounded successor
+
+The three proposals are not treated as votes:
+
+- **Android/offline-first proposal:** accepted where it demands durable journal-before-send, idempotent replay, opaque cursors, process-death recovery, bounded WorkManager-friendly batches, explicit conflicts, resumable hash-verified media, and semantic advisory intelligence. Claims that these Android primitives are still only hypothetical are superseded by current implementation evidence.
+- **Sample Lib authority proposal:** accepted on canonical ownership, operation-family writes, opaque revisions, receipt authority, principal-scoped auth and canonical playlists. Falsification found the production `android_sync` facade already implements much of this boundary; the remaining issue is convergence/scaling and capability breadth, not facade existence. Its current signed cursor embeds revision maps and its hello advertises only `interval.editor_state.replace`, canonical playlist reads, no analysis capability, and no implemented WebSocket event stream. The proposal's later revalidation also correctly identified that the advertised 365-day mutation replay horizon is not age-enforced by current receipt storage/lookup; that gap is folded into the same Sample Lib convergence tranche rather than creating a second protocol successor.
+- **Sample Lab/Overtone proposal:** accepted on provider-neutral advisory DTOs and mediated request/confirmation/reply semantics. Overtone runtime application remains separate from canonical commit; no direct mobile/browser performance-control channel becomes durable library authority.
+
+Exactly one concrete successor is warranted: **converge the existing Sample Lib sync-v1 production adapter** by replacing O(N) cursor state with scalable durable change/tombstone tracking, making advertised retention/replay horizons match enforceable storage semantics, and then adding only negotiated, revision-checked operation/advisory capabilities that have real persistence semantics. No parallel Android protocol rewrite, replacement facade, or legacy prolong task is justified.
+
+## 17. Acceptance decision
 
 The synthesis decision is ready for independent protocol review when:
 
 - JSON Schema validates;
 - the fake drives every declared state;
-- opaque revisions, cursor expiry, tombstones, idempotent receipts, receipt lookup, operation-family capability and playlist withholding tests pass;
+- pairing, opaque revisions, cursor expiry, tombstones, idempotent receipts, receipt lookup, operation-family capability and canonical-read/write-withholding playlist tests pass;
 - intelligence mediation assertions pass;
 - scoped diff contains only the synthesis packet's allowed contracts, decision and fake-server paths.
 
-Wave Three may treat EPIC-10's **old** 13/13 integer-revision checkpoint as superseded evidence. The gate should clear only after this repaired synthesis contract is independently reviewed and the existing EPIC-10 lifecycle is reconciled against it; implementation of Sample Lib persistence/auth remains a separate real backend tranche.
+Wave Three may treat EPIC-10's **old** 13/13 integer-revision checkpoint as superseded evidence. The gate should clear only after this repaired synthesis contract is independently reviewed and the existing EPIC-10 lifecycle is reconciled against it; the remaining real backend tranche is Sample Lib cursor/change-journal scalability plus capability-by-capability mutation/advisory convergence, not greenfield auth/facade work.
