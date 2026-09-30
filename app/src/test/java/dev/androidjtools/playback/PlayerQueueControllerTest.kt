@@ -35,6 +35,22 @@ class PlayerQueueControllerTest {
     }
 
     @Test
+    fun playNextRepositionsExistingOrNewTrackImmediatelyAfterCurrent() {
+        val controller = PlayerQueueController(FakePlaybackProvider(), InMemoryQueueStateStore())
+        controller.add("a")
+        controller.add("b")
+        controller.add("c")
+        controller.playNow("a")
+
+        controller.playNext("c")
+        assertEquals(listOf("a", "c", "b"), controller.queue.value)
+
+        controller.playNext("d")
+        assertEquals(listOf("a", "d", "c", "b"), controller.queue.value)
+        assertEquals("a", controller.currentTrackId.value)
+    }
+
+    @Test
     fun transportUsesQueueAndPersistsPosition() {
         val playback = FakePlaybackProvider()
         val store = InMemoryQueueStateStore()
@@ -69,6 +85,7 @@ class PlayerQueueControllerTest {
         controller.add("b")
         controller.playNow("a")
         assertEquals(null, playback.currentTrackId.value)
+        assertEquals("a", controller.currentTrackId.value)
         assertEquals(QueueSnapshot(listOf("a", "b"), "a", 0L, true), store.load())
 
         controller.seek(12_345)
@@ -81,6 +98,7 @@ class PlayerQueueControllerTest {
 
         controller.next()
         assertEquals(QueueSnapshot(listOf("a", "b"), "b", 0L, true), store.load())
+        assertEquals("b", controller.currentTrackId.value)
         assertEquals("b", playback.actualTrackId)
         assertTrue(playback.actualPlaying)
     }
@@ -101,6 +119,7 @@ class PlayerQueueControllerTest {
 
         assertEquals(null, playback.currentTrackId.value)
         assertFalse(playback.isPlaying.value)
+        assertEquals("b", restored.currentTrackId.value)
         assertEquals("b", playback.actualTrackId)
         assertEquals(42_000L, playback.actualPositionMs)
         assertFalse(playback.actualPlaying)

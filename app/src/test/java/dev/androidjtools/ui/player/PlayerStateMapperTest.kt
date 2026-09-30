@@ -5,6 +5,8 @@ import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.core.model.Track
 import dev.androidjtools.core.model.TrackDownloadState
 import dev.androidjtools.core.provider.ProviderUiState
+import dev.androidjtools.playback.PlaybackIssue
+import dev.androidjtools.playback.PlaybackIssueKind
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -39,6 +41,37 @@ class PlayerStateMapperTest {
         assertEquals(PlayerSurfaceState.READY, state.surface)
         assertEquals(true, state.isPlaying)
         assertEquals(listOf("Harsh transient"), state.warningMessages)
+    }
+
+    @Test
+    fun audioFocusIsAdvisoryWhilePlaybackFailureIsExplicitError() {
+        val focus = PlayerStateMapper.map(
+            providerState = ProviderUiState.Ready,
+            track = onlineTrack,
+            isPlaying = false,
+            positionMs = 12_000,
+            queueTrackIds = listOf("a"),
+            syncState = SyncState.ONLINE_IDLE,
+            downloadState = null,
+            warningMessages = emptyList(),
+            playbackIssue = PlaybackIssue(PlaybackIssueKind.AUDIO_FOCUS, "Another app has audio focus"),
+        )
+        assertEquals(PlayerSurfaceState.READY, focus.surface)
+        assertEquals(listOf("Another app has audio focus"), focus.warningMessages)
+
+        val failed = PlayerStateMapper.map(
+            providerState = ProviderUiState.Ready,
+            track = onlineTrack,
+            isPlaying = false,
+            positionMs = 12_000,
+            queueTrackIds = listOf("a"),
+            syncState = SyncState.ONLINE_IDLE,
+            downloadState = null,
+            warningMessages = emptyList(),
+            playbackIssue = PlaybackIssue(PlaybackIssueKind.PLAYBACK_ERROR, "Decoder failed"),
+        )
+        assertEquals(PlayerSurfaceState.ERROR, failed.surface)
+        assertEquals("Decoder failed", failed.errorMessage)
     }
 
     private fun map(

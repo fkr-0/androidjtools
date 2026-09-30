@@ -17,6 +17,8 @@ class PlayerQueueController(
 
     private val mutableQueue = MutableStateFlow<List<String>>(emptyList())
     val queue: StateFlow<List<String>> = mutableQueue.asStateFlow()
+    private val mutableCurrentTrackId = MutableStateFlow(playback.currentTrackId.value)
+    val currentTrackId: StateFlow<String?> = mutableCurrentTrackId.asStateFlow()
 
     private var transportIntent = TransportIntent(
         currentTrackId = playback.currentTrackId.value,
@@ -39,6 +41,7 @@ class PlayerQueueController(
         if (trackId !in mutableQueue.value) mutableQueue.value = mutableQueue.value + trackId
         playback.play(trackId)
         transportIntent = TransportIntent(trackId, positionMs = 0L, playWhenReady = true)
+        mutableCurrentTrackId.value = trackId
         persist()
     }
 
@@ -72,9 +75,11 @@ class PlayerQueueController(
             val replacement = nextQueue[oldIndex.coerceAtMost(nextQueue.lastIndex)]
             playback.play(replacement)
             transportIntent = TransportIntent(replacement, positionMs = 0L, playWhenReady = true)
+            mutableCurrentTrackId.value = replacement
         } else if (wasCurrent) {
             if (transportIntent.playWhenReady) playback.toggle()
             transportIntent = TransportIntent(currentTrackId = null, positionMs = 0L, playWhenReady = false)
+            mutableCurrentTrackId.value = null
         }
         persist()
     }
@@ -92,6 +97,7 @@ class PlayerQueueController(
             val first = mutableQueue.value.firstOrNull() ?: return
             playback.play(first)
             transportIntent = TransportIntent(first, positionMs = 0L, playWhenReady = true)
+            mutableCurrentTrackId.value = first
         } else {
             playback.toggle()
             transportIntent = transportIntent.copy(
@@ -135,6 +141,7 @@ class PlayerQueueController(
         if (targetId != transportIntent.currentTrackId) {
             playback.play(targetId)
             transportIntent = TransportIntent(targetId, positionMs = 0L, playWhenReady = true)
+            mutableCurrentTrackId.value = targetId
         }
         persist()
     }
@@ -147,6 +154,7 @@ class PlayerQueueController(
             positionMs = snapshot.positionMs,
             playWhenReady = snapshot.playWhenReady,
         )
+        mutableCurrentTrackId.value = transportIntent.currentTrackId
         val current = transportIntent.currentTrackId ?: return
         playback.play(current)
         playback.seek(transportIntent.positionMs)

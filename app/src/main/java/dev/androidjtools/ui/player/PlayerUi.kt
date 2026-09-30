@@ -47,6 +47,9 @@ import dev.androidjtools.core.model.TrackDownloadState
 import dev.androidjtools.core.provider.AppProviders
 import dev.androidjtools.core.provider.ProviderUiState
 import dev.androidjtools.playback.PlayerQueueController
+import dev.androidjtools.playback.PlaybackDiagnostics
+import dev.androidjtools.playback.PlaybackIssue
+import dev.androidjtools.playback.PlaybackIssueKind
 
 enum class PlayerSurfaceState {
     EMPTY,
@@ -78,11 +81,14 @@ object PlayerStateMapper {
         syncState: SyncState,
         downloadState: TrackDownloadState?,
         warningMessages: List<String>,
+        playbackIssue: PlaybackIssue? = null,
     ): PlayerUiState {
         val surface = when {
             providerState is ProviderUiState.Error -> PlayerSurfaceState.ERROR
             providerState == ProviderUiState.Loading && track == null -> PlayerSurfaceState.LOADING
             track == null -> PlayerSurfaceState.EMPTY
+            playbackIssue?.kind == PlaybackIssueKind.UNAVAILABLE_MEDIA -> PlayerSurfaceState.UNAVAILABLE
+            playbackIssue?.kind == PlaybackIssueKind.PLAYBACK_ERROR -> PlayerSurfaceState.ERROR
             syncState == SyncState.OFFLINE && !track.offlineAvailable -> PlayerSurfaceState.UNAVAILABLE
             downloadState?.status == DownloadStatus.FAILED -> PlayerSurfaceState.ERROR
             else -> PlayerSurfaceState.READY
@@ -95,9 +101,14 @@ object PlayerStateMapper {
             queueTrackIds = queueTrackIds,
             syncState = syncState,
             downloadState = downloadState,
-            warningMessages = warningMessages,
+            warningMessages = warningMessages + listOfNotNull(
+                playbackIssue
+                    ?.takeIf { it.kind == PlaybackIssueKind.AUDIO_FOCUS }
+                    ?.message,
+            ),
             errorMessage = when {
                 providerState is ProviderUiState.Error -> providerState.message
+                playbackIssue?.kind == PlaybackIssueKind.PLAYBACK_ERROR -> playbackIssue.message
                 downloadState?.status == DownloadStatus.FAILED -> downloadState.error ?: "Media download failed"
                 else -> null
             },
@@ -115,16 +126,24 @@ fun PlayerHost(
     onJumpToPrep: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val currentTrackId by providers.playback.currentTrackId.collectAsState()
+    val providerTrackId by providers.playback.currentTrackId.collectAsState()
+    val intendedTrackId by controller.currentTrackId.collectAsState()
     val isPlaying by providers.playback.isPlaying.collectAsState()
     val positionMs by providers.playback.positionMs.collectAsState()
     val tracks by providers.library.tracks.collectAsState()
     val queue by controller.queue.collectAsState()
     val providerState by providers.runtime.uiState.collectAsState()
     val syncState by providers.sync.state.collectAsState()
-    val track = tracks.firstOrNull { it.id == currentTrackId }
+    val track = tracks.firstOrNull { it.id == (intendedTrackId ?: providerTrackId) }
     val downloadState = track?.let { providers.downloads.state(it.id).collectAsState().value }
     val suggestions = track?.let { providers.analysis.suggestions(it.id).collectAsState().value }.orEmpty()
+    val diagnostics = providers.playback as? PlaybackDiagnostics
+    val playbackIssue = if (diagnostics != null) {
+        val issue by diagnostics.issue.collectAsState()
+        issue
+    } else {
+        null
+    }
     val warnings = suggestions.mapNotNull { suggestion ->
         (suggestion.payload as? SuggestionPayload.Warning)?.message
     }
@@ -137,6 +156,7 @@ fun PlayerHost(
         syncState = syncState,
         downloadState = downloadState,
         warningMessages = warnings,
+        playbackIssue = playbackIssue,
     )
     if (expanded) {
         FullPlayer(

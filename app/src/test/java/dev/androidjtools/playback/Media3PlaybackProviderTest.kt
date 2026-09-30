@@ -33,6 +33,7 @@ class Media3PlaybackProviderTest {
         assertNull(engine.loadedMediaId)
         assertNull(provider.currentTrackId.value)
         assertFalse(provider.isPlaying.value)
+        assertEquals(PlaybackIssueKind.UNAVAILABLE_MEDIA, provider.issue.value?.kind)
     }
 
     @Test
@@ -57,6 +58,22 @@ class Media3PlaybackProviderTest {
         assertTrue(engine.released)
     }
 
+    @Test
+    fun engineErrorsAndAudioFocusSuppressionAreObservableWithoutChangingProviderContract() {
+        val engine = FakePlaybackEngine()
+        val provider = Media3PlaybackProvider(mediaUriResolver = { "content://media/item" }, engine = engine)
+        provider.play("device-media:7")
+
+        engine.issue = PlaybackIssue(PlaybackIssueKind.AUDIO_FOCUS, "focus lost")
+        engine.emit()
+        assertEquals(PlaybackIssueKind.AUDIO_FOCUS, provider.issue.value?.kind)
+
+        engine.issue = PlaybackIssue(PlaybackIssueKind.PLAYBACK_ERROR, "decoder failed")
+        engine.emit()
+        assertEquals("decoder failed", provider.issue.value?.message)
+        assertFalse(provider.isPlaying.value)
+    }
+
     private class FakePlaybackEngine : PlaybackEngine {
         private var listener: (PlaybackEngineState) -> Unit = {}
         var loadedMediaId: String? = null
@@ -64,6 +81,7 @@ class Media3PlaybackProviderTest {
         var playing = false
         var positionMs = 0L
         var released = false
+        var issue: PlaybackIssue? = null
 
         override fun setStateListener(listener: (PlaybackEngineState) -> Unit) {
             this.listener = listener
@@ -96,8 +114,9 @@ class Media3PlaybackProviderTest {
             released = true
         }
 
-        private fun emit() {
-            listener(PlaybackEngineState(loadedMediaId, playing, positionMs))
+        fun emit() {
+            if (issue?.kind == PlaybackIssueKind.PLAYBACK_ERROR) playing = false
+            listener(PlaybackEngineState(loadedMediaId, playing, positionMs, issue))
         }
     }
 }
