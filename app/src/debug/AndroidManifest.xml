@@ -6,6 +6,6 @@
         tools:replace="android:label">
         <activity
             android:name=".debug.DebugHarnessActivity"
-            android:exported="false" />
+            android:exported="true" />
     </application>
 </manifest>

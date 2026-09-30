@@ -1,6 +1,14 @@
 # EPIC-16 debug harness
 
-The Android DJ Tools debug build has a dedicated dogfood launcher that is compiled only from `app/src/debug/**`. It wraps the normal backend-neutral `AndroidDjToolsApp` with deterministic diagnostics and state injection; release builds continue to use the production launcher and contain none of the debug activity, debug contract asset, or controls.
+The Android DJ Tools debug build has a dedicated dogfood activity compiled only from `app/src/debug/**`. The normal app remains the sole launcher; the debug activity wraps the backend-neutral `AndroidDjToolsApp` with deterministic diagnostics and state injection. Release builds contain none of the debug activity, debug contract asset, or controls.
+
+## Launching the dogfood harness
+
+Install the debug APK, then explicitly start the debug-only activity:
+
+    adb shell am start -n dev.androidjtools.debug/dev.androidjtools.debug.DebugHarnessActivity
+
+It is intentionally not a launcher activity, so normal debug-app launches still exercise the real production shell. The activity is exported only in the debug source set so the adb component command can reach it; the release APK has no such component.
 
 ## Controls
 
@@ -27,6 +35,6 @@ From the repository root, after both variants build:
     ./gradlew :app:assembleDebug :app:assembleRelease
     python app/src/debug/verify_debug_harness.py \
       --debug-apk app/build/outputs/apk/debug/app-debug.apk \
-      --release-apk app/build/outputs/apk/release/app-release-unsigned.apk
+      --release-apk app/build/outputs/apk/release/app-release.apk
 
-The verifier checks that the JSON matrix exactly covers the production sync enum and all debug selectors, that deterministic/failure hooks remain present, and that the debug launcher class plus contract asset exist in the debug APK but not the release APK.
+The verifier checks that the JSON matrix exactly covers the production sync enum and all debug selectors, that deterministic/failure hooks remain present, that both variants retain the real launcher, and that the debug activity/classes/contract asset exist only in the debug APK. It also requires the release APK to be non-debuggable.

@@ -8,6 +8,7 @@ import json
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
@@ -16,6 +17,9 @@ CONTRACT = ROOT / "app/src/debug/assets/debug-harness-contract.json"
 DOMAIN = ROOT / "app/src/main/java/dev/androidjtools/core/model/Domain.kt"
 PROVIDERS = ROOT / "app/src/debug/java/dev/androidjtools/debug/DebugHarnessProviders.kt"
 DEBUG_MANIFEST = ROOT / "app/src/debug/AndroidManifest.xml"
+MAIN_ACTIVITY = "dev.androidjtools.shell.AndroidDjToolsActivity"
+DEBUG_HARNESS_ACTIVITY = "dev.androidjtools.debug.DebugHarnessActivity"
+ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
 
 
 def enum_values(source: str, enum_name: str) -> list[str]:
@@ -69,10 +73,25 @@ def check_matrix() -> None:
     assert "ReceiptOutcome.CONFLICT" in providers
 
     manifest = DEBUG_MANIFEST.read_text()
-    assert ".debug.DebugHarnessActivity" in manifest
-    assert "tools:node=\"remove\"" in manifest
+    assert ".debug.DebugHarnessActivity" in manifest, "debug harness activity missing from debug source-set manifest"
+    assert "android:exported=\"true\"" in manifest, "debug harness must be explicitly launchable for dogfood use"
+    assert "tools:replace=\"android:label\"" in manifest, "debug manifest should only replace the app label"
+    assert "tools:node=\"remove\"" not in manifest, "debug source set must not remove the production launcher"
     print("PASS matrix: debug contract exactly covers production SyncState and declared selectors")
     print("PASS determinism: fixed seed, fixed timestamps, fixed large-library cardinality, explicit failure injection")
+
+
+def launcher_activities(manifest_xml: str) -> list[str]:
+    root = ET.fromstring(manifest_xml)
+    launchers: list[str] = []
+    for activity in root.findall("./application/activity"):
+        name = activity.get(ANDROID_NS + "name")
+        for intent_filter in activity.findall("intent-filter"):
+            actions = {item.get(ANDROID_NS + "name") for item in intent_filter.findall("action")}
+            categories = {item.get(ANDROID_NS + "name") for item in intent_filter.findall("category")}
+            if "android.intent.action.MAIN" in actions and "android.intent.category.LAUNCHER" in categories:
+                launchers.append(name or "")
+    return launchers
 
 
 def check_apks(debug_apk: Path, release_apk: Path) -> None:
@@ -81,17 +100,26 @@ def check_apks(debug_apk: Path, release_apk: Path) -> None:
     debug_dex = apkanalyzer("dex", "packages", str(debug_apk))
     release_dex = apkanalyzer("dex", "packages", str(release_apk))
 
-    assert "dev.androidjtools.debug.DebugHarnessActivity" in debug_manifest
-    assert "dev.androidjtools.debug.DebugHarnessActivity" not in release_manifest
-    assert "DebugHarnessActivity" in debug_dex
-    assert "DebugHarnessActivity" not in release_dex
+    assert launcher_activities(debug_manifest) == [MAIN_ACTIVITY], "debug APK must launch the real app"
+    assert launcher_activities(release_manifest) == [MAIN_ACTIVITY], "release APK must launch the real app"
+    assert DEBUG_HARNESS_ACTIVITY in debug_manifest, "debug harness activity missing from debug APK manifest"
+    debug_root = ET.fromstring(debug_manifest)
+    debug_activity = next(
+        activity for activity in debug_root.findall("./application/activity")
+        if activity.get(ANDROID_NS + "name") == DEBUG_HARNESS_ACTIVITY
+    )
+    assert debug_activity.get(ANDROID_NS + "exported") == "true", "debug harness must be explicitly launchable"
+    assert DEBUG_HARNESS_ACTIVITY not in release_manifest, "debug harness activity leaked into release APK manifest"
+    assert "DebugHarnessActivity" in debug_dex, "debug harness classes missing from debug APK"
+    assert "DebugHarnessActivity" not in release_dex, "debug harness classes leaked into release APK"
+    assert apkanalyzer("manifest", "debuggable", str(release_apk)).strip() == "false", "release APK must be non-debuggable"
 
     with zipfile.ZipFile(debug_apk) as archive:
-        assert "assets/debug-harness-contract.json" in archive.namelist()
+        assert "assets/debug-harness-contract.json" in archive.namelist(), "debug harness contract missing from debug APK"
     with zipfile.ZipFile(release_apk) as archive:
-        assert "assets/debug-harness-contract.json" not in archive.namelist()
+        assert "assets/debug-harness-contract.json" not in archive.namelist(), "debug harness contract leaked into release APK"
 
-    print("PASS isolation: debug launcher/classes/contract asset are present only in debug APK")
+    print("PASS isolation: real launcher retained; debug activity/classes/contract asset are debug-only")
 
 
 def main() -> int:
