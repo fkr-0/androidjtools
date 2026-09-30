@@ -24,6 +24,24 @@ class LibraryLogicTest {
     }
 
     @Test
+    fun `search tokenizes across metadata fields and ignores accents`() {
+        val accented = tracks + track(
+            "4",
+            "Été Drive",
+            "Night Crew",
+            bpm = 124.0,
+            key = "7A",
+            rating = 4,
+            offline = true,
+            album = "Route Cuts",
+        )
+
+        assertEquals(listOf("1"), filterAndSortTracks(tracks, state(query = "sample 8a")).map { it.id })
+        assertEquals(listOf("4"), filterAndSortTracks(accented, state(query = "ete night")).map { it.id })
+        assertEquals(listOf("1"), filterAndSortTracks(tracks, state(query = "  NIGHT   routes ")).map { it.id })
+    }
+
+    @Test
     fun `compound filters compose across bpm key rating energy availability and analysis`() {
         val fastStreaming = LibraryFilters(
             bpmBand = BpmBand.FAST,
@@ -91,14 +109,65 @@ class LibraryLogicTest {
                 availability = AvailabilityFilter.OFFLINE,
             ),
         )
+        val searchIndex = buildLibrarySearchIndex(large)
 
-        val first = filterAndSortTracks(large, browse)
-        val second = filterAndSortTracks(large, browse)
+        val first = filterAndSortTracks(large, browse, searchIndex)
+        val second = filterAndSortTracks(large, browse, searchIndex)
 
         assertEquals(first.map { it.id }, second.map { it.id })
         assertEquals(first.size, first.map { it.id }.distinct().size)
         assertTrue(first.all { it.artist == "Even Crew" && it.offlineAvailable && (it.rating ?: 0) >= 4 })
         assertEquals(first.mapNotNull { it.bpm }, first.mapNotNull { it.bpm }.sorted())
+    }
+
+    @Test
+    fun `precomputed search index preserves token and accent matching semantics`() {
+        val indexedTracks = tracks + track(
+            "4",
+            "Été Drive",
+            "Night Crew",
+            bpm = 124.0,
+            key = "7A",
+            rating = 4,
+            offline = true,
+            album = "Route Cuts",
+        )
+        val index = buildLibrarySearchIndex(indexedTracks)
+
+        assertEquals(
+            filterAndSortTracks(indexedTracks, state(query = "ete night")),
+            filterAndSortTracks(indexedTracks, state(query = "ete night"), index),
+        )
+        assertEquals(
+            filterAndSortTracks(indexedTracks, state(query = "sample 8a")),
+            filterAndSortTracks(indexedTracks, state(query = "sample 8a"), index),
+        )
+    }
+
+    @Test
+    fun `visible selection toggle adds missing rows then removes the whole visible set`() {
+        val initial = setOf("1", "hidden")
+        val visible = listOf("1", "2")
+
+        val selected = toggleVisibleSelection(initial, visible)
+        assertEquals(setOf("1", "2", "hidden"), selected)
+
+        val deselected = toggleVisibleSelection(selected, visible)
+        assertEquals(setOf("hidden"), deselected)
+
+        assertEquals(initial, toggleVisibleSelection(initial, emptyList()))
+    }
+
+    @Test
+    fun `batch play prefers first selected track in visible sort order`() {
+        val selected = setOf("1", "2")
+        val visibleDescending = filterAndSortTracks(
+            tracks,
+            state(sort = LibrarySort.BPM, direction = SortDirection.DESCENDING),
+        )
+        assertEquals("2", firstSelectedTrackId(visibleDescending, tracks, selected))
+        assertEquals("1", firstSelectedTrackId(listOf(tracks[2]), tracks, selected))
+        assertNull(firstSelectedTrackId(visibleDescending, tracks, emptySet()))
     }
 
     @Test

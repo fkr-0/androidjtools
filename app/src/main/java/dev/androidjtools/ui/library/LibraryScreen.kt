@@ -125,7 +125,10 @@ fun LibraryScreen(
     val browseState = remember(query, sort, direction, filters) {
         LibraryBrowseState(query = query, sort = sort, direction = direction, filters = filters)
     }
-    val visibleTracks = remember(tracks, browseState) { filterAndSortTracks(tracks, browseState) }
+    val searchIndex = remember(tracks) { buildLibrarySearchIndex(tracks) }
+    val visibleTracks = remember(tracks, browseState, searchIndex) {
+        filterAndSortTracks(tracks, browseState, searchIndex)
+    }
     val availableKeys = remember(tracks) {
         tracks.mapNotNull { it.key?.takeIf(String::isNotBlank) }
             .distinctBy { it.lowercase(Locale.ROOT) }
@@ -159,7 +162,11 @@ fun LibraryScreen(
         val roomy = maxWidth >= 600.dp
         val horizontalPadding = if (roomy) 24.dp else 12.dp
 
-        Column(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .testTag(if (roomy) "library-layout-roomy" else "library-layout-compact"),
+        ) {
             LibraryHeader(
                 totalCount = tracks.size,
                 visibleCount = visibleTracks.size,
@@ -241,7 +248,13 @@ fun LibraryScreen(
                                 isPlaying = currentTrackId == detailTrack.id && isPlaying,
                                 selected = detailTrack.id in selectedSet,
                                 onBack = { detailTrackId = null },
-                                onPlay = { providers.playback.play(detailTrack.id) },
+                                onPlay = {
+                                    if (currentTrackId == detailTrack.id) {
+                                        providers.playback.toggle()
+                                    } else {
+                                        providers.playback.play(detailTrack.id)
+                                    }
+                                },
                                 onToggleSelection = {
                                     selectedIds = toggleSelection(selectedIds, detailTrack.id)
                                 },
@@ -254,13 +267,36 @@ fun LibraryScreen(
                             visibleTracks.isEmpty() -> LibraryMessageState(
                                 title = "No matches",
                                 body = "Try another search term or clear one of the active filters.",
+                                primaryAction = query.takeIf(String::isNotBlank)?.let {
+                                    "Clear search" to {
+                                        query = ""
+                                        activeSavedViewId = null
+                                    }
+                                },
+                                secondaryAction = filters.takeIf { it.activeCount > 0 }?.let {
+                                    "Clear filters" to {
+                                        bpmBandName = BpmBand.ANY.name
+                                        keyFilter = null
+                                        ratingFourPlus = false
+                                        energyHalfPlus = false
+                                        availabilityName = AvailabilityFilter.ANY.name
+                                        analysisName = AnalysisFilter.ANY.name
+                                        activeSavedViewId = null
+                                    }
+                                },
                             )
                             else -> TrackList(
                                 tracks = visibleTracks,
                                 currentTrackId = currentTrackId,
                                 isPlaying = isPlaying,
                                 selectedIds = selectedSet,
-                                onPlay = providers.playback::play,
+                                onPlay = { trackId ->
+                                    if (currentTrackId == trackId) {
+                                        providers.playback.toggle()
+                                    } else {
+                                        providers.playback.play(trackId)
+                                    }
+                                },
                                 onOpenDetail = { detailTrackId = it },
                                 onToggleSelection = { trackId ->
                                     selectedIds = toggleSelection(selectedSet, trackId)
@@ -286,11 +322,15 @@ fun LibraryScreen(
                         selectedCount = selectedIds.size,
                         visibleCount = visibleTracks.size,
                         visibleSelectedCount = visibleSelectedCount,
-                        onSelectVisible = {
-                            selectedIds = selectedSet + visibleTracks.map { it.id }
+                        onToggleVisible = {
+                            selectedIds = toggleVisibleSelection(
+                                selectedIds = selectedSet,
+                                visibleTrackIds = visibleTracks.map { it.id },
+                            )
                         },
                         onPlayFirst = {
-                            tracks.firstOrNull { it.id in selectedSet }?.let { providers.playback.play(it.id) }
+                            firstSelectedTrackId(visibleTracks, tracks, selectedSet)
+                                ?.let(providers.playback::play)
                         },
                         onClear = { selectedIds = emptySet() },
                         modifier = Modifier.align(Alignment.BottomCenter),
@@ -601,7 +641,7 @@ private fun TrackRow(
     onToggleSelection: () -> Unit,
     roomy: Boolean,
 ) {
-    var menuExpanded by rememberSaveable(track.id) { mutableStateOf(false) }
+    var menuExpanded by remember(track.id) { mutableStateOf(false) }
     val metadata = remember(track) { trackMetadata(track) }
 
     Surface(
@@ -662,11 +702,21 @@ private fun TrackRow(
                     modifier = Modifier.testTag("track-metadata-${track.id}"),
                 )
             }
+            val playbackActionLabel = when {
+                isCurrent && isPlaying -> "Pause"
+                isCurrent -> "Resume"
+                else -> "Play"
+            }
             IconButton(
                 onClick = onPlay,
-                modifier = Modifier.semantics { contentDescription = "Play ${track.title}" },
+                modifier = Modifier.semantics {
+                    contentDescription = "$playbackActionLabel ${track.title}"
+                },
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                Icon(
+                    if (isCurrent && isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = null,
+                )
             }
             Box {
                 IconButton(onClick = { menuExpanded = true }) {
@@ -741,9 +791,18 @@ private fun LibraryTrackDetail(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onPlay) {
-                Icon(if (isCurrent && isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null)
+                Icon(
+                    if (isCurrent && isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = null,
+                )
                 Spacer(Modifier.width(6.dp))
-                Text(if (isCurrent && isPlaying) "Playing" else "Play")
+                Text(
+                    when {
+                        isCurrent && isPlaying -> "Pause"
+                        isCurrent -> "Resume"
+                        else -> "Play"
+                    },
+                )
             }
             FilterChip(
                 selected = selected,
@@ -782,7 +841,7 @@ private fun BatchActionBar(
     selectedCount: Int,
     visibleCount: Int,
     visibleSelectedCount: Int,
-    onSelectVisible: () -> Unit,
+    onToggleVisible: () -> Unit,
     onPlayFirst: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
@@ -794,9 +853,21 @@ private fun BatchActionBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Default.CheckCircle, contentDescription = null)
-            Text("$selectedCount selected", style = MaterialTheme.typography.labelLarge)
+            val hiddenSelectedCount = (selectedCount - visibleSelectedCount).coerceAtLeast(0)
+            Text(
+                buildString {
+                    append("$selectedCount selected")
+                    if (hiddenSelectedCount > 0) append(" · $hiddenSelectedCount hidden")
+                },
+                style = MaterialTheme.typography.labelLarge,
+            )
             Spacer(Modifier.width(4.dp))
-            TextButton(onClick = onSelectVisible, enabled = visibleSelectedCount < visibleCount) { Text("Select visible") }
+            TextButton(
+                onClick = onToggleVisible,
+                enabled = visibleCount > 0,
+            ) {
+                Text(if (visibleSelectedCount == visibleCount && visibleCount > 0) "Deselect visible" else "Select visible")
+            }
             Button(onClick = onPlayFirst) { Text("Play first") }
             TextButton(onClick = onClear) { Text("Clear") }
         }
@@ -815,12 +886,32 @@ private fun LibraryLoadingState() {
 }
 
 @Composable
-private fun LibraryMessageState(title: String, body: String) {
+private fun LibraryMessageState(
+    title: String,
+    body: String,
+    primaryAction: Pair<String, () -> Unit>? = null,
+    secondaryAction: Pair<String, () -> Unit>? = null,
+) {
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(6.dp))
             Text(body, style = MaterialTheme.typography.bodyMedium)
+            if (primaryAction != null || secondaryAction != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    primaryAction?.let { (label, action) ->
+                        Button(onClick = action) { Text(label) }
+                    }
+                    secondaryAction?.let { (label, action) ->
+                        TextButton(onClick = action) { Text(label) }
+                    }
+                }
+            }
         }
     }
 }

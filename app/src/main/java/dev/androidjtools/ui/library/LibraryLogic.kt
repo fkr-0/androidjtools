@@ -3,8 +3,12 @@ package dev.androidjtools.ui.library
 import dev.androidjtools.core.model.Track
 import dev.androidjtools.core.provider.ProviderUiState
 import java.nio.charset.StandardCharsets
+import java.text.Normalizer
 import java.util.Base64
 import java.util.Locale
+
+private val SearchWhitespace = Regex("\\s+")
+private val CombiningMarks = Regex("\\p{M}+")
 
 sealed interface LibrarySurfaceState {
     data object Ready : LibrarySurfaceState
@@ -113,14 +117,12 @@ data class SavedLibraryView(
 internal fun filterAndSortTracks(
     tracks: List<Track>,
     state: LibraryBrowseState,
+    searchIndex: Map<String, String> = emptyMap(),
 ): List<Track> {
-    val needle = state.query.trim().lowercase(Locale.ROOT)
+    val queryTokens = searchTokens(state.query)
     val filters = state.filters
     return tracks.asSequence()
-        .filter { track ->
-            needle.isEmpty() || listOfNotNull(track.title, track.artist, track.album, track.key)
-                .any { it.lowercase(Locale.ROOT).contains(needle) }
-        }
+        .filter { track -> track.matchesSearchTokens(queryTokens, searchIndex[track.id]) }
         .filter { track -> filters.bpmBand.matches(track.bpm) }
         .filter { track -> filters.key == null || track.key.equals(filters.key, ignoreCase = true) }
         .filter { track -> !filters.ratingFourPlus || (track.rating ?: 0) >= 4 }
@@ -142,6 +144,30 @@ internal fun filterAndSortTracks(
         .sortedWith(trackComparator(state.sort, state.direction))
         .toList()
 }
+
+internal fun buildLibrarySearchIndex(tracks: List<Track>): Map<String, String> =
+    tracks.associate { track ->
+        track.id to normalizeSearchText(
+            listOfNotNull(track.title, track.artist, track.album, track.key).joinToString(" "),
+        )
+    }
+
+private fun searchTokens(query: String): List<String> = normalizeSearchText(query)
+    .split(SearchWhitespace)
+    .filter(String::isNotBlank)
+
+private fun Track.matchesSearchTokens(tokens: List<String>, indexedText: String?): Boolean {
+    if (tokens.isEmpty()) return true
+    val searchableText = indexedText ?: normalizeSearchText(
+        listOfNotNull(title, artist, album, key).joinToString(" "),
+    )
+    return tokens.all(searchableText::contains)
+}
+
+private fun normalizeSearchText(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKD)
+    .replace(CombiningMarks, "")
+    .lowercase(Locale.ROOT)
+    .trim()
 
 private fun trackComparator(sort: LibrarySort, direction: SortDirection): Comparator<Track> = Comparator { left, right ->
     val primary = when (sort) {
@@ -183,6 +209,26 @@ internal fun toggleSelection(selectedIds: Collection<String>, trackId: String): 
     selectedIds.toMutableSet().apply {
         if (!add(trackId)) remove(trackId)
     }
+
+internal fun toggleVisibleSelection(
+    selectedIds: Set<String>,
+    visibleTrackIds: Collection<String>,
+): Set<String> {
+    if (visibleTrackIds.isEmpty()) return selectedIds
+    val visibleIds = visibleTrackIds.toSet()
+    return if (visibleIds.all(selectedIds::contains)) {
+        selectedIds - visibleIds
+    } else {
+        selectedIds + visibleIds
+    }
+}
+
+internal fun firstSelectedTrackId(
+    visibleTracks: List<Track>,
+    allTracks: List<Track>,
+    selectedIds: Set<String>,
+): String? = visibleTracks.firstOrNull { it.id in selectedIds }?.id
+    ?: allTracks.firstOrNull { it.id in selectedIds }?.id
 
 internal fun saveLibraryView(
     existing: List<SavedLibraryView>,

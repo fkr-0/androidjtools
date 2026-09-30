@@ -2,6 +2,7 @@ package dev.androidjtools.ui.library
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -47,6 +48,32 @@ class LibraryScreenTest {
         compose.onNodeWithTag("library-track-list").performScrollToIndex(1)
         compose.onNodeWithText("Night Bus").assertIsDisplayed()
         compose.onAllNodesWithText("Concrete Flash").assertCountEquals(0)
+    }
+
+    @Test
+    fun noMatches_offersDirectRecoveryWithoutLeavingLibrary() {
+        val providers = FixtureAppProviders.create(FixtureScenario.NOMINAL)
+        compose.setContent {
+            AndroidDjToolsTheme { LibraryScreen(providers) }
+        }
+
+        compose.onNodeWithContentDescription("Search library").performTextInput("does-not-exist")
+        compose.onNodeWithText("No matches").assertIsDisplayed()
+        compose.onNodeWithText("Clear search").performClick()
+
+        compose.onNodeWithText("3 tracks").assertIsDisplayed()
+        compose.onNodeWithText("Night Bus").assertIsDisplayed()
+
+        compose.onNodeWithText("Filters").performClick()
+        compose.onNodeWithText("Any BPM").performClick()
+        compose.onNodeWithText("< 100 BPM").performClick()
+        compose.onNodeWithText("Any availability").performClick()
+        compose.onNodeWithText("Offline").performClick()
+        compose.onNodeWithText("No matches").assertIsDisplayed()
+        compose.onNodeWithText("Clear filters").performClick()
+
+        compose.onNodeWithText("3 tracks").assertIsDisplayed()
+        compose.onNodeWithText("Concrete Flash").assertIsDisplayed()
     }
 
     @Test
@@ -104,7 +131,17 @@ class LibraryScreenTest {
 
         compose.onNodeWithText("Select visible").performClick()
         compose.onNodeWithText("3 selected").assertIsDisplayed()
+        compose.onNodeWithText("Deselect visible").assertIsDisplayed()
         compose.onNodeWithContentDescription("Deselect Dub Colony").assertIsDisplayed()
+
+        compose.onNodeWithText("Deselect visible").performClick()
+        compose.onAllNodesWithText("3 selected").assertCountEquals(0)
+
+        compose.onNodeWithContentDescription("Select Night Bus").performClick()
+        compose.onNodeWithContentDescription("Search library").performTextInput("concrete")
+        compose.onNodeWithText("1 selected · 1 hidden").assertIsDisplayed()
+        compose.onNodeWithText("Select visible").performClick()
+        compose.onNodeWithText("2 selected · 1 hidden").assertIsDisplayed()
         compose.onNodeWithText("Clear").performClick()
         compose.onAllNodesWithText("3 selected").assertCountEquals(0)
     }
@@ -123,6 +160,10 @@ class LibraryScreenTest {
 
         compose.onNodeWithContentDescription("Play Night Bus").performClick()
         compose.onNodeWithContentDescription("Playing").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Pause Night Bus").performClick()
+        compose.onNodeWithContentDescription("Resume Night Bus").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Resume Night Bus").performClick()
+        compose.onNodeWithContentDescription("Pause Night Bus").assertIsDisplayed()
 
         compose.onNodeWithText("Clear").performClick()
         compose.onAllNodesWithText("1 selected").assertCountEquals(0)
@@ -264,5 +305,69 @@ class LibraryScreenTest {
         compose.onNodeWithContentDescription("Play Night Bus").assertIsDisplayed()
         compose.onNodeWithContentDescription("Sort by Title. Double tap to change field.").assertIsDisplayed()
         compose.onNodeWithContentDescription("Sort direction Ascending. Double tap to reverse.").assertIsDisplayed()
+    }
+
+    @Test
+    fun compactPhoneWidth_usesCompactLibraryLayout() {
+        val providers = FixtureAppProviders.create(FixtureScenario.NOMINAL)
+        compose.setContent {
+            AndroidDjToolsTheme {
+                Box(Modifier.width(360.dp).height(720.dp)) {
+                    LibraryScreen(providers)
+                }
+            }
+        }
+
+        compose.onNodeWithTag("library-layout-compact").assertIsDisplayed()
+        compose.onNodeWithTag("library-layout-roomy").assertDoesNotExist()
+    }
+
+    @Test
+    fun largePhoneWidth_usesRoomyLibraryLayout() {
+        val providers = FixtureAppProviders.create(FixtureScenario.NOMINAL)
+        compose.setContent {
+            AndroidDjToolsTheme {
+                Box(Modifier.width(720.dp).height(900.dp)) {
+                    LibraryScreen(providers)
+                }
+            }
+        }
+
+        compose.onNodeWithTag("library-layout-roomy").assertIsDisplayed()
+        compose.onNodeWithTag("library-layout-compact").assertDoesNotExist()
+    }
+
+    @Test
+    fun trackOverflowActions_supportSelectionAndDetailWithoutChangingProviderContracts() {
+        val providers = FixtureAppProviders.create(FixtureScenario.NOMINAL)
+        compose.setContent {
+            AndroidDjToolsTheme { LibraryScreen(providers) }
+        }
+
+        compose.onNodeWithContentDescription("Actions for Night Bus").performClick()
+        compose.onNodeWithText("Select").performClick()
+        compose.onNodeWithText("1 selected").assertIsDisplayed()
+
+        compose.onNodeWithContentDescription("Actions for Night Bus").performClick()
+        compose.onNodeWithText("Details").performClick()
+        compose.onNodeWithText("Track details").assertIsDisplayed()
+        compose.onNodeWithText("Night Bus").assertIsDisplayed()
+    }
+
+    @Test
+    fun transientTrackOverflowMenu_doesNotRestoreAcrossProcessState() {
+        val restoration = StateRestorationTester(compose)
+        val providers = FixtureAppProviders.create(FixtureScenario.NOMINAL)
+        restoration.setContent {
+            AndroidDjToolsTheme { LibraryScreen(providers) }
+        }
+
+        compose.onNodeWithContentDescription("Actions for Night Bus").performClick()
+        compose.onNodeWithText("Play now").assertIsDisplayed()
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        compose.onAllNodesWithText("Play now").assertCountEquals(0)
+        compose.onNodeWithText("Night Bus").assertIsDisplayed()
     }
 }
