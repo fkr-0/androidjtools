@@ -1,0 +1,110 @@
+schema: release-evidence/v1
+schema_version: 1
+release:
+  unit: androidjtools
+  candidate_version: 0.2.0-rc.1
+  base_revision: 131b33ef3118882e7aa414f9b245be10a5ef37c7
+  target_revision: 4a18915f1a241b851238246bf2dd50c025698803
+  members:
+    - app
+  revision_vector:
+    androidjtools: 4a18915f1a241b851238246bf2dd50c025698803
+metadata:
+  version_sources:
+    - path: app/build.gradle.kts
+      version_name: 0.2.0-rc.1
+      version_code: 5
+  changelog: CHANGELOG.md
+  release_notes: docs/release/v0.2.0-rc.1.md
+  tag:
+    proposed: v0.2.0-rc.1
+    created: false
+    target: 4a18915f1a241b851238246bf2dd50c025698803
+preflight:
+  branch: main
+  upstream: origin/main
+  ahead: 11
+  behind: 0
+  dirty_paths: []
+  tool_versions:
+    java_gate: openjdk 17.0.20.1
+    java_host_default: openjdk 26.0.2.1
+    gradle: "8.7"
+    python: "3.14.7"
+    adb_sdk: "1.0.41 / 35.0.1-11580240"
+checks:
+  - name: protocol-and-fake-sample-lib
+    command: "python -m unittest discover -s test-server -p 'test_*.py' -v && PYTHONPATH=test-server/samplelib python -m unittest discover -s test-server/samplelib -p 'test_*.py' -v"
+    outcome: passed
+    evidence: "32 sync/protocol tests + 7 authenticated fake Sample Lib HTTP tests passed"
+  - name: ui-runner-unit-tests
+    command: "python -m unittest e2e.ui.test_run_ui_e2e -v"
+    outcome: passed
+    evidence: "6 tests passed"
+  - name: android-host-release-gate
+    command: "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease --stacktrace --no-daemon --console=plain"
+    outcome: passed
+    evidence: "BUILD SUCCESSFUL; 107 actionable tasks"
+  - name: parity-ledger-integrity
+    command: "python3 e2e/parity/validate_matrix.py"
+    outcome: passed
+    evidence: "87 required stories; 49 pass / 13 partial / 25 blocked; no validation errors"
+  - name: architecture-provider-boundary
+    command: "python3 e2e/parity/check_architecture_boundary.py"
+    outcome: passed
+    evidence: "17 product UI Kotlin files inspected; no violations"
+  - name: debug-harness-release-isolation
+    command: "python3 app/src/debug/verify_debug_harness.py --debug-apk app/build/outputs/apk/debug/app-debug.apk --release-apk app/build/outputs/apk/release/app-release.apk"
+    outcome: passed
+    evidence: "production launcher retained in both variants; debug harness/classes/contract asset remain debug-only"
+  - name: host-ui-qualification
+    command: "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local python3 e2e/ui/run_ui_e2e.py --json-out /tmp/androidjtools-ui-host-rc1.json"
+    outcome: passed
+    evidence: "host gates green; instrumentation explicitly not run without a compatible adb target"
+  - name: device-ui-qualification
+    command: "python3 e2e/ui/run_ui_e2e.py --skip-host --require-device --json-out /tmp/androidjtools-ui-device-rc1.json"
+    outcome: blocked
+    exit_code: 3
+    evidence: "no compatible adb device"
+  - name: real-sample-lib
+    command: "python3 e2e/djxml/qualify_samplelib.py --require-real-sync"
+    outcome: passed
+    evidence: "production sync routes, stable asset identity, canonical playlist identity/order, cue/loop/region/tag semantics qualified"
+  - name: strict-parity
+    command: "python3 e2e/parity/validate_matrix.py --require-qualified"
+    outcome: failed
+    exit_code: 2
+    evidence: "38 stories non-pass; real-core evidence not pass; hosted-CI evidence not pass; independent review not approved"
+  - name: independent-release-review
+    command: "opencode-profiles doctor --provider xiaomi"
+    outcome: blocked
+    evidence: "active provider credential exhausted/cooling down; active profile invalidated; managed agent bundle unavailable"
+artifacts:
+  - path: app/build/outputs/apk/debug/app-debug.apk
+    size_bytes: 111214477
+    sha256: 661a4e1857d012eab6621f0634875cc9e7e2a8420a9ddff0c04c96a75f0941cf
+    role: diagnostic-debug-apk
+  - path: app/build/outputs/apk/release/app-release.apk
+    size_bytes: 49559763
+    sha256: fbc64a659c9093751679b482a7aa60956d9caf6c0dbf2bf6170f16bb14aff189
+    role: primary-rc-review-apk
+warnings:
+  - "No compatible Android runtime is attached; SDK adb currently reports no devices."
+  - "No API-35 system image or local AVD is installed, although /dev/kvm is available."
+  - "The host /usr/bin/adb fails at startup with a libusb symbol lookup error; project tooling uses /opt/android-sdk/platform-tools/adb instead."
+  - "AGP 8.5.2 warns that compileSdk 35 is newer than its certified compileSdk 34 range."
+  - "The release variant remains development/debug signed for sideload review, not store distribution."
+  - "Strict parity is not release-green: 49 pass / 13 partial / 25 blocked."
+release_gate:
+  tag_ready: false
+  blocking_reasons:
+    - compatible Android device/emulator execution is missing
+    - real Android-to-real-Sample-Lib evidence is missing
+    - exact-revision hosted API-35 CI evidence is missing
+    - strict parity has 38 non-pass stories
+    - independent review for current target revision is not approved
+side_effects:
+  pushed: false
+  published: false
+  deployed: false
+  state: not_requested
