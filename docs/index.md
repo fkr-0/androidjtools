@@ -2,9 +2,9 @@
 
 Android DJ Tools is a cloudless Android DJ-library preparation client for Sample Lib and Sample Lab. It is built fixture-first so browsing, preparation, waveform editing, playback, analysis suggestions, and sync behavior can be developed and verified without making a remote backend mandatory.
 
-## v0.1.3 first-review preview
+## v0.2.0-rc.1 release candidate
 
-The current preview includes the Android application shell, dense library and collection workflows, player/queue foundations, interactive preparation surfaces, offline/sync and intelligence flows, protocol contracts, deterministic fake-server qualification, parity tooling, and API-35 UI screenshot coverage. `v0.1.2`/`v0.1.3` additionally repair the production launcher and package the real MediaStore/Media3 playback path in the primary review APK.
+The prepared candidate includes the Android application shell, dense library and collection workflows, player/queue and Media3 playback hardening, interactive preparation surfaces, offline/sync and intelligence flows, converged protocol contracts, deterministic fake-server qualification, parity tooling, and the hosted API-35 screenshot pipeline.
 
 The project deliberately separates verified fixture/fake-server and host-build evidence from emulator, physical-device, and real-backend claims. The release notes record those evidence boundaries explicitly.
 
@@ -16,6 +16,7 @@ GitHub Actions builds a non-debuggable release APK as the primary review artifac
 
 - [Repository](https://github.com/fkr-0/androidjtools)
 - [GitHub Actions](https://github.com/fkr-0/androidjtools/actions)
+- [v0.2.0-rc.1 candidate notes](release/v0.2.0-rc.1.md)
 - [v0.1.3 review notes](release/v0.1.3.md)
 - [v0.1.1 release notes](release/v0.1.1.md)
 - [v0.1.0 release notes](release/v0.1.0.md)

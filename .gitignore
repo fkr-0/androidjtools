@@ -12,6 +12,7 @@ __pycache__/
 .gradle/
 .gradle-local/
 .ws-bridge/
+.tmp-test-gate/
 build/
 **/build/
 local.properties

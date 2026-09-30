@@ -4,7 +4,42 @@ All notable changes to Android DJ Tools are documented here.
 
 ## Unreleased
 
-No unreleased changes are documented after `v0.1.3` yet.
+No changes are currently queued beyond the v0.2.0-rc.1 candidate.
+
+## 0.2.0-rc.1 - 2026-09-30
+
+First release candidate for the 0.2.x line, consolidating the post-v0.1.3 convergence work.
+
+### Added
+
+- Playback diagnostics for unavailable media, Media3 transport/service errors, and audio-focus suppression, plus offline-playback integration coverage.
+- Expanded library/search/filter regression coverage, including Compose instrumentation scenarios and state restoration behavior.
+- Machine-readable Wave Two/Three and parity qualification evidence for the converged feature set.
+
+### Changed
+
+- Media3 playback now converges on the MediaSession/MediaController service boundary with stronger transport, queue, seek, and state synchronization behavior.
+- Library browsing/search behavior and player controls are reconciled across the primary Compose surfaces.
+- Sync protocol v1 schemas, capability negotiation, opaque revision handling, receipt semantics, and deterministic fake-server qualification are aligned with the current Sample Lib authority model.
+- Parity/E2E tooling now fails closed on Android targets below minSdk 28 and distinguishes host qualification from real-device execution.
+- Debug-harness verification now checks both production launchers and release isolation directly from built APKs.
+
+### Qualification
+
+- Fresh local protocol/fake-server tests: 32 passed.
+- Fresh UI-runner tests: 6 passed.
+- Android JVM tests, instrumentation-source compilation, lint, debug assembly, and release assembly passed under JDK 17.
+- Debug/release launcher and debug-harness isolation checks passed.
+- Host conformance passed as `host-preflight-passed-not-full-conformance`.
+- The canonical parity ledger validates at 49 pass / 13 partial / 25 blocked across 87 required stories.
+
+### Release-candidate limitations
+
+- No compatible adb target was available during the 2026-09-30 local qualification run, so connected instrumentation and real-device Media3 playback were not re-verified.
+- The API-35 screenshot/E2E phase is a separate hosted/device gate and must pass on the exact candidate revision before tag publication.
+- Full parity is not claimed while 38 required stories remain partial or blocked.
+- The release build remains development/debug signed for sideload review rather than store distribution.
+- AGP 8.5.2 still warns that compileSdk 35 is newer than its certified compileSdk 34 range.
 
 ## 0.1.3 - 2026-09-18
 
