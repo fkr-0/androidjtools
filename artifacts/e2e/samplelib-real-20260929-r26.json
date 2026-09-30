@@ -1,0 +1,19 @@
+{
+  "adapter_tests_passed": true,
+  "android_real_round_trip": "qualified",
+  "canonical_playlist_identity_and_order": true,
+  "crate_membership_projection": true,
+  "cue_loop_region_tags": true,
+  "missing_production_sync_routes": [],
+  "playlist_authority_tests_passed": true,
+  "playlist_round_trip": "qualified",
+  "production_sync_routes": [
+    "/v1/sync/hello",
+    "/v1/sync/pair",
+    "/v1/sync/pull",
+    "/v1/sync/push",
+    "/v1/sync/receipts/{mutation_id}"
+  ],
+  "sample_lib_root": "/home/user/code/sample-lab/third_party/sample-lib",
+  "stable_asset_identity": true
+}

@@ -1,0 +1,37 @@
+{
+  "adb": "/opt/android-sdk/platform-tools/adb",
+  "adb_error": null,
+  "android_devices": [
+    {
+      "detail": "product:omni_golden model:GT_I8190 device:golden transport_id:41",
+      "serial": "192.168.23.186:5555"
+    }
+  ],
+  "blockers": ["android_real_backend_evidence_missing"],
+  "device_backend_evidence": null,
+  "device_backend_evidence_error": "missing",
+  "device_backend_evidence_path": "/home/user/code/androidjtools/artifacts/e2e/real-device-backend.json",
+  "git_revision": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "note": "Fake/emulator evidence and mere Android-device presence are not promoted into this real-system result; qualification requires explicit Android -> real Sample Lib round-trip evidence.",
+  "real_core_e2e": "blocked",
+  "real_sample_lib": {
+    "adapter_tests_passed": true,
+    "android_real_round_trip": "qualified",
+    "canonical_playlist_identity_and_order": true,
+    "crate_membership_projection": true,
+    "cue_loop_region_tags": true,
+    "missing_production_sync_routes": [],
+    "playlist_authority_tests_passed": true,
+    "playlist_round_trip": "qualified",
+    "production_sync_routes": [
+      "/v1/sync/hello",
+      "/v1/sync/pair",
+      "/v1/sync/pull",
+      "/v1/sync/push",
+      "/v1/sync/receipts/{mutation_id}"
+    ],
+    "sample_lib_root": "/home/user/code/sample-lab/third_party/sample-lib",
+    "stable_asset_identity": true
+  },
+  "schema": "androidjtools.core-e2e-readiness/v1"
+}

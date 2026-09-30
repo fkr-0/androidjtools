@@ -1,0 +1,42 @@
+{
+  "device": {
+    "adb": "/opt/android-sdk/platform-tools/adb",
+    "count": 0,
+    "discovered": [
+      {
+        "api_level": 22,
+        "compatible": false,
+        "reason": "api-22-below-min-sdk-28",
+        "serial": "192.168.23.186:5555",
+        "state": "device"
+      }
+    ],
+    "discovered_count": 1,
+    "error": null,
+    "min_sdk": 28,
+    "required": true,
+    "serials": [],
+    "status": "unavailable"
+  },
+  "host": {
+    "command": [
+      "./gradlew",
+      ":app:testDebugUnitTest",
+      ":app:compileDebugAndroidTestKotlin",
+      ":app:lintDebug",
+      ":app:assembleDebug",
+      "--no-daemon",
+      "--console=plain"
+    ],
+    "duration_seconds": 11.657,
+    "exit_code": 0,
+    "status": "passed"
+  },
+  "instrumentation": {
+    "reason": "no-compatible-adb-device",
+    "status": "not-run"
+  },
+  "qualification": "blocked-no-device",
+  "root": "/home/user/code/androidjtools",
+  "schema": "androidjtools.ui-e2e/v1"
+}

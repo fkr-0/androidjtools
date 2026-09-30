@@ -1,0 +1,12 @@
+{
+  "matrix": "docs/parity/parity.json",
+  "qualified": false,
+  "required_story_count": 87,
+  "status_counts": {"blocked": 25, "partial": 13, "pass": 49},
+  "validation_errors": [
+    "stories not qualified: ['US-001', 'US-002', 'US-010', 'US-011', 'US-012', 'US-013', 'US-014', 'US-030', 'US-031', 'US-040', 'US-041', 'US-042', 'US-043', 'US-055', 'US-060', 'US-071', 'US-091', 'US-094', 'US-120', 'US-121', 'US-122', 'US-123', 'US-130', 'US-131', 'US-132', 'US-144', 'US-146', 'US-150', 'US-151', 'US-160', 'US-161', 'US-162', 'US-170', 'US-171', 'US-172', 'US-173', 'US-181', 'US-182']",
+    "required real-system evidence is not pass: real-core-e2e",
+    "required hosted-CI evidence is not pass: hosted-ci",
+    "independent review is not approved"
+  ]
+}

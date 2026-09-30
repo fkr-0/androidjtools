@@ -1,0 +1,31 @@
+{
+  "device": {
+    "adb": "/opt/android-sdk/platform-tools/adb",
+    "count": 0,
+    "error": null,
+    "required": false,
+    "serials": [],
+    "status": "unavailable"
+  },
+  "host": {
+    "command": [
+      "./gradlew",
+      ":app:testDebugUnitTest",
+      ":app:compileDebugAndroidTestKotlin",
+      ":app:lintDebug",
+      ":app:assembleDebug",
+      "--no-daemon",
+      "--console=plain"
+    ],
+    "duration_seconds": 48.812,
+    "exit_code": 0,
+    "status": "passed"
+  },
+  "instrumentation": {
+    "reason": "no-ready-adb-device",
+    "status": "not-run"
+  },
+  "qualification": "host-qualified-device-pending",
+  "root": "/home/user/code/androidjtools",
+  "schema": "androidjtools.ui-e2e/v1"
+}
