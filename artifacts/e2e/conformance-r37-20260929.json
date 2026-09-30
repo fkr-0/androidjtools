@@ -1,0 +1,105 @@
+{
+  "schema": "androidjtools.conformance-refresh/v1",
+  "canonical_task": ".",
+  "observed_at": "2026-09-29T11:01:21Z",
+  "head": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "source_tree": "shared checkout with pre-existing dirty work preserved",
+  "live_coordination": {
+    "initial_active_claims": 0,
+    "selected_packet": "47d6c3b8-f64c-4ad5-91e2-f535c17beb20",
+    "selected_packet_disposition": "abandoned cleanly before writes because it was stale EPIC-00 Wave-0 foundation scope, unrelated to conformance",
+    "parity_claim": "7f2c7552-6216-4916-8eb7-6915c0e28b4d"
+  },
+  "results": {
+    "parity_ledger_integrity": {
+      "exit_code": 0,
+      "required_story_count": 87,
+      "status_counts": {
+        "pass": 49,
+        "partial": 13,
+        "blocked": 25
+      },
+      "validation_errors": []
+    },
+    "architecture_provider_boundary": {
+      "exit_code": 0,
+      "status": "pass",
+      "ui_files_inspected": 17,
+      "violations": []
+    },
+    "protocol_backend_contracts": {
+      "exit_code": 0,
+      "tests": 39,
+      "status": "pass"
+    },
+    "release_variant_build": {
+      "exit_code": 0,
+      "status": "pass",
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=/tmp/androidjtools-gradle ./gradlew :app:assembleDebug :app:assembleRelease --no-daemon --console=plain"
+    },
+    "debug_harness_release_exclusion": {
+      "exit_code": 0,
+      "status": "pass"
+    },
+    "ui_host_gate": {
+      "exit_code": 0,
+      "status": "pass",
+      "checks": [
+        "testDebugUnitTest",
+        "compileDebugAndroidTestKotlin",
+        "lintDebug",
+        "assembleDebug"
+      ]
+    },
+    "ui_runner_classification_tests": {
+      "exit_code": 0,
+      "status": "pass",
+      "tests": 6
+    },
+    "compatible_device_gate": {
+      "exit_code": 3,
+      "status": "blocked",
+      "reason": "SDK adb sees GT-I8190 at API 22; app minSdk is 28; no compatible target available"
+    },
+    "real_sample_lib": {
+      "exit_code": 0,
+      "status": "pass",
+      "routes": [
+        "/v1/sync/hello",
+        "/v1/sync/pair",
+        "/v1/sync/pull",
+        "/v1/sync/push",
+        "/v1/sync/receipts/{mutation_id}"
+      ],
+      "canonical_playlist_identity_and_order": true
+    },
+    "real_core": {
+      "exit_code": 3,
+      "status": "blocked",
+      "blockers": [
+        "android_real_backend_evidence_missing"
+      ]
+    },
+    "strict_qualification": {
+      "exit_code": 2,
+      "status": "not_qualified",
+      "reasons": [
+        "stories remain non-pass",
+        "real-core-e2e not pass",
+        "hosted-ci not pass",
+        "independent review pending"
+      ]
+    }
+  },
+  "transient_environment_note": "An isolated /tmp snapshot attempt hit disk quota during packageRelease/lint and temporarily caused the Sample Lib subprocess wrapper to fail. After deleting only the temporary snapshot/cache created by this run, the same shared-tree release build and strict real Sample Lib qualification passed. This was treated as host-capacity noise, not a product defect.",
+  "canonical_parity": {
+    "pass": 49,
+    "partial": 13,
+    "blocked": 25,
+    "missing": 0,
+    "fail": 0,
+    "qualification": "not_qualified"
+  },
+  "implementation_changes": [],
+  "conclusion": "No reproducible unowned implementation blocker was found. Protected runner/workflow and active UI/offline/analysis/release source lanes were not modified."
+}

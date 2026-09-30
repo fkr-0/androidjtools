@@ -1,0 +1,53 @@
+{
+  "schema": "androidjtools.e2e-closure/v1",
+  "canonical_task": "ANDROIDJTOOLS-E2E-CLOSURE-R62-20260929",
+  "workflow_packet": "ecbc41f2-f68f-4a37-94a1-7446f966e5d0",
+  "git_revision": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "parity": {
+    "required": 87,
+    "pass": 49,
+    "partial": 13,
+    "blocked": 25,
+    "fail": 0,
+    "missing": 0,
+    "qualified": false
+  },
+  "host": {
+    "exit_code": 0,
+    "qualification": "host-preflight-passed-not-full-conformance",
+    "report": "artifacts/e2e/conformance-r62-host.json",
+    "note": "Initial shared /tmp Gradle-cache attempt was environment-blocked by wrapper lock; isolated repository-local cache/temp rerun passed."
+  },
+  "emulator": {
+    "exit_code": 1,
+    "qualification": "emulator-conformance-failed",
+    "report": "artifacts/e2e/conformance-r62-emulator.json",
+    "blocker": "no compatible minSdk 28+ Android target; visible GT-I8190 is API 22"
+  },
+  "real_sample_lib": {
+    "exit_code": 0,
+    "status": "qualified"
+  },
+  "real_core": {
+    "exit_code": 3,
+    "status": "blocked",
+    "blockers": [
+      "android_real_backend_evidence_missing"
+    ]
+  },
+  "strict_matrix": {
+    "exit_code": 2,
+    "status": "not-qualified",
+    "non_pass_stories": 38,
+    "additional_blockers": [
+      "real-core-e2e",
+      "hosted-ci"
+    ]
+  },
+  "protected_paths": {
+    "runner_sha256": "4ea8c95d9bac98d581b7032546f48cfdf438a35c07242b66d54d4dbe7ab47ab4",
+    "workflow_sha256": "1fa4281c81873228594f238fa74687e880714fe58f798a95c79ac33dff780bfc",
+    "modified": false
+  },
+  "implementation_defect_reproduced": false
+}

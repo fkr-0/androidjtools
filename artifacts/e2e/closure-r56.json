@@ -1,0 +1,68 @@
+{
+  "schema": "androidjtools.conformance-closure/v1",
+  "run": "R56",
+  "observed_at": "2026-09-29T19:43:22Z",
+  "git_revision": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "parity": {
+    "required_stories": 87,
+    "pass": 49,
+    "partial": 13,
+    "blocked": 25,
+    "fail": 0,
+    "missing": 0,
+    "qualification": "not_qualified"
+  },
+  "checks": {
+    "host_conformance": {
+      "exit_code": 0,
+      "qualification": "host-preflight-passed-not-full-conformance",
+      "evidence": "artifacts/e2e/conformance-r56-host.json"
+    },
+    "emulator_conformance": {
+      "exit_code": 1,
+      "qualification": "emulator-conformance-failed",
+      "cause": "device-required UI step exited 3: only visible Android target is API 22 below minSdk 28",
+      "evidence": "artifacts/e2e/conformance-r56-emulator.json"
+    },
+    "ui_device_gate": {
+      "exit_code": 3,
+      "qualification": "blocked-no-device",
+      "visible_device": "192.168.23.186:5555",
+      "model": "GT-I8190",
+      "api_level": 22,
+      "min_sdk": 28,
+      "evidence": "artifacts/e2e/ui-e2e-r56.json"
+    },
+    "ui_runner_classification_tests": {
+      "exit_code": 0,
+      "tests": "6/6",
+      "evidence": "artifacts/e2e/ui-runner-tests-r56.log"
+    },
+    "real_sample_lib": {
+      "exit_code": 0,
+      "status": "qualified",
+      "evidence": "artifacts/e2e/samplelib-real-r56.log"
+    },
+    "real_core": {
+      "exit_code": 3,
+      "status": "blocked",
+      "blockers": [
+        "android_real_backend_evidence_missing"
+      ],
+      "evidence": "artifacts/e2e/real-core-r56.log"
+    },
+    "strict_matrix": {
+      "exit_code": 2,
+      "status": "not_qualified",
+      "non_pass_stories": 38,
+      "evidence": "artifacts/e2e/strict-matrix-r56.log"
+    }
+  },
+  "protected_paths": {
+    "e2e/parity/run_conformance.py": "sha256:4ea8c95d9bac98d581b7032546f48cfdf438a35c07242b66d54d4dbe7ab47ab4",
+    ".github/workflows/android-e2e-conformance.yml": "sha256:1fa4281c81873228594f238fa74687e880714fe58f798a95c79ac33dff780bfc"
+  },
+  "reproduced_unowned_blockers": [],
+  "implementation_changes": [],
+  "conclusion": "No reproducible unowned implementation defect found. Canonical parity evidence refreshed only; device, Android-to-real-Sample-Lib, story-level, and hosted-CI gates remain non-pass."
+}

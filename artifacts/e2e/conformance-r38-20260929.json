@@ -1,0 +1,73 @@
+{
+  "schema": "androidjtools.conformance-refresh/v1",
+  "round": "R38",
+  "observed_at": "2026-09-29T11:22:23Z",
+  "git_revision": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "dirty_tree_preserved": true,
+  "protected_paths_untouched": [
+    "e2e/parity/run_conformance.py",
+    ".github/workflows/android-e2e-conformance.yml",
+    "app/src/**",
+    "contracts/**",
+    "test-server/**"
+  ],
+  "ledger": {
+    "required_stories": 87,
+    "pass": 49,
+    "partial": 13,
+    "blocked": 25,
+    "fail": 0,
+    "missing": 0,
+    "structural_validation": "pass"
+  },
+  "gates": {
+    "ui_runner_classification": {
+      "status": "pass",
+      "tests": "6/6"
+    },
+    "host_conformance": {
+      "status": "pass",
+      "exit_code": 0,
+      "qualification": "host-preflight-passed-not-full-conformance",
+      "artifact": "artifacts/e2e/conformance-20260929-r38-host.json"
+    },
+    "emulator_conformance": {
+      "status": "blocked",
+      "exit_code": 1,
+      "reason": "no compatible adb device; discovered GT-I8190 API 22 below minSdk 28",
+      "artifact": "artifacts/e2e/conformance-20260929-r38-emulator.json"
+    },
+    "real_sample_lib": {
+      "status": "pass",
+      "exit_code": 0,
+      "artifact": "artifacts/e2e/samplelib-real-20260929-r38.json"
+    },
+    "real_core": {
+      "status": "blocked",
+      "exit_code": 3,
+      "reason": "android_real_backend_evidence_missing"
+    },
+    "strict_qualification": {
+      "status": "blocked",
+      "exit_code": 2,
+      "reasons": [
+        "38 required stories are non-pass (13 partial, 25 blocked)",
+        "real-core-e2e is not pass",
+        "hosted-ci is not pass",
+        "independent review is not approved"
+      ]
+    }
+  },
+  "host_constituents": {
+    "parity_ledger_integrity": "pass",
+    "architecture_provider_boundary": "pass",
+    "backend_protocol_tests": "39/39 pass",
+    "debug_release_apk_assembly": "pass",
+    "debug_harness_release_exclusion": "pass",
+    "debug_unit_tests": "pass",
+    "android_test_compile": "pass",
+    "lint_debug": "pass",
+    "ui_host_gate": "pass"
+  },
+  "result": "no reproducible unowned implementation defect; evidence-only ledger refresh"
+}

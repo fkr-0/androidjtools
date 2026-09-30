@@ -1,0 +1,69 @@
+{
+  "schema": "androidjtools.conformance-closure/v1",
+  "round": "R44",
+  "date": "2026-09-29",
+  "git_revision": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "status_counts": {
+    "pass": 49,
+    "partial": 13,
+    "blocked": 25,
+    "required_story_count": 87
+  },
+  "checks": {
+    "host_conformance": {
+      "rc": 0,
+      "status": "pass"
+    },
+    "ui_runner_classification": {
+      "rc": 0,
+      "status": "pass",
+      "tests": "6/6"
+    },
+    "ui_device_required": {
+      "rc": 3,
+      "status": "blocked",
+      "reason": "only visible GT-I8190 is API 22; app minSdk is 28"
+    },
+    "samplelib_real_sync": {
+      "rc": 0,
+      "status": "pass"
+    },
+    "real_core_require_real": {
+      "rc": 3,
+      "status": "blocked",
+      "reason": "android_real_backend_evidence_missing"
+    },
+    "strict_matrix": {
+      "rc": 2,
+      "status": "not-qualified",
+      "reasons": [
+        "38 non-pass stories",
+        "real-core gate not pass",
+        "hosted-CI gate not pass",
+        "independent review not approved"
+      ]
+    },
+    "ledger_validation": {
+      "rc": 0,
+      "status": "pass"
+    }
+  },
+  "implementation_defects_reproduced": [],
+  "protected_paths_untouched": [
+    "e2e/parity/run_conformance.py",
+    ".github/workflows/android-e2e-conformance.yml",
+    "app/src/**",
+    "contracts/**",
+    "test-server/**"
+  ],
+  "evidence_sha256": {
+    "docs/parity/parity.json": "4c6fa6a731318964dd26c4d87121930a8aacc7ccc7918c59222a0b55cb2a0498",
+    "docs/parity/README.md": "bc53df8aee05c62e140e16b57a8921da677dcd7bd1650fad122dba76dc11eebf",
+    "artifacts/e2e/conformance-r44-20260929.json": "d4431a8a560d15dcfc826235f48a31e61065f5cefeeada401d9d6ecb64928f14",
+    "artifacts/e2e/ui-e2e-r44.json": "cba24d253757bccea666993b35cf3adf20107a8140bf19b4f0b5ac4cab58cd9d",
+    "artifacts/e2e/ui-runner-tests-r44.log": "988def8b91f5c63ad5aa9cfdf0705842cdc6e680bf3aecd9d1dd906641d4086e",
+    "artifacts/e2e/samplelib-real-r44.log": "c03ac63644c1d4328245385f27a27def241063a0863ed23fb2e42cec472ad03b",
+    "artifacts/e2e/real-core-r44-20260929.log": "762961814d96bf3afa5ac215f8b454733fbfe87e3ce26a2328aa41df1b10d9b2",
+    "artifacts/e2e/strict-matrix-r44-20260929.log": "42617c190a91d653cc561f49878a3cd3842d6d89e89ab2d79b7f077369616985"
+  }
+}

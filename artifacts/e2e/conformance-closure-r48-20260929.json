@@ -1,0 +1,80 @@
+{
+  "schema": "androidjtools.conformance-closure/v1",
+  "task": "large-scale conformance/E2E closure R48",
+  "observed_at": "2026-09-29T15:57:00Z",
+  "git_revision": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "preservation": {
+    "protected_dirty_paths": [
+      "e2e/parity/run_conformance.py",
+      ".github/workflows/android-e2e-conformance.yml"
+    ],
+    "protected_paths_modified": false,
+    "implementation_lanes_modified": false,
+    "canonical_ledger_write_attempt": {
+      "path": "docs/parity/parity.json",
+      "applied": false,
+      "reason": "active conflicting workflow claim on docs/**",
+      "conflicting_claim_id": "27b71670-8c0a-49bb-9dff-5a22dbe52b38",
+      "conflicting_owner": "workflow:2b1043ce-a119-49c2-bea6-81268442a598"
+    }
+  },
+  "evidence": {
+    "host_conformance": {
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local PYTHONDONTWRITEBYTECODE=1 python3 e2e/parity/run_conformance.py --profile host --report artifacts/e2e/conformance-20260929-r48-host.json",
+      "exit_code": 0,
+      "qualification": "host-preflight-passed-not-full-conformance",
+      "passed": [
+        "parity-ledger-integrity",
+        "architecture-provider-boundary",
+        "39 backend/protocol tests",
+        "assembleDebug",
+        "assembleRelease",
+        "debug-harness release exclusion",
+        "debug unit tests",
+        "debug Android-test compilation",
+        "lintDebug",
+        "assembleDebug UI host gate"
+      ]
+    },
+    "ui_device_required": {
+      "command": "JAVA_HOME=/usr/lib/jvm/java-17-openjdk GRADLE_USER_HOME=$PWD/.gradle-local PYTHONDONTWRITEBYTECODE=1 python3 e2e/ui/run_ui_e2e.py --require-device --json-out artifacts/e2e/ui-e2e-20260929-r48-device.json",
+      "exit_code": 3,
+      "status": "blocked",
+      "reason": "no compatible adb device; visible GT-I8190 is API 22 while app minSdk is 28"
+    },
+    "ui_runner_unit_tests": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest e2e.ui.test_run_ui_e2e",
+      "exit_code": 0,
+      "tests": 6
+    },
+    "real_core": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 e2e/parity/run_core_e2e.py --require-real --sample-lib-root /home/user/code/sample-lab/third_party/sample-lib --device-backend-evidence artifacts/e2e/real-device-backend.json",
+      "exit_code": 3,
+      "status": "blocked",
+      "blockers": [
+        "android_real_backend_evidence_missing"
+      ],
+      "sample_lib_adapter_tests_passed": true,
+      "playlist_authority_tests_passed": true,
+      "missing_production_sync_routes": []
+    },
+    "strict_matrix": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 e2e/parity/validate_matrix.py --require-qualified",
+      "exit_code": 2,
+      "required_story_count": 87,
+      "status_counts": {
+        "pass": 49,
+        "partial": 13,
+        "blocked": 25
+      },
+      "validation_errors": [
+        "38 stories remain non-pass",
+        "required real-system evidence is not pass: real-core-e2e",
+        "required hosted-CI evidence is not pass: hosted-ci",
+        "independent review is not approved"
+      ]
+    }
+  },
+  "reproduced_unowned_blockers": [],
+  "conclusion": "No new unowned implementation defect reproduced. Host conformance is green; full qualification remains blocked by missing compatible Android device/real-backend round-trip evidence plus existing hosted-CI and independent-review gates."
+}

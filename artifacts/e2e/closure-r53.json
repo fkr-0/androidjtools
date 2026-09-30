@@ -1,0 +1,77 @@
+{
+  "schema": "androidjtools.e2e-closure/v1",
+  "task_id": "ANDROIDJTOOLS-E2E-CLOSURE-R53-20260929",
+  "observed_at": "2026-09-29T17:42:34Z",
+  "git_revision": "131b33ef3118882e7aa414f9b245be10a5ef37c7",
+  "story_counts": {
+    "pass": 49,
+    "partial": 13,
+    "blocked": 25,
+    "fail": 0,
+    "missing": 0,
+    "required": 87
+  },
+  "gates": {
+    "host_conformance": {
+      "status": "pass",
+      "exit_code": 0,
+      "qualification": "host-preflight-passed-not-full-conformance",
+      "evidence": "artifacts/e2e/conformance-r53-host.json"
+    },
+    "emulator_conformance": {
+      "status": "blocked",
+      "exit_code": 1,
+      "qualification": "emulator-conformance-failed",
+      "reason": "no compatible adb device; only visible target is API 22 below minSdk 28",
+      "evidence": "artifacts/e2e/conformance-r53-emulator.json"
+    },
+    "ui_device": {
+      "status": "blocked",
+      "exit_code": 3,
+      "reason": "no-compatible-adb-device",
+      "visible_device": {
+        "serial": "192.168.23.186:5555",
+        "api_level": 22,
+        "min_sdk": 28
+      },
+      "evidence": "artifacts/e2e/ui-e2e.json"
+    },
+    "backend_contracts": {
+      "status": "pass",
+      "tests": 39
+    },
+    "release_variant_build": {
+      "status": "pass"
+    },
+    "debug_harness_release_exclusion": {
+      "status": "pass"
+    },
+    "real_sample_lib": {
+      "status": "pass",
+      "exit_code": 0
+    },
+    "real_core": {
+      "status": "blocked",
+      "exit_code": 3,
+      "reason": "android_real_backend_evidence_missing",
+      "required_evidence": "artifacts/e2e/real-device-backend.json"
+    },
+    "strict_parity": {
+      "status": "blocked",
+      "exit_code": 2,
+      "reasons": [
+        "38 required stories are non-pass (25 blocked + 13 partial)",
+        "required real-system evidence real-core-e2e is not pass",
+        "required hosted-CI evidence is not pass"
+      ]
+    }
+  },
+  "changes": {
+    "implementation_fixes": [],
+    "protected_files_unchanged": [
+      "e2e/parity/run_conformance.py",
+      ".github/workflows/android-e2e-conformance.yml"
+    ],
+    "note": "No reproducible unowned implementation blocker was found; only canonical ledger/evidence metadata was refreshed."
+  }
+}

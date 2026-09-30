@@ -1,0 +1,20 @@
+{
+  "device": {
+    "adb": "/opt/android-sdk/platform-tools/adb",
+    "count": 0,
+    "error": null,
+    "required": true,
+    "serials": [],
+    "status": "unavailable"
+  },
+  "host": {
+    "status": "skipped"
+  },
+  "instrumentation": {
+    "reason": "no-ready-adb-device",
+    "status": "not-run"
+  },
+  "qualification": "blocked-no-device",
+  "root": "/home/user/code/androidjtools",
+  "schema": "androidjtools.ui-e2e/v1"
+}

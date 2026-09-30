@@ -1,0 +1,15 @@
+{
+  "forbidden_backend_prefixes": [
+    "dev.androidjtools.fixture.",
+    "dev.androidjtools.remote.",
+    "dev.androidjtools.sync.",
+    "dev.androidjtools.debug.",
+    "dev.androidjtools.interop."
+  ],
+  "missing_provider_contracts": [],
+  "schema": "androidjtools.architecture-boundary/v1",
+  "status": "pass",
+  "story": "US-004",
+  "ui_files_inspected": 17,
+  "violations": []
+}
