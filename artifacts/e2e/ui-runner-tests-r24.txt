@@ -1,0 +1,11 @@
+test_adb_list_failure_is_distinct (e2e.ui.test_run_ui_e2e.AdbDeviceCompatibilityTests.test_adb_list_failure_is_distinct) ... ok
+test_compatible_ready_device_is_admitted (e2e.ui.test_run_ui_e2e.AdbDeviceCompatibilityTests.test_compatible_ready_device_is_admitted) ... ok
+test_invalid_sdk_probe_fails_closed (e2e.ui.test_run_ui_e2e.AdbDeviceCompatibilityTests.test_invalid_sdk_probe_fails_closed) ... ok
+test_non_ready_states_are_reported_without_sdk_probe (e2e.ui.test_run_ui_e2e.AdbDeviceCompatibilityTests.test_non_ready_states_are_reported_without_sdk_probe) ... ok
+test_ready_device_below_min_sdk_is_rejected (e2e.ui.test_run_ui_e2e.AdbDeviceCompatibilityTests.test_ready_device_below_min_sdk_is_rejected) ... ok
+test_sdk_probe_failure_fails_closed (e2e.ui.test_run_ui_e2e.AdbDeviceCompatibilityTests.test_sdk_probe_failure_fails_closed) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.004s
+
+OK
