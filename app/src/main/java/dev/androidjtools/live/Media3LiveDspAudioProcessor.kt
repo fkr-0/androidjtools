@@ -1,8 +1,10 @@
 package dev.androidjtools.live
 
+import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
+import androidx.media3.common.util.UnstableApi
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.roundToInt
@@ -15,6 +17,7 @@ import kotlin.math.roundToInt
  * The scratch buffer only grows when Media3 presents a larger block; steady-state processing does
  * not allocate per audio block.
  */
+@OptIn(UnstableApi::class)
 internal class Media3LiveDspAudioProcessor : BaseAudioProcessor() {
     @Volatile
     private var effectStates: Map<LiveEffectType, LiveEffectState> =

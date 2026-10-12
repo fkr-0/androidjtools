@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -12,6 +13,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.common.util.UnstableApi
 
 /**
  * Two-deck Android compatibility engine.
@@ -22,6 +24,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
  * for device media. The controller remains backend-independent so a direct native AAudio/OpenSL ES
  * implementation can replace this compatibility backend without changing UI/control semantics.
  */
+@OptIn(UnstableApi::class)
 class Media3LiveAudioEngine(
     context: Context,
     private val mediaUriResolver: (String) -> String?,

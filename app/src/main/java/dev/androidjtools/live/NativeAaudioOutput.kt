@@ -1,6 +1,7 @@
 package dev.androidjtools.live
 
 import android.os.Build
+import androidx.annotation.OptIn
 import androidx.annotation.RequiresApi
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackParameters
@@ -9,6 +10,7 @@ import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
+import androidx.media3.common.util.UnstableApi
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -124,6 +126,7 @@ class NativeAaudioMixer private constructor(
     }
 }
 
+@OptIn(UnstableApi::class)
 internal class NativeAaudioOutputProcessor(
     private val deck: DeckId,
     private val mixer: NativeAaudioMixer,
@@ -246,6 +249,7 @@ internal class NativeAaudioOutputProcessor(
     }
 }
 
+@OptIn(UnstableApi::class)
 internal class NativeAaudioProcessorChain(
     nativeOutput: NativeAaudioOutputProcessor,
 ) : DefaultAudioSink.AudioProcessorChain {
