@@ -32,6 +32,7 @@ import androidx.navigation.compose.rememberNavController
 import dev.androidjtools.core.provider.AppProviders
 import dev.androidjtools.live.LivePerformanceController
 import dev.androidjtools.playback.PlayerQueueController
+import dev.androidjtools.sync.samplelib.ServerSessionController
 import dev.androidjtools.ui.analysis.AnalysisScreen
 import dev.androidjtools.ui.collections.CollectionsScreen
 import dev.androidjtools.ui.library.LibraryScreen
@@ -48,6 +49,7 @@ fun AndroidDjToolsApp(
     providers: AppProviders,
     playerQueueController: PlayerQueueController? = null,
     livePerformanceController: LivePerformanceController? = null,
+    server: ServerSessionController? = null,
 ) {
     val nav = rememberNavController()
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
@@ -117,7 +119,7 @@ fun AndroidDjToolsApp(
             }
             composable("analysis") { AnalysisScreen(providers) }
             composable("offline") { OfflineScreen(providers) }
-            composable("sync") { SyncScreen(providers) }
+            composable("sync") { SyncScreen(providers, server) }
         }
     }
 }
