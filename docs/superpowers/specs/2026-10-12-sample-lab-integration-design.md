@@ -1,6 +1,6 @@
 # Sample Lab integration design
 
-Status: approved in conversation 2026-10-12; awaiting written-spec review.
+Status: spec approved 2026-10-12. S1 implementation plan: `docs/superpowers/plans/2026-10-12-samplelab-s1-connect-and-read.md`. S2 to S5 not yet planned.
 Branch: `feat/samplelab-integration`.
 
 ## Purpose

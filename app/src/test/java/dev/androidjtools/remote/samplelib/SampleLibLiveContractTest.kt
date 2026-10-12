@@ -1,5 +1,14 @@
 package dev.androidjtools.remote.samplelib
 
+import dev.androidjtools.core.model.SyncState
+import dev.androidjtools.sync.samplelib.FakeCipher
+import dev.androidjtools.sync.samplelib.JdbcSqlDatabase
+import dev.androidjtools.sync.samplelib.LibraryProjector
+import dev.androidjtools.sync.samplelib.SampleLibProfileStore
+import dev.androidjtools.sync.samplelib.SampleLibSessionManager
+import dev.androidjtools.sync.samplelib.SqlLibraryCache
+import dev.androidjtools.sync.samplelib.StoredSessionResult
+import java.nio.file.Files
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
@@ -184,6 +193,45 @@ class SampleLibLiveContractTest {
             client.push(session, listOf(unsupported))
             fail("unadvertised operation must not be sent")
         } catch (expected: SampleLibFailure.CapabilityUnavailable) {
+        }
+    }
+
+    @Test
+    fun managerPairsSyncsAndProjectsTheRealLibraryThenForgets() = runBlocking {
+        requireLive()
+        val dir = Files.createTempDirectory("samplelib-live-store").toFile()
+        val db = JdbcSqlDatabase()
+        try {
+            val cache = SqlLibraryCache(db)
+            val store = SampleLibProfileStore(dir, FakeCipher())
+            val manager = SampleLibSessionManager(store, cache)
+
+            manager.pair(baseUrl, pairingCode)
+
+            assertEquals(manager.error.value, SyncState.ONLINE_IDLE, manager.state.value)
+            assertTrue("interval.editor_state.replace" in manager.capabilities.value!!.mutations)
+            val projection = LibraryProjector.project(cache.entities("asset"), cache.entities("interval"))
+            val track = projection.tracks.single { it.id == "asset-1" }
+            assertEquals("A", track.title)
+            assertEquals("Artist", track.artist)
+            assertEquals(3, track.rating)
+            val cue = projection.cues.getValue("asset-1").single { it.id == "marker-a" }
+            assertEquals(1500L, cue.positionMs)
+            assertEquals(0xFF112233L, cue.colorArgb)
+
+            // A second refresh reconnects with the pinned identity and finds nothing new.
+            val before = cache.entities("asset").map { it.revision }
+            manager.refresh()
+            assertEquals(SyncState.ONLINE_IDLE, manager.state.value)
+            assertEquals(before, cache.entities("asset").map { it.revision })
+
+            manager.forget()
+            assertEquals(StoredSessionResult.Absent, store.load())
+            assertTrue(cache.entities("asset").isEmpty())
+            assertEquals(SyncState.UNCONFIGURED, manager.state.value)
+        } finally {
+            db.close()
+            dir.deleteRecursively()
         }
     }
 }

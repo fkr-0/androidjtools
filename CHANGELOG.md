@@ -4,6 +4,14 @@ All notable changes to Android DJ Tools are documented here.
 
 ## Unreleased
 
+### Sample Lab integration (S1: connect and read)
+
+- Pair with a Sample Lib server from the Sync screen; the server's library, cues and loops are synced into a local cache and shown in the Library. The Sync screen lists which server capabilities (library, playlists, editing, analysis, audio) are and are not available, and why.
+- The credential is encrypted with an Android Keystore key and stored outside backups; `allowBackup` is now `false`, and cleartext traffic is limited to loopback.
+- Server tracks cannot be played yet (server audio arrives in S2); device tracks stay visible and playable, and tapping a server track explains why.
+- Server addresses with a reverse-proxy path prefix now work (the sync endpoints no longer drop the prefix).
+- Periodic background sync (unmetered networks) and manual refresh; Forget server removes the profile, credential and cache.
+
 ### Release engineering
 
 - Release builds can be signed with a project-owned key supplied through `ANDROID_KEYSTORE_*` environment variables or a git-ignored `keystore.properties`; `-PrequireReleaseSigning=true` fails the build instead of falling back to the debug key. Tag CI requires it.
