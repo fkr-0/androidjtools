@@ -1,0 +1,178 @@
+package dev.androidjtools.sync.samplelib
+
+import dev.androidjtools.core.model.SyncState
+import dev.androidjtools.remote.samplelib.PairingCode
+import dev.androidjtools.remote.samplelib.SampleLibClient
+import dev.androidjtools.remote.samplelib.SampleLibFailure
+import dev.androidjtools.remote.samplelib.SampleLibHttpTransport
+import dev.androidjtools.remote.samplelib.SampleLibSession
+import dev.androidjtools.remote.samplelib.ServerCapabilities
+import dev.androidjtools.remote.samplelib.normalizeBaseUrl
+import java.util.UUID
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+const val SAMPLE_LIB_CLIENT_ID = "android-dj-tools"
+
+val defaultSampleLibClientFactory: (String, String) -> SampleLibClient = { baseUrl, installationId ->
+    SampleLibClient(SampleLibHttpTransport(baseUrl), SAMPLE_LIB_CLIENT_ID, installationId)
+}
+
+/**
+ * Owns the connection lifecycle: pair, reconnect, sync, forget. Every operation holds one lock, so a
+ * forget can never interleave with a sync. User-visible messages never contain secrets.
+ */
+class SampleLibSessionManager(
+    private val store: SampleLibProfileStore,
+    private val cache: LibraryCache,
+    private val clientFactory: (baseUrl: String, installationId: String) -> SampleLibClient = defaultSampleLibClientFactory,
+    private val newInstallationId: () -> String = { UUID.randomUUID().toString() },
+) {
+    private val lock = Mutex()
+    private val mutableState = MutableStateFlow(SyncState.UNCONFIGURED)
+    private val mutableCapabilities = MutableStateFlow<ServerCapabilities?>(null)
+    private val mutableError = MutableStateFlow<String?>(null)
+    private val mutableProfile = MutableStateFlow<SampleLibProfile?>(null)
+
+    val state: StateFlow<SyncState> = mutableState.asStateFlow()
+    val capabilities: StateFlow<ServerCapabilities?> = mutableCapabilities.asStateFlow()
+    val error: StateFlow<String?> = mutableError.asStateFlow()
+    val profile: StateFlow<SampleLibProfile?> = mutableProfile.asStateFlow()
+
+    /** Loads the stored session (if any), reconnects with the pinned server identity and syncs. */
+    suspend fun refresh() = lock.withLock {
+        when (val loaded = store.load()) {
+            StoredSessionResult.Absent -> {
+                mutableProfile.value = null
+                mutableCapabilities.value = null
+                mutableState.value = SyncState.UNCONFIGURED
+            }
+            is StoredSessionResult.Unreadable -> {
+                mutableProfile.value = loaded.profile
+                mutableCapabilities.value = null
+                fail(SyncState.AUTH_REQUIRED, "The stored server credential could not be read. Pair again.")
+            }
+            is StoredSessionResult.Loaded -> {
+                val stored = loaded.session
+                mutableProfile.value = stored.profile
+                guarded(::applyRefreshFailure) {
+                    val client = clientFactory(stored.profile.baseUrl, stored.profile.installationId)
+                    val session = client.connect(stored.credential, stored.profile.serverId, null, stored.profile.principalId)
+                    syncSession(client, session)
+                }
+            }
+        }
+    }
+
+    suspend fun pair(rawUrl: String, rawCode: String) = lock.withLock {
+        val baseUrl = try {
+            normalizeBaseUrl(rawUrl)
+        } catch (invalid: IllegalArgumentException) {
+            mutableError.value = invalid.message
+            return@withLock
+        }
+        val code = rawCode.trim()
+        if (code.isEmpty()) {
+            mutableError.value = "Enter the pairing code."
+            return@withLock
+        }
+
+        val previousState = mutableState.value
+        mutableError.value = null
+        mutableState.value = SyncState.PAIRING
+        val installationId = mutableProfile.value?.installationId ?: newInstallationId()
+        val (client, session) = try {
+            val created = clientFactory(baseUrl, installationId)
+            created to created.pair(PairingCode.entered(code))
+        } catch (cancelled: CancellationException) {
+            mutableState.value = previousState
+            throw cancelled
+        } catch (failure: Exception) {
+            mutableState.value = previousState
+            mutableError.value = describePairingFailure(failure)
+            return@withLock
+        }
+
+        guarded(::applyRefreshFailure) {
+            val cachedServer = cache.meta().serverId
+            if (cachedServer != null && cachedServer != session.identity.serverId) cache.reset()
+            val saved = SampleLibProfile(baseUrl, session.identity.serverId, session.principalId, installationId)
+            store.save(saved, session.credential)
+            mutableProfile.value = saved
+            syncSession(client, session)
+        }
+    }
+
+    suspend fun forget() = lock.withLock {
+        store.clear()
+        cache.reset()
+        mutableProfile.value = null
+        mutableCapabilities.value = null
+        mutableError.value = null
+        mutableState.value = SyncState.UNCONFIGURED
+    }
+
+    private suspend fun syncSession(client: SampleLibClient, session: SampleLibSession) {
+        mutableCapabilities.value = session.capabilities
+        mutableState.value = SyncState.PULLING
+        val engine = SampleLibSyncEngine(client, cache)
+        var result = engine.sync(session)
+        if (result is SyncResult.NeedsReconnect) {
+            val fresh = client.connect(session.credential, session.identity.serverId, null, session.principalId)
+            mutableCapabilities.value = fresh.capabilities
+            result = engine.sync(fresh)
+            if (result is SyncResult.NeedsReconnect) {
+                throw SampleLibFailure.InvalidResponse("Server authority kept changing during sync")
+            }
+        }
+        mutableError.value = null
+        mutableState.value = SyncState.ONLINE_IDLE
+    }
+
+    private suspend fun guarded(onFailure: (Exception) -> Unit, block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            onFailure(failure)
+        }
+    }
+
+    private fun applyRefreshFailure(failure: Exception) {
+        when (failure) {
+            is SampleLibFailure.AuthRequired ->
+                fail(SyncState.AUTH_REQUIRED, "The server rejected the stored credential. Pair again.")
+            is SampleLibFailure.Incompatible ->
+                fail(SyncState.SERVER_INCOMPATIBLE, "This server does not support a compatible sync protocol.")
+            is SampleLibFailure.Offline ->
+                fail(SyncState.OFFLINE, "Server unreachable. Showing the last synced library.")
+            is SampleLibFailure.ServerIdentityMismatch ->
+                fail(SyncState.DEGRADED, "The server identity changed. Forget this server and pair again.")
+            is SampleLibFailure ->
+                fail(SyncState.DEGRADED, "The server returned an unexpected response.")
+            else -> fail(SyncState.DEGRADED, "Local storage error.")
+        }
+    }
+
+    private fun describePairingFailure(failure: Exception): String = when (failure) {
+        is SampleLibFailure.PairingRejected -> "The server rejected the pairing code."
+        is SampleLibFailure.InsecureTransport -> "Use an https:// address for servers outside this device."
+        is SampleLibFailure.Offline -> "Could not reach the server."
+        is SampleLibFailure.Incompatible -> "This server does not support a compatible sync protocol."
+        is SampleLibFailure.ServerIdentityMismatch -> "The server identity could not be confirmed."
+        is SampleLibFailure.AuthRequired -> "The server did not authorize this pairing."
+        is SampleLibFailure -> "The server returned an unexpected response."
+        is IllegalArgumentException -> failure.message ?: "Invalid pairing input."
+        else -> "Pairing failed."
+    }
+
+    private fun fail(state: SyncState, message: String) {
+        mutableError.value = message
+        mutableState.value = state
+    }
+}
