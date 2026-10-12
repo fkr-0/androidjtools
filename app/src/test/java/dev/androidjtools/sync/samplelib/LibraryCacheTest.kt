@@ -139,6 +139,40 @@ class LibraryCacheTest {
     }
 
     @Test
+    fun constructingTheCacheDoesNoDatabaseWorkAndTheFirstUseCreatesTheSchema() {
+        val counting = CountingSqlDatabase(db)
+        val cache = SqlLibraryCache(counting)
+        assertEquals(0, counting.transactions)
+        assertEquals(emptyList<String>(), tableNames())
+
+        cache.meta()
+
+        assertTrue(counting.transactions > 0)
+        assertEquals(listOf("entities", "meta"), tableNames())
+    }
+
+    @Test
+    fun aFirstUseFailureIsRetriedOnTheNextCall() {
+        val failing = FailingSqlDatabase(db)
+        val cache = SqlLibraryCache(failing)
+        failing.failOnNthExecute(1)
+        try {
+            cache.entities("asset")
+            fail("expected the injected failure during the schema setup")
+        } catch (expected: IllegalStateException) {
+        }
+        assertEquals(emptyList<String>(), tableNames())
+
+        assertTrue(cache.entities("asset").isEmpty())
+
+        assertEquals(listOf("entities", "meta"), tableNames())
+    }
+
+    private fun tableNames(): List<String> = db.transaction { conn ->
+        conn.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name") { it.string(0).orEmpty() }
+    }
+
+    @Test
     fun aSecondInstanceOnTheSameDatabaseSeesCommittedData() {
         SqlLibraryCache(db).applyPage(listOf(change("asset", "a1", "r1")), emptyList(), CacheMeta("c1", "g", "s"))
         val reopened = SqlLibraryCache(db)
@@ -170,5 +204,16 @@ class FailingSqlDatabase(private val delegate: SqlDatabase) : SqlDatabase {
 
         override fun <T> query(sql: String, vararg args: Any?, map: (SqlRow) -> T): List<T> =
             real.query(sql, *args, map = map)
+    }
+}
+
+/** Counts how often the database is touched, to prove that constructing a cache does no database work. */
+class CountingSqlDatabase(private val delegate: SqlDatabase) : SqlDatabase {
+    var transactions = 0
+        private set
+
+    override fun <T> transaction(block: (SqlConnection) -> T): T {
+        transactions++
+        return delegate.transaction(block)
     }
 }

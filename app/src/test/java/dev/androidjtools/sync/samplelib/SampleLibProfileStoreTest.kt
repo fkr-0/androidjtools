@@ -96,6 +96,57 @@ class SampleLibProfileStoreTest {
         assertEquals(null, unreadable.profile)
     }
 
+    private fun blockCredentialDeletion() {
+        val credential = File(tmp.root, "samplelib/samplelib-credential.bin")
+        credential.delete()
+        credential.mkdirs()
+        File(credential, "blocker").writeText("x") // a non-empty directory cannot be deleted by File.delete()
+    }
+
+    @Test
+    fun clearDestroysTheCipherKeyExactlyOnce() {
+        val cipher = FakeCipher()
+        val store = store(cipher)
+        store.save(profile, MobileCredential.issued(token))
+        assertTrue(store.clear())
+        assertEquals(1, cipher.destroyCalls)
+    }
+
+    @Test
+    fun clearStillDestroysTheKeyWhenTheCredentialFileCannotBeDeleted() {
+        val cipher = FakeCipher()
+        val store = store(cipher)
+        store.save(profile, MobileCredential.issued(token))
+        blockCredentialDeletion()
+        assertFalse(store.clear())
+        assertEquals(1, cipher.destroyCalls)
+    }
+
+    @Test
+    fun aFailingKeyDestroyNeitherThrowsNorChangesTheResult() {
+        val cipher = FakeCipher(failDestroy = true)
+        val store = store(cipher)
+        store.save(profile, MobileCredential.issued(token))
+        assertTrue(store.clear())
+        assertEquals(1, cipher.destroyCalls)
+        assertEquals(StoredSessionResult.Absent, store.load())
+
+        store.save(profile, MobileCredential.issued(token))
+        blockCredentialDeletion()
+        assertFalse(store.clear())
+        assertEquals(2, cipher.destroyCalls)
+    }
+
+    @Test
+    fun savingAfterClearWorksAgain() {
+        val store = store()
+        store.save(profile, MobileCredential.issued("first"))
+        store.clear()
+        store.save(profile, MobileCredential.issued("second"))
+        val loaded = store.load() as StoredSessionResult.Loaded
+        assertEquals("second", loaded.session.credential.bearerValue())
+    }
+
     @Test
     fun clearReportsWhetherEverythingWasRemoved() {
         assertTrue(store().clear())

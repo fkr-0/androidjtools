@@ -29,6 +29,9 @@ sealed interface StoredSessionResult {
 interface CredentialCipher {
     fun encrypt(plain: ByteArray): ByteArray
     fun decrypt(encrypted: ByteArray): ByteArray
+
+    /** Destroys the key material behind this cipher (best effort). Ciphertext made before is unreadable afterwards. */
+    fun destroy() {}
 }
 
 /** Persists the (non-secret) server profile and the encrypted credential in two separate files. */
@@ -60,11 +63,21 @@ class SampleLibProfileStore(private val dir: File, private val cipher: Credentia
         return StoredSessionResult.Loaded(StoredSession(profile, credential))
     }
 
-    /** Deletes both files; true only if neither exists afterwards (File.delete() fails silently). */
+    /**
+     * Deletes both files and then destroys the cipher key. Returns true only if neither file exists afterwards
+     * (File.delete() fails silently). The key is destroyed even when a file could not be deleted: leftover
+     * ciphertext is then unreadable, which is what Forget wants. Destroying is best effort and never throws.
+     */
     fun clear(): Boolean {
         profileFile.delete()
         credentialFile.delete()
-        return !profileFile.exists() && !credentialFile.exists()
+        val removed = !profileFile.exists() && !credentialFile.exists()
+        try {
+            cipher.destroy()
+        } catch (_: Exception) {
+            // The key may already be gone or the Keystore unavailable; the files are what the result reports.
+        }
+        return removed
     }
 
     private fun encode(profile: SampleLibProfile): JsonObject = buildJsonObject {

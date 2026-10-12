@@ -23,6 +23,8 @@ class AesGcmKeystoreCipher(private val alias: String = DEFAULT_ALIAS) : Credenti
         return cipher.doFinal(encrypted, IV_BYTES, encrypted.size - IV_BYTES)
     }
 
+    override fun destroy() = deleteKey()
+
     fun deleteKey() {
         val store = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         if (store.containsAlias(alias)) store.deleteEntry(alias)

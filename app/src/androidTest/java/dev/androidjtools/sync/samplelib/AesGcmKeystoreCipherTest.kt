@@ -41,4 +41,17 @@ class AesGcmKeystoreCipherTest {
         } catch (expected: Exception) {
         }
     }
+
+    @Test
+    fun destroyMakesOldCiphertextUnreadableAndANewKeyWorksAfterwards() {
+        val encrypted = cipher.encrypt("secret-token".toByteArray())
+        cipher.destroy()
+        try {
+            cipher.decrypt(encrypted)
+            fail("destroy() must make earlier ciphertext undecryptable")
+        } catch (expected: Exception) {
+        }
+        val fresh = "next-token".toByteArray()
+        assertArrayEquals(fresh, cipher.decrypt(cipher.encrypt(fresh)))
+    }
 }
