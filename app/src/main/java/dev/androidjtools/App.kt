@@ -38,6 +38,7 @@ import dev.androidjtools.ui.collections.CollectionsScreen
 import dev.androidjtools.ui.library.LibraryScreen
 import dev.androidjtools.ui.live.LivePerformanceScreen
 import dev.androidjtools.ui.offline.OfflineScreen
+import dev.androidjtools.ui.player.PlaybackNoticeBanner
 import dev.androidjtools.ui.player.PlayerHost
 import dev.androidjtools.ui.sync.SyncScreen
 import dev.androidjtools.ui.waveform.WaveformScreen
@@ -109,17 +110,20 @@ fun AndroidDjToolsApp(
             }
         },
     ) { padding ->
-        NavHost(navController = nav, startDestination = "library", modifier = Modifier.padding(padding)) {
-            composable("library") { LibraryScreen(providers) }
-            composable("collections") { CollectionsScreen(providers) }
-            composable("waveform") { WaveformScreen(providers) }
-            composable("live") {
-                livePerformanceController?.let { LivePerformanceScreen(providers, it) }
-                    ?: Text("Live performance is unavailable in this runtime.")
+        Column(Modifier.padding(padding)) {
+            PlaybackNoticeBanner(providers)
+            NavHost(navController = nav, startDestination = "library", modifier = Modifier.weight(1f)) {
+                composable("library") { LibraryScreen(providers) }
+                composable("collections") { CollectionsScreen(providers) }
+                composable("waveform") { WaveformScreen(providers) }
+                composable("live") {
+                    livePerformanceController?.let { LivePerformanceScreen(providers, it) }
+                        ?: Text("Live performance is unavailable in this runtime.")
+                }
+                composable("analysis") { AnalysisScreen(providers) }
+                composable("offline") { OfflineScreen(providers) }
+                composable("sync") { SyncScreen(providers, server) }
             }
-            composable("analysis") { AnalysisScreen(providers) }
-            composable("offline") { OfflineScreen(providers) }
-            composable("sync") { SyncScreen(providers, server) }
         }
     }
 }

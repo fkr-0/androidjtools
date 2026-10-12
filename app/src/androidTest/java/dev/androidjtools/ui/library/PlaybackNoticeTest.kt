@@ -9,6 +9,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import dev.androidjtools.core.provider.PlaybackProvider
 import dev.androidjtools.fixture.FixtureAppProviders
+import dev.androidjtools.ui.player.PlaybackNoticeBanner
 import dev.androidjtools.ui.theme.AndroidDjToolsTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,11 +24,15 @@ class PlaybackNoticeTest {
         override val playbackNotice: StateFlow<String?> = MutableStateFlow("Server audio is not available yet.")
     }
 
+    private class NoNoticePlayback(private val delegate: PlaybackProvider) : PlaybackProvider by delegate {
+        override val playbackNotice: StateFlow<String?> = MutableStateFlow(null)
+    }
+
     @Test
-    fun theLibraryShowsTheProvidersPlaybackNotice() {
+    fun theBannerShowsTheProvidersPlaybackNotice() {
         val fixtures = FixtureAppProviders.create()
         val providers = fixtures.copy(playback = NoticePlayback(fixtures.playback))
-        compose.setContent { AndroidDjToolsTheme { LibraryScreen(providers) } }
+        compose.setContent { AndroidDjToolsTheme { PlaybackNoticeBanner(providers) } }
         compose.onNodeWithTag("playback-notice").assertIsDisplayed()
     }
 
@@ -35,8 +40,16 @@ class PlaybackNoticeTest {
     fun theNoticeIsAnnouncedAsAPoliteLiveRegion() {
         val fixtures = FixtureAppProviders.create()
         val providers = fixtures.copy(playback = NoticePlayback(fixtures.playback))
-        compose.setContent { AndroidDjToolsTheme { LibraryScreen(providers) } }
+        compose.setContent { AndroidDjToolsTheme { PlaybackNoticeBanner(providers) } }
         compose.onNodeWithTag("playback-notice")
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+    }
+
+    @Test
+    fun noNodeWhenTheNoticeIsNull() {
+        val fixtures = FixtureAppProviders.create()
+        val providers = fixtures.copy(playback = NoNoticePlayback(fixtures.playback))
+        compose.setContent { AndroidDjToolsTheme { PlaybackNoticeBanner(providers) } }
+        compose.onNodeWithTag("playback-notice").assertDoesNotExist()
     }
 }

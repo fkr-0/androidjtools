@@ -65,19 +65,21 @@ fun AnalysisScreen(
                 is AnalysisUiAction.Reject -> providers.analysis.reject(action.suggestionId)
                 is AnalysisUiAction.Refresh -> providers.analysis.refresh(action.trackId)
                 is AnalysisUiAction.Preview -> {
-                    val positionMs = suggestions
-                        .firstOrNull { it.id == action.suggestionId }
-                        ?.let { suggestion ->
-                            when (val payload = suggestion.payload) {
-                                is SuggestionPayload.Point -> payload.positionMs
-                                is SuggestionPayload.Range -> payload.startMs
-                                is SuggestionPayload.Transcript -> payload.positionMs
-                                else -> null
+                    if (track.playable) {
+                        val positionMs = suggestions
+                            .firstOrNull { it.id == action.suggestionId }
+                            ?.let { suggestion ->
+                                when (val payload = suggestion.payload) {
+                                    is SuggestionPayload.Point -> payload.positionMs
+                                    is SuggestionPayload.Range -> payload.startMs
+                                    is SuggestionPayload.Transcript -> payload.positionMs
+                                    else -> null
+                                }
                             }
+                        positionMs?.let { position ->
+                            providers.playback.play(track.id)
+                            providers.playback.seek(position)
                         }
-                    positionMs?.let { position ->
-                        providers.playback.play(track.id)
-                        providers.playback.seek(position)
                     }
                 }
             }

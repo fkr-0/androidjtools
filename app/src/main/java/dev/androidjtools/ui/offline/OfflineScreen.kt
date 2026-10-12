@@ -203,10 +203,19 @@ private fun OfflineTrackRow(
             Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
 
+        track.unplayableReason?.let { reason ->
+            Text(
+                reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.testTag("unplayable-reason-${track.id}"),
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (actions.canPlay) {
                 Button(
                     onClick = { providers.playback.play(track.id) },
+                    enabled = track.playable,
                     modifier = Modifier.testTag("offline-track-play-${track.id}").semantics { contentDescription = "Play cached ${track.title}" },
                 ) { Text("Play") }
             }

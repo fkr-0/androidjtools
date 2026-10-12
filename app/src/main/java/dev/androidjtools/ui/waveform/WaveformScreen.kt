@@ -215,8 +215,16 @@ fun WaveformScreen(providers: AppProviders) {
             }
         }
 
+        track.unplayableReason?.let { reason ->
+            Text(
+                reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.testTag("unplayable-reason-${track.id}"),
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { providers.playback.play(track.id) }) { Text("Play") }
+            Button(onClick = { providers.playback.play(track.id) }, enabled = track.playable) { Text("Play") }
             Button(onClick = providers.playback::toggle) { Text(if (playing) "Pause" else "Resume") }
         }
     }

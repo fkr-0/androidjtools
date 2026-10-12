@@ -62,9 +62,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -87,7 +85,6 @@ fun LibraryScreen(
     val currentTrackId by providers.playback.currentTrackId.collectAsState()
     val isPlaying by providers.playback.isPlaying.collectAsState()
     val syncState by providers.sync.state.collectAsState()
-    val playbackNotice by providers.playback.playbackNotice.collectAsState()
     val effectiveSurfaceState = surfaceState ?: providerUiState.toLibrarySurfaceState()
 
     var query by rememberSaveable { mutableStateOf("") }
@@ -170,18 +167,6 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .testTag(if (roomy) "library-layout-roomy" else "library-layout-compact"),
         ) {
-            playbackNotice?.let { notice ->
-                Text(
-                    text = notice,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = horizontalPadding, vertical = 8.dp)
-                        .semantics { liveRegion = LiveRegionMode.Polite }
-                        .testTag("playback-notice"),
-                )
-            }
             LibraryHeader(
                 totalCount = tracks.size,
                 visibleCount = visibleTracks.size,
@@ -716,6 +701,15 @@ private fun TrackRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.testTag("track-metadata-${track.id}"),
                 )
+                track.unplayableReason?.let { reason ->
+                    Text(
+                        reason,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 2,
+                        modifier = Modifier.testTag("unplayable-reason-${track.id}"),
+                    )
+                }
             }
             val playbackActionLabel = when {
                 isCurrent && isPlaying -> "Pause"
@@ -724,6 +718,7 @@ private fun TrackRow(
             }
             IconButton(
                 onClick = onPlay,
+                enabled = track.playable,
                 modifier = Modifier.semantics {
                     contentDescription = "$playbackActionLabel ${track.title}"
                 },
@@ -804,8 +799,15 @@ private fun LibraryTrackDetail(
             if (track.isAnalyzed) "Analysis available" else "Analysis pending",
             style = MaterialTheme.typography.bodyMedium,
         )
+        track.unplayableReason?.let { reason ->
+            Text(
+                reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onPlay) {
+            Button(onClick = onPlay, enabled = track.playable) {
                 Icon(
                     if (isCurrent && isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = null,

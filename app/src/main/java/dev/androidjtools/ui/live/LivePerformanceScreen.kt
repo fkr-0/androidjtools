@@ -166,9 +166,17 @@ private fun TrackLoader(
                             ) {
                                 Text(track.title, maxLines = 1)
                                 Text(track.artist, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                track.unplayableReason?.let { reason ->
+                                    Text(
+                                        reason,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                        maxLines = 2,
+                                    )
+                                }
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Button(onClick = { onLoad(DeckId.A, track) }) { Text("Deck A") }
-                                    Button(onClick = { onLoad(DeckId.B, track) }) { Text("Deck B") }
+                                    Button(onClick = { onLoad(DeckId.A, track) }, enabled = track.playable) { Text("Deck A") }
+                                    Button(onClick = { onLoad(DeckId.B, track) }, enabled = track.playable) { Text("Deck B") }
                                 }
                             }
                         }

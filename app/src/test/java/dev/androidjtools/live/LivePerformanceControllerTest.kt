@@ -163,6 +163,40 @@ class LivePerformanceControllerTest {
         assertTrue(controller.state.value.deckA.effects.getValue(LiveEffectType.GATE).enabled)
     }
 
+    @Test
+    fun anUnplayableTrackIsRefusedByLoadDeck() {
+        val engine = RecordingEngine()
+        val controller = LivePerformanceController(engine)
+        val initialState = controller.state.value.deckA
+
+        val unplayable = Track(
+            id = "srv-1",
+            title = "Server track",
+            artist = "artist",
+            durationMs = 120_000L,
+            bpm = 128.0,
+            playable = false,
+            unplayableReason = "Server audio is not available yet.",
+        )
+        controller.loadDeck(DeckId.A, unplayable, grid("srv-1", 128.0))
+
+        // Deck state unchanged
+        assertEquals(initialState.trackId, controller.state.value.deckA.trackId)
+        // Engine not called
+        assertFalse(engine.loadedTracks.contains(DeckId.A))
+    }
+
+    @Test
+    fun aPlayableTrackStillLoadsNormally() {
+        val engine = RecordingEngine()
+        val controller = LivePerformanceController(engine)
+        val playable = track("a", 120.0)
+        controller.loadDeck(DeckId.A, playable, grid("a", 120.0))
+
+        assertEquals("a", controller.state.value.deckA.trackId)
+        assertTrue(engine.loadedTracks.containsKey(DeckId.A))
+    }
+
     private fun track(id: String, bpm: Double) = Track(
         id = id,
         title = id,
@@ -180,8 +214,9 @@ class LivePerformanceControllerTest {
         val positions = mutableMapOf<DeckId, Long>()
         val loops = mutableMapOf<DeckId, LiveLoop?>()
         val effects = mutableMapOf<Pair<DeckId, LiveEffectType>, LiveEffectState>()
+        val loadedTracks = mutableMapOf<DeckId, String>()
 
-        override fun load(deck: DeckId, trackId: String) = Unit
+        override fun load(deck: DeckId, trackId: String) { loadedTracks[deck] = trackId }
         override fun setPlaying(deck: DeckId, playing: Boolean) = Unit
         override fun seek(deck: DeckId, positionMs: Long) {
             positions[deck] = positionMs
