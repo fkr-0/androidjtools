@@ -3,6 +3,7 @@ package dev.androidjtools.sync.samplelib
 import dev.androidjtools.core.model.Cue
 import dev.androidjtools.core.model.Loop
 import dev.androidjtools.core.model.Track
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -125,7 +126,13 @@ object LibraryProjector {
         value?.let { colour.matchEntire(it) }?.groupValues?.get(1)?.toLong(16)?.let { 0xFF000000L or it }
 
     private fun parseObject(json: String): JsonObject? =
-        runCatching { Json.parseToJsonElement(json) as? JsonObject }.getOrNull()
+        try {
+            Json.parseToJsonElement(json) as? JsonObject
+        } catch (_: SerializationException) {
+            null
+        } catch (_: IllegalArgumentException) {
+            null
+        }
 
     private fun JsonObject.string(key: String): String? =
         (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
