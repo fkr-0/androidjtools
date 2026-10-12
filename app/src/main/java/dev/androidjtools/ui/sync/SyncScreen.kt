@@ -33,12 +33,12 @@ import dev.androidjtools.sync.samplelib.ServerSessionController
 
 @Composable
 fun SyncScreen(providers: AppProviders, server: ServerSessionController? = null) {
-    val state by providers.sync.state.collectAsState()
     val pending by providers.sync.pendingMutationCount.collectAsState()
     if (server == null) {
+        val state by providers.sync.state.collectAsState()
         LegacySyncContent(providers, state, pending)
     } else {
-        ServerSyncContent(server, state, pending)
+        ServerSyncContent(server, pending)
     }
 }
 
@@ -58,7 +58,8 @@ private fun LegacySyncContent(providers: AppProviders, state: SyncState, pending
 }
 
 @Composable
-private fun ServerSyncContent(server: ServerSessionController, state: SyncState, pending: Int) {
+private fun ServerSyncContent(server: ServerSessionController, pending: Int) {
+    val state by server.state.collectAsState()
     val capabilities by server.capabilities.collectAsState()
     val error by server.error.collectAsState()
     val savedUrl by server.serverUrl.collectAsState()

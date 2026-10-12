@@ -71,7 +71,8 @@ class SampleLibSessionControllerTest {
         controller.forget()
         advanceUntilIdle()
 
-        assertEquals(1, scheduler.cancelled)
+        // once immediately when forget() is called, once more inside the forget job after it ran
+        assertEquals(2, scheduler.cancelled)
         assertEquals(SyncState.UNCONFIGURED, controller.state.value)
         assertNull(controller.serverUrl.value)
         assertEquals(StoredSessionResult.Absent, store.load())
@@ -123,6 +124,36 @@ class SampleLibSessionControllerTest {
         assertEquals(SyncState.UNCONFIGURED, controller.state.value)
         assertTrue(cache.entities("asset").isEmpty())
         assertEquals(1, transport.helloCalls)
-        assertEquals(1, scheduler.cancelled)
+        // once immediately when forget() is called, once more inside the forget job after it ran
+        assertEquals(2, scheduler.cancelled)
+    }
+
+    @Test
+    fun aForgetWinsOverEveryRequestQueuedBehindIt_notJustTheNextOne() = runTest(UnconfinedTestDispatcher()) {
+        val store = store()
+        store.save(SampleLibProfile("https://samplelab.example", "server-1", "principal-1", "install-1"), MobileCredential.issued("token-secret"))
+        val gate = CompletableDeferred<Unit>()
+        // Refresh A cannot be interrupted, so the forget stays parked behind it.
+        transport.onPull = { withContext(NonCancellable) { gate.await() } }
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+        val controller = SampleLibSessionController(manager(store), backgroundScope, scheduler)
+
+        controller.refresh()                       // A
+        assertEquals(SyncState.PULLING, controller.state.value)
+        controller.forget()                        // F, parked behind A
+        controller.refresh()                       // X1, parked behind F
+        controller.refresh()                       // X2 supersedes X1 but must still wait for F
+        assertEquals(StoredSessionResult.Loaded::class, store.load()::class)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(StoredSessionResult.Absent, store.load())
+        assertTrue(cache.entities("asset").isEmpty())
+        assertNull(controller.serverUrl.value)
+        assertEquals(SyncState.UNCONFIGURED, controller.state.value)
+        assertEquals(1, transport.helloCalls)      // only A connected; X1 and X2 found no profile left
+        assertEquals(0, scheduler.scheduled)
+        assertEquals(2, scheduler.cancelled)
     }
 }

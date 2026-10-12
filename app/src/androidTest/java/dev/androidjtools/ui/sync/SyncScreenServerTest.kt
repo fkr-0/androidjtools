@@ -3,9 +3,13 @@ package dev.androidjtools.ui.sync
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.fixture.FixtureAppProviders
@@ -72,8 +76,26 @@ class SyncScreenServerTest {
             media = emptySet(),
         )
         show(controller)
+        // The rows live in a LazyColumn, so later rows are not composed until scrolled to.
+        compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("sync-error"))
         compose.onNodeWithTag("sync-error").assertTextContains("rejected the pairing code", substring = true)
+        compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("capability-library"))
         compose.onNodeWithTag("capability-library").assertTextContains("Available", substring = true)
+        compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("capability-audio"))
         compose.onNodeWithTag("capability-audio").assertTextContains("asset_file", substring = true)
+    }
+
+    @Test
+    fun theStateComesFromTheControllerAndABusyPairingDisablesPair() {
+        val controller = FakeController()
+        show(controller)
+        compose.onNodeWithTag("server-url-field").performTextInput("https://samplelab.example")
+        compose.onNodeWithTag("pairing-code-field").performTextInput("246810")
+        compose.onNodeWithTag("pair-button").assertIsEnabled()
+
+        controller.state.value = SyncState.PAIRING
+
+        compose.onNodeWithTag("sync-state").assertTextEquals("State: ${syncStateLabel(SyncState.PAIRING)}")
+        compose.onNodeWithTag("pair-button").assertIsNotEnabled()
     }
 }

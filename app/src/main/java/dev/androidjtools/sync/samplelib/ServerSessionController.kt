@@ -42,7 +42,7 @@ class SampleLibSessionController(
         .stateIn(scope, SharingStarted.Eagerly, manager.profile.value?.baseUrl)
 
     private var job: Job? = null
-    private var lastWasForget = false
+    private var pendingForget: Job? = null
 
     override fun pair(baseUrl: String, code: String) = enqueue(forget = false) {
         manager.pair(baseUrl, code)
@@ -53,17 +53,28 @@ class SampleLibSessionController(
 
     override fun forget() {
         scheduler.cancel()
-        enqueue(forget = true) { withContext(NonCancellable) { manager.forget() } }
+        enqueue(forget = true) {
+            withContext(NonCancellable) { manager.forget() }
+            // A pair that returned from the manager just before the forget may still have scheduled; make sure
+            // the periodic sync cannot outlive the forget.
+            scheduler.cancel()
+        }
     }
 
-    /** A new request supersedes an in-flight pair or refresh, but never cancels a pending forget. */
+    /**
+     * Every request first waits for the latest forget, so a forget always wins over anything queued after it
+     * (not just the request right behind it). Then it supersedes the previous pair or refresh, but never
+     * cancels a forget.
+     */
     private fun enqueue(forget: Boolean, block: suspend () -> Unit) {
         val previous = job
-        val previousWasForget = lastWasForget
-        lastWasForget = forget
-        job = scope.launch {
-            if (previousWasForget) previous?.join() else previous?.cancelAndJoin()
+        val barrier = pendingForget
+        val created = scope.launch {
+            barrier?.join()
+            if (previous != null && previous !== barrier) previous.cancelAndJoin()
             block()
         }
+        job = created
+        if (forget) pendingForget = created
     }
 }
