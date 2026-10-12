@@ -118,6 +118,7 @@ jobs:
 
           "$apkanalyzer_bin" manifest print "$release_apk" > /tmp/release-manifest.xml
           "$apkanalyzer_bin" manifest print "$debug_apk" > /tmp/debug-manifest.xml
+          python3 scripts/check_manifest_hardening.py /tmp/release-manifest.xml
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
 

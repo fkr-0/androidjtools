@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import dev.androidjtools.AndroidDjToolsApp
 import dev.androidjtools.device.DeviceMediaProviderBundle
 import dev.androidjtools.device.mediaUriForDeviceTrack
@@ -17,7 +18,10 @@ import dev.androidjtools.live.Media3LiveAudioEngine
 import dev.androidjtools.live.NativeAaudioLiveAudioEngine
 import dev.androidjtools.playback.PlayerQueueController
 import dev.androidjtools.playback.SharedPreferencesQueueStateStore
+import dev.androidjtools.sync.samplelib.SampleLibRuntime
 import dev.androidjtools.ui.theme.AndroidDjToolsTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class AndroidDjToolsActivity : ComponentActivity() {
     private lateinit var deviceProviders: DeviceMediaProviderBundle
@@ -31,7 +35,8 @@ class AndroidDjToolsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         deviceProviders = DeviceMediaProviderBundle.create(this)
-        val providers = deviceProviders.providers
+        val runtime = SampleLibRuntime.get(this)
+        val providers = runtime.compose(deviceProviders.providers)
         val permission = requiredAudioPermission()
         val permissionGranted = ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
         deviceProviders.refresh(permissionGranted)
@@ -60,8 +65,15 @@ class AndroidDjToolsActivity : ComponentActivity() {
 
         setContent {
             AndroidDjToolsTheme {
-                AndroidDjToolsApp(providers, playerQueueController, livePerformanceController)
+                AndroidDjToolsApp(providers, playerQueueController, livePerformanceController, server = runtime.controller)
             }
+        }
+
+        // Dispatchers.Default: lifecycleScope would otherwise run the stored-session load (file read and Keystore
+        // decrypt) on the main thread until the first suspension.
+        lifecycleScope.launch(Dispatchers.Default) {
+            runtime.manager.refresh()
+            if (runtime.manager.profile.value != null) runtime.scheduler.schedule()
         }
     }
 
