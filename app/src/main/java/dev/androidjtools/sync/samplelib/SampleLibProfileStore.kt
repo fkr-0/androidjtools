@@ -60,9 +60,11 @@ class SampleLibProfileStore(private val dir: File, private val cipher: Credentia
         return StoredSessionResult.Loaded(StoredSession(profile, credential))
     }
 
-    fun clear() {
+    /** Deletes both files; true only if neither exists afterwards (File.delete() fails silently). */
+    fun clear(): Boolean {
         profileFile.delete()
         credentialFile.delete()
+        return !profileFile.exists() && !credentialFile.exists()
     }
 
     private fun encode(profile: SampleLibProfile): JsonObject = buildJsonObject {

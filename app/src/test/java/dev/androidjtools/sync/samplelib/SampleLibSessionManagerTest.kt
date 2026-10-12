@@ -9,6 +9,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -237,5 +238,97 @@ class SampleLibSessionManagerTest {
         assertEquals(StoredSessionResult.Absent, store.load())
         assertTrue(cache.entities("asset").isEmpty())
         assertNull(manager.profile.value)
+    }
+
+    @Test
+    fun cancellingARefreshMidSyncRestoresTheStateReleasesTheLockAndPropagates() = runBlocking {
+        seedStoredSession()
+        val gate = CompletableDeferred<Unit>()
+        val started = CompletableDeferred<Unit>()
+        transport.onPull = {
+            started.complete(Unit)
+            gate.await()
+        }
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+
+        val job = launch(Dispatchers.Default) { manager.refresh() }
+        started.await()
+        assertEquals(SyncState.PULLING, manager.state.value)
+        job.cancel()
+        job.join()
+
+        assertTrue(job.isCancelled)
+        assertEquals(SyncState.UNCONFIGURED, manager.state.value)
+
+        gate.complete(Unit)
+        manager.refresh()
+        assertEquals(SyncState.ONLINE_IDLE, manager.state.value)
+        assertEquals(listOf("a1"), cache.entities("asset").map { it.entityId })
+    }
+
+    @Test
+    fun cancellingAPairingMidSyncRestoresTheStateAndPropagates() = runBlocking {
+        val gate = CompletableDeferred<Unit>()
+        val started = CompletableDeferred<Unit>()
+        transport.onPull = {
+            started.complete(Unit)
+            gate.await()
+        }
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+
+        val job = launch(Dispatchers.Default) { manager.pair("https://samplelab.example", "246810") }
+        started.await()
+        assertEquals(1, transport.pairCalls)
+        job.cancel()
+        job.join()
+
+        assertTrue(job.isCancelled)
+        assertEquals(SyncState.UNCONFIGURED, manager.state.value)
+        assertNull(manager.error.value)
+
+        gate.complete(Unit)
+        manager.refresh()
+        assertEquals(SyncState.ONLINE_IDLE, manager.state.value)
+    }
+
+    @Test
+    fun aFailingCacheResetDuringForgetIsReportedWithoutThrowing() = runBlocking {
+        val failing = FailingSqlDatabase(JdbcSqlDatabase())
+        val brokenCache = SqlLibraryCache(failing)
+        val subject = SampleLibSessionManager(store, brokenCache, { _, _ -> client }, { "install-1" })
+        seedStoredSession()
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+        subject.refresh()
+        assertEquals(SyncState.ONLINE_IDLE, subject.state.value)
+        failing.failOnNthExecute(1)
+
+        subject.forget()
+
+        assertEquals(SyncState.DEGRADED, subject.state.value)
+        assertEquals(FORGET_FAILED, subject.error.value)
+        assertEquals(profile, subject.profile.value)
+        // store.clear() is independent of the failing reset, so it still ran and removed the credential.
+        assertEquals(StoredSessionResult.Absent, store.load())
+    }
+
+    @Test
+    fun anUndeletableCredentialMakesForgetReportFailureAndKeepTheProfile() = runBlocking {
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+        manager.pair("https://samplelab.example", "246810")
+        val credential = File(tmp.root, "sl/samplelib-credential.bin")
+        assertTrue(credential.delete())
+        assertTrue(credential.mkdirs())
+        File(credential, "blocker").writeText("x") // non-empty directory: File.delete() returns false
+
+        manager.forget()
+
+        assertEquals(SyncState.DEGRADED, manager.state.value)
+        assertEquals(FORGET_FAILED, manager.error.value)
+        assertEquals("https://samplelab.example", manager.profile.value?.baseUrl)
+        assertTrue(cache.entities("asset").isEmpty())
+    }
+
+    private companion object {
+        const val FORGET_FAILED = "Could not remove the stored server connection from this device. Try again."
     }
 }

@@ -45,6 +45,7 @@ class SampleLibSessionManager(
 
     /** Loads the stored session (if any), reconnects with the pinned server identity and syncs. */
     suspend fun refresh() = lock.withLock {
+        val startState = mutableState.value
         when (val loaded = store.load()) {
             StoredSessionResult.Absent -> {
                 mutableProfile.value = null
@@ -59,7 +60,7 @@ class SampleLibSessionManager(
             is StoredSessionResult.Loaded -> {
                 val stored = loaded.session
                 mutableProfile.value = stored.profile
-                guarded(::applyRefreshFailure) {
+                guarded(startState, ::applyRefreshFailure) {
                     val client = clientFactory(stored.profile.baseUrl, stored.profile.installationId)
                     val session = client.connect(stored.credential, stored.profile.serverId, null, stored.profile.principalId)
                     syncSession(client, session)
@@ -97,7 +98,7 @@ class SampleLibSessionManager(
             return@withLock
         }
 
-        guarded(::applyRefreshFailure) {
+        guarded(previousState, ::applyRefreshFailure) {
             val cachedServer = cache.meta().serverId
             if (cachedServer != null && cachedServer != session.identity.serverId) cache.reset()
             val saved = SampleLibProfile(baseUrl, session.identity.serverId, session.principalId, installationId)
@@ -107,13 +108,33 @@ class SampleLibSessionManager(
         }
     }
 
+    /**
+     * Removes the stored connection and the cached library. Both removals are attempted independently; the
+     * manager only reports UNCONFIGURED when both really succeeded, otherwise it stays DEGRADED with the
+     * profile still known so the person can retry. Never throws (except to propagate cancellation).
+     */
     suspend fun forget() = lock.withLock {
-        store.clear()
-        cache.reset()
-        mutableProfile.value = null
-        mutableCapabilities.value = null
-        mutableError.value = null
-        mutableState.value = SyncState.UNCONFIGURED
+        val storeCleared = attempt { store.clear() }
+        val cacheReset = attempt {
+            cache.reset()
+            true
+        }
+        if (storeCleared && cacheReset) {
+            mutableProfile.value = null
+            mutableCapabilities.value = null
+            mutableError.value = null
+            mutableState.value = SyncState.UNCONFIGURED
+        } else {
+            fail(SyncState.DEGRADED, "Could not remove the stored server connection from this device. Try again.")
+        }
+    }
+
+    private inline fun attempt(block: () -> Boolean): Boolean = try {
+        block()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        false
     }
 
     private suspend fun syncSession(client: SampleLibClient, session: SampleLibSession) {
@@ -133,10 +154,12 @@ class SampleLibSessionManager(
         mutableState.value = SyncState.ONLINE_IDLE
     }
 
-    private suspend fun guarded(onFailure: (Exception) -> Unit, block: suspend () -> Unit) {
+    private suspend fun guarded(restoreOnCancel: SyncState, onFailure: (Exception) -> Unit, block: suspend () -> Unit) {
         try {
             block()
         } catch (cancelled: CancellationException) {
+            // Do not leave PAIRING/PULLING behind: no operation is running any more.
+            mutableState.value = restoreOnCancel
             throw cancelled
         } catch (failure: Exception) {
             onFailure(failure)

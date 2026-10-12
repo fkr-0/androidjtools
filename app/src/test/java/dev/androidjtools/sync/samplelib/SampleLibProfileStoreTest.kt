@@ -95,4 +95,19 @@ class SampleLibProfileStoreTest {
         val unreadable = store().load() as StoredSessionResult.Unreadable
         assertEquals(null, unreadable.profile)
     }
+
+    @Test
+    fun clearReportsWhetherEverythingWasRemoved() {
+        assertTrue(store().clear())
+        store().save(profile, MobileCredential.issued(token))
+        assertTrue(store().clear())
+        assertEquals(StoredSessionResult.Absent, store().load())
+
+        store().save(profile, MobileCredential.issued(token))
+        val credential = File(tmp.root, "samplelib/samplelib-credential.bin")
+        credential.delete()
+        credential.mkdirs()
+        File(credential, "blocker").writeText("x") // a non-empty directory cannot be deleted by File.delete()
+        assertFalse(store().clear())
+    }
 }
