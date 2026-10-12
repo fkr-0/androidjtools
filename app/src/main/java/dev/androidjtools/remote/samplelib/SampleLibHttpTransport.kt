@@ -29,14 +29,17 @@ import okhttp3.Response
 
 class SampleLibHttpTransport(
     baseUrl: String,
-    private val http: OkHttpClient = OkHttpClient(),
+    private val http: OkHttpClient = OkHttpClient.Builder()
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build(),
 ) : SampleLibTransport {
     private val base: HttpUrl = baseUrl.ensureTrailingSlash().toHttpUrl()
     private val json = Json { ignoreUnknownKeys = false }
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
 
     init {
-        val loopback = base.host == "127.0.0.1" || base.host == "localhost" || base.host == "::1"
+        val loopback = base.host == "127.0.0.1" || base.host == "localhost"
         if (!loopback && !base.isHttps) throw SampleLibFailure.InsecureTransport(base.host)
     }
 
