@@ -2,10 +2,13 @@ package dev.androidjtools.sync.samplelib
 
 import dev.androidjtools.core.model.BeatGrid
 import dev.androidjtools.core.model.Cue
+import dev.androidjtools.core.model.DownloadStatus
 import dev.androidjtools.core.model.Loop
 import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.core.model.Track
+import dev.androidjtools.core.model.TrackDownloadState
 import dev.androidjtools.core.provider.AppRuntimeProvider
+import dev.androidjtools.core.provider.DownloadProvider
 import dev.androidjtools.core.provider.LibraryProvider
 import dev.androidjtools.core.provider.PlaybackProvider
 import dev.androidjtools.core.provider.PreparationProvider
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -34,7 +38,16 @@ class SampleLibProjectionState(
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     val projection: StateFlow<LibraryProjection> = cache.changes
-        .map { LibraryProjector.project(cache.entities("asset"), cache.entities("interval")) }
+        .map {
+            try {
+                val snap = cache.snapshot("asset", "interval")
+                LibraryProjector.project(snap["asset"].orEmpty(), snap["interval"].orEmpty())
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                null // keep previous value
+            }
+        }
+        .filterNotNull()
         .flowOn(dispatcher)
         .stateIn(scope, SharingStarted.Eagerly, LibraryProjection.EMPTY)
 
@@ -123,5 +136,34 @@ class ServerAwarePlayback(
         }
         notice.value = null
         delegate.play(trackId)
+    }
+}
+
+/** Server tracks report NOT_DOWNLOADED and pin/retry/cancel are no-ops; device tracks delegate. */
+class ServerAwareDownloads(
+    private val delegate: DownloadProvider,
+    private val isServerTrack: (String) -> Boolean,
+) : DownloadProvider by delegate {
+    override fun state(trackId: String): StateFlow<TrackDownloadState> {
+        if (isServerTrack(trackId)) {
+            return MutableStateFlow(TrackDownloadState(trackId, DownloadStatus.NOT_DOWNLOADED)).asStateFlow()
+        }
+        return delegate.state(trackId)
+    }
+
+    override fun pinTrack(trackId: String) {
+        if (!isServerTrack(trackId)) delegate.pinTrack(trackId)
+    }
+
+    override fun unpinTrack(trackId: String) {
+        if (!isServerTrack(trackId)) delegate.unpinTrack(trackId)
+    }
+
+    override fun retry(trackId: String) {
+        if (!isServerTrack(trackId)) delegate.retry(trackId)
+    }
+
+    override fun cancel(trackId: String) {
+        if (!isServerTrack(trackId)) delegate.cancel(trackId)
     }
 }

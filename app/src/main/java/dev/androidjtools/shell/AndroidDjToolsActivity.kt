@@ -36,7 +36,7 @@ class AndroidDjToolsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         deviceProviders = DeviceMediaProviderBundle.create(this)
         val runtime = SampleLibRuntime.get(this)
-        val providers = runtime.compose(deviceProviders.providers)
+        val providers = runtime.compose(deviceProviders.providers, lifecycleScope)
         val permission = requiredAudioPermission()
         val permissionGranted = ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
         deviceProviders.refresh(permissionGranted)

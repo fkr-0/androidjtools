@@ -1,6 +1,8 @@
 package dev.androidjtools.sync.samplelib
 
+import dev.androidjtools.core.model.Track
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -154,5 +156,23 @@ class LibraryProjectionTest {
         val projection = LibraryProjector.project(assets, intervals)
         assertEquals(5_000, projection.tracks.size)
         assertEquals(5_000, projection.cues.size)
+    }
+
+    @Test
+    fun serverTracksAreNotPlayableAndCarryTheNotice() {
+        val projection = LibraryProjector.project(
+            listOf(asset("a1", """{"title":"Alpha","duration_ms":10000}""")),
+            emptyList(),
+        )
+        val track = projection.tracks.single()
+        assertFalse(track.playable)
+        assertEquals(SERVER_AUDIO_UNAVAILABLE_NOTICE, track.unplayableReason)
+    }
+
+    @Test
+    fun deviceStyleTracksConstructedDirectlyDefaultToPlayable() {
+        val track = Track(id = "dev-1", title = "Local", artist = "Me", durationMs = 5000)
+        assertTrue(track.playable)
+        assertNull(track.unplayableReason)
     }
 }

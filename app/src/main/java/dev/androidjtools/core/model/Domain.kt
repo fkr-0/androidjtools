@@ -13,6 +13,8 @@ data class Track(
     val energy: Double? = null,
     val rating: Int? = null,
     val offlineAvailable: Boolean = false,
+    val playable: Boolean = true,
+    val unplayableReason: String? = null,
 )
 
 data class Cue(

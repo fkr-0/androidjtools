@@ -1,15 +1,23 @@
 package dev.androidjtools.sync.samplelib
 
+import dev.androidjtools.core.model.DownloadStatus
+import dev.androidjtools.core.model.OfflineCacheSummary
 import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.core.model.Track
+import dev.androidjtools.core.model.TrackDownloadState
 import dev.androidjtools.core.provider.AppRuntimeProvider
+import dev.androidjtools.core.provider.DownloadProvider
 import dev.androidjtools.core.provider.LibraryProvider
 import dev.androidjtools.core.provider.PlaybackProvider
 import dev.androidjtools.core.provider.ProviderUiState
 import dev.androidjtools.remote.samplelib.EntityChange
 import dev.androidjtools.remote.samplelib.OpaqueRevision
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -151,6 +159,129 @@ class SampleLibProvidersTest {
     @Test
     fun playbackWithoutAGateNeverHasANotice() {
         assertNull(FakePlayback().playbackNotice.value)
+    }
+
+    private class FakeDownloads : DownloadProvider {
+        val pinned = mutableSetOf<String>()
+        val retried = mutableListOf<String>()
+        val cancelled = mutableListOf<String>()
+        override val cacheSummary = MutableStateFlow(OfflineCacheSummary())
+        private val states = mutableMapOf<String, MutableStateFlow<TrackDownloadState>>()
+
+        override fun state(trackId: String): StateFlow<TrackDownloadState> =
+            states.getOrPut(trackId) { MutableStateFlow(TrackDownloadState(trackId, DownloadStatus.AVAILABLE, progress = 1.0)) }
+
+        override fun pinTrack(trackId: String) { pinned += trackId }
+        override fun unpinTrack(trackId: String) { pinned -= trackId }
+        override fun pinPlaylist(playlistId: String) = Unit
+        override fun unpinPlaylist(playlistId: String) = Unit
+        override fun retry(trackId: String) { retried += trackId }
+        override fun cancel(trackId: String) { cancelled += trackId }
+        override fun pruneUnpinned() = Unit
+    }
+
+    @Test
+    fun serverTracksReportNotDownloadedAndNeverReachDelegateForPinRetryCancel() {
+        val delegate = FakeDownloads()
+        val downloads = ServerAwareDownloads(delegate) { it.startsWith("srv-") }
+
+        val state = downloads.state("srv-1")
+        assertEquals(DownloadStatus.NOT_DOWNLOADED, state.value.status)
+
+        downloads.pinTrack("srv-1")
+        assertTrue(delegate.pinned.isEmpty())
+
+        downloads.unpinTrack("srv-1")
+        assertTrue(delegate.pinned.isEmpty())
+
+        downloads.retry("srv-1")
+        assertTrue(delegate.retried.isEmpty())
+
+        downloads.cancel("srv-1")
+        assertTrue(delegate.cancelled.isEmpty())
+    }
+
+    /** Delegates to a real cache but can inject failures into snapshot(). */
+    private class FailingSnapshotCache(private val delegate: LibraryCache) : LibraryCache by delegate {
+        var shouldFailSnapshot = false
+
+        override fun snapshot(vararg entityTypes: String): Map<String, List<CachedEntity>> {
+            if (shouldFailSnapshot) {
+                shouldFailSnapshot = false
+                throw IllegalStateException("injected snapshot failure")
+            }
+            return delegate.snapshot(*entityTypes)
+        }
+    }
+
+    @Test
+    fun projectionFlowSurvivesATransientCacheError() = runTest(UnconfinedTestDispatcher()) {
+        val realDb = JdbcSqlDatabase()
+        val realCache = SqlLibraryCache(realDb)
+        val failingCache = FailingSnapshotCache(realCache)
+        val state = SampleLibProjectionState(failingCache, backgroundScope, UnconfinedTestDispatcher(testScheduler))
+
+        // Seed one commit
+        realCache.applyPage(listOf(asset("a1", "Alpha")), emptyList(), CacheMeta("c1", "g", "s"))
+        advanceUntilIdle()
+        assertEquals(listOf("Alpha"), state.tracks.value.map { it.title })
+
+        // Inject a failure so the next recompute throws
+        failingCache.shouldFailSnapshot = true
+        realCache.applyPage(listOf(asset("a2", "Beta")), emptyList(), CacheMeta("c2", "g", "s"))
+        advanceUntilIdle()
+
+        // Previous value is kept, no crash, scope still alive
+        assertEquals(listOf("Alpha"), state.tracks.value.map { it.title })
+
+        // Commit again — projection updates now that the failure is gone
+        realCache.applyPage(listOf(asset("a3", "Gamma")), emptyList(), CacheMeta("c3", "g", "s"))
+        advanceUntilIdle()
+        assertTrue(state.tracks.value.map { it.title }.contains("Gamma"))
+    }
+
+    @Test
+    fun cancellingTheWrapperScopeStopsWrapperFlowUpdates() = runTest(UnconfinedTestDispatcher()) {
+        val cache = SqlLibraryCache(JdbcSqlDatabase())
+        val projectionState = SampleLibProjectionState(cache, backgroundScope, UnconfinedTestDispatcher(testScheduler))
+
+        val serverLib = SampleLibLibraryProvider(projectionState)
+        val deviceLib = FakeLibrary(listOf(track("dev-1")))
+
+        // Create a child scope that simulates lifecycleScope
+        val childJob = SupervisorJob(backgroundScope.coroutineContext[Job])
+        val wrapperScope = CoroutineScope(childJob + UnconfinedTestDispatcher(testScheduler))
+
+        val composite = CompositeLibraryProvider(serverLib, deviceLib, wrapperScope)
+
+        cache.applyPage(listOf(asset("srv-1", "Server")), emptyList(), CacheMeta("c1", "g", "s"))
+        advanceUntilIdle()
+        assertEquals(listOf("srv-1", "dev-1"), composite.tracks.value.map { it.id })
+
+        // Cancel the wrapper scope (simulating activity destroyed)
+        wrapperScope.cancel()
+
+        // Further changes should not update the wrapper
+        cache.applyPage(listOf(asset("srv-2", "Server2")), emptyList(), CacheMeta("c2", "g", "s"))
+        advanceUntilIdle()
+
+        // The composite still holds the old value since collectors are gone
+        assertEquals(listOf("srv-1", "dev-1"), composite.tracks.value.map { it.id })
+
+        // But the projection state still updates (process-scoped)
+        assertEquals(listOf("srv-1", "srv-2"), projectionState.tracks.value.map { it.id })
+    }
+
+    @Test
+    fun deviceTracksDelegate() {
+        val delegate = FakeDownloads()
+        val downloads = ServerAwareDownloads(delegate) { it.startsWith("srv-") }
+
+        val state = downloads.state("dev-1")
+        assertEquals(DownloadStatus.AVAILABLE, state.value.status)
+
+        downloads.pinTrack("dev-1")
+        assertTrue(delegate.pinned.contains("dev-1"))
     }
 
     @Test

@@ -44,6 +44,8 @@ object LibraryProjector {
                 bpm = fullSpan?.bpm,
                 key = fullSpan?.key,
                 rating = value.long("rating")?.toInt(),
+                playable = false,
+                unplayableReason = SERVER_AUDIO_UNAVAILABLE_NOTICE,
             )
         }
         return LibraryProjection(

@@ -21,14 +21,21 @@ class SampleLibRuntime private constructor(context: Context) {
     val controller: ServerSessionController = SampleLibSessionController(manager, scope, scheduler)
     private val projection = SampleLibProjectionState(cache, scope)
 
-    /** Wraps the device providers once; their content then follows pairing state at runtime. */
-    fun compose(device: AppProviders): AppProviders {
+    /**
+     * Wraps the device providers; their content then follows pairing state at runtime.
+     * [wrapperScope] is used for the composite/wrapper flows and should be tied to the activity's lifecycle
+     * (e.g. `lifecycleScope`) so that wrapper collectors do not leak across activity recreations.
+     * The projection state, manager, controller and scheduler remain process-scoped.
+     */
+    fun compose(device: AppProviders, wrapperScope: CoroutineScope = scope): AppProviders {
         val serverLibrary = SampleLibLibraryProvider(projection)
+        val isServer: (String) -> Boolean = { projection.projection.value.hasTrack(it) }
         return device.copy(
-            runtime = CompositeRuntimeProvider(device.runtime, serverLibrary, scope),
-            library = CompositeLibraryProvider(serverLibrary, device.library, scope),
-            preparation = SampleLibPreparationProvider(projection, scope),
-            playback = ServerAwarePlayback(device.playback) { projection.projection.value.hasTrack(it) },
+            runtime = CompositeRuntimeProvider(device.runtime, serverLibrary, wrapperScope),
+            library = CompositeLibraryProvider(serverLibrary, device.library, wrapperScope),
+            preparation = SampleLibPreparationProvider(projection, wrapperScope),
+            playback = ServerAwarePlayback(device.playback, isServer),
+            downloads = ServerAwareDownloads(device.downloads, isServer),
             sync = SampleLibSyncProvider(manager),
         )
     }

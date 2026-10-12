@@ -173,6 +173,50 @@ class LibraryCacheTest {
     }
 
     @Test
+    fun snapshotReturnsEachRequestedTypeInOneTransaction() {
+        val counting = CountingSqlDatabase(db)
+        val cache = SqlLibraryCache(counting)
+        cache.applyPage(
+            listOf(change("asset", "a1", "r1"), change("interval", "i1", "r1")),
+            emptyList(),
+            CacheMeta("c1", "g", "s"),
+        )
+        val txBefore = counting.transactions
+        val snap = cache.snapshot("asset", "interval", "missing")
+        // Exactly one transaction for the snapshot call
+        assertEquals(txBefore + 1, counting.transactions)
+        assertEquals(listOf("a1"), snap["asset"]?.map { it.entityId })
+        assertEquals(listOf("i1"), snap["interval"]?.map { it.entityId })
+        assertTrue(snap["missing"]!!.isEmpty())
+    }
+
+    @Test
+    fun snapshotWithAFailingDatabasePropagates() {
+        val failingOnQuery = object : SqlDatabase {
+            var shouldFail = false
+            override fun <T> transaction(block: (SqlConnection) -> T): T =
+                db.transaction { conn ->
+                    block(object : SqlConnection {
+                        override fun execute(sql: String, vararg args: Any?) = conn.execute(sql, *args)
+                        override fun <R> query(sql: String, vararg args: Any?, map: (SqlRow) -> R): List<R> {
+                            if (shouldFail) throw IllegalStateException("injected query failure")
+                            return conn.query(sql, *args, map = map)
+                        }
+                    })
+                }
+        }
+        val cache = SqlLibraryCache(failingOnQuery)
+        // Trigger schema setup first
+        cache.meta()
+        failingOnQuery.shouldFail = true
+        try {
+            cache.snapshot("asset")
+            fail("expected the injected failure")
+        } catch (expected: IllegalStateException) {
+        }
+    }
+
+    @Test
     fun aSecondInstanceOnTheSameDatabaseSeesCommittedData() {
         SqlLibraryCache(db).applyPage(listOf(change("asset", "a1", "r1")), emptyList(), CacheMeta("c1", "g", "s"))
         val reopened = SqlLibraryCache(db)

@@ -33,6 +33,9 @@ interface LibraryCache {
 
     fun entities(entityType: String): List<CachedEntity>
 
+    /** Returns the entities for each requested type in a single transaction. Missing types map to empty lists. */
+    fun snapshot(vararg entityTypes: String): Map<String, List<CachedEntity>>
+
     /** Drops every entity and the sync metadata; the schema version marker is kept. */
     fun reset()
 }
@@ -116,6 +119,20 @@ class SqlLibraryCache(private val db: SqlDatabase) : LibraryCache {
                 entityType,
             ) { row ->
                 CachedEntity(entityType, row.string(0).orEmpty(), row.string(1).orEmpty(), row.string(2).orEmpty(), row.string(3).orEmpty())
+            }
+        }
+    }
+
+    override fun snapshot(vararg entityTypes: String): Map<String, List<CachedEntity>> {
+        ensureSchema()
+        return db.transaction { conn ->
+            entityTypes.associateWith { entityType ->
+                conn.query(
+                    "SELECT entity_id, revision, schema_id, value_json FROM entities WHERE entity_type = ? ORDER BY entity_id",
+                    entityType,
+                ) { row ->
+                    CachedEntity(entityType, row.string(0).orEmpty(), row.string(1).orEmpty(), row.string(2).orEmpty(), row.string(3).orEmpty())
+                }
             }
         }
     }
