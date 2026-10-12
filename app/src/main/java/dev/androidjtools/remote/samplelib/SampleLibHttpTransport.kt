@@ -223,7 +223,8 @@ class SampleLibHttpTransport(
         credential: MobileCredential?,
         ambiguousOnIo: Boolean,
     ): JsonElement {
-        val url = base.resolve(path) ?: throw SampleLibFailure.InvalidResponse("Invalid Sample Lib endpoint path")
+        // Relative on purpose: an absolute path ("/v1/...") would discard a reverse-proxy prefix in the base URL.
+        val url = base.resolve(path.removePrefix("/")) ?: throw SampleLibFailure.InvalidResponse("Invalid Sample Lib endpoint path")
         val request = Request.Builder()
             .url(url)
             .apply { credential?.let { header("Authorization", "Bearer ${it.bearerValue()}") } }
