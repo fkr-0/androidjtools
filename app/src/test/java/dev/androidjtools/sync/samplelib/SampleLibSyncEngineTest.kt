@@ -152,6 +152,23 @@ class SampleLibSyncEngineTest {
     }
 
     @Test
+    fun aPageCapStopsSyncAfterTheConfiguredMaximum() {
+        val cappedEngine = SampleLibSyncEngine(client, cache, maxPages = 3)
+        // Enqueue 4 pages: c1, c2, c3 all hasMore=true, then c4 should never be reached
+        transport.enqueuePage(page("c1", hasMore = true, changes = listOf(assetChange("a1"))))
+        transport.enqueuePage(page("c2", hasMore = true, changes = listOf(assetChange("a2"))))
+        transport.enqueuePage(page("c3", hasMore = true, changes = listOf(assetChange("a3"))))
+        transport.enqueuePage(page("c4", hasMore = false, changes = listOf(assetChange("a4"))))
+
+        assertThrows(SampleLibFailure.InvalidResponse::class.java) {
+            runBlocking { cappedEngine.sync(session()) }
+        }
+        // Already-committed pages stay committed
+        assertEquals(listOf("a1", "a2", "a3"), cache.entities("asset").map { it.entityId })
+        assertEquals("c3", cache.meta().cursor)
+    }
+
+    @Test
     fun aPageThatRepeatsTheCursorWhileClaimingMoreIsRejectedAndNotCommitted() {
         transport.enqueuePage(page("c1", hasMore = true, changes = listOf(assetChange("a1"))))
         transport.enqueuePage(page("c1", hasMore = true, changes = listOf(assetChange("a2"))))

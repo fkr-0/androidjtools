@@ -14,6 +14,7 @@ sealed interface SyncResult {
 class SampleLibSyncEngine(
     private val client: SampleLibClient,
     private val cache: LibraryCache,
+    private val maxPages: Int = 10_000,
 ) {
     suspend fun sync(session: SampleLibSession, scopes: Set<String> = setOf("library")): SyncResult {
         val stored = cache.meta()
@@ -65,6 +66,9 @@ class SampleLibSyncEngine(
             tombstones += page.tombstones.size
             cursor = page.nextCursor
             if (!page.hasMore) return SyncResult.Synced(pages, upserts, tombstones, bootstrapped)
+            if (pages >= maxPages) {
+                throw SampleLibFailure.InvalidResponse("Pull did not finish")
+            }
         }
     }
 }
