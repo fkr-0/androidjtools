@@ -2,7 +2,12 @@ package dev.androidjtools.ui.analysis
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertAll
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.isNotEnabled
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -129,5 +134,28 @@ class AnalysisAssistantContentTest {
         compose.onNodeWithTag("analysis-failure").assertIsDisplayed()
         compose.onNodeWithTag("analysis-empty").assertIsDisplayed()
         compose.onNodeWithText("Analysis services failed. Canonical library data is still available.").assertIsDisplayed()
+    }
+
+    @Test
+    fun previewIsDisabledWithAReasonWhenTheTrackCannotBePlayed() {
+        val state = AnalysisAssistantFixtures.competition().copy(
+            preview = PreviewAvailability(enabled = false, reason = "No audio on the server yet."),
+        )
+        compose.setContent { MaterialTheme { AnalysisAssistantContent(state = state, acceptanceEnabled = true, onAction = {}) } }
+
+        compose.onNodeWithTag("preview-unavailable-reason").assertIsDisplayed()
+        compose.onNodeWithText("Preview unavailable: No audio on the server yet.").assertIsDisplayed()
+        val previews = compose.onAllNodesWithText("Preview")
+        assertTrue("fixture must contain Preview controls", previews.fetchSemanticsNodes().isNotEmpty())
+        previews.assertAll(isNotEnabled())
+    }
+
+    @Test
+    fun previewStaysEnabledAndSilentForAPlayableTrack() {
+        val state = AnalysisAssistantFixtures.competition()
+        compose.setContent { MaterialTheme { AnalysisAssistantContent(state = state, acceptanceEnabled = true, onAction = {}) } }
+
+        compose.onAllNodesWithText("Preview").assertAll(isEnabled())
+        assertTrue(compose.onAllNodesWithTag("preview-unavailable-reason").fetchSemanticsNodes().isEmpty())
     }
 }

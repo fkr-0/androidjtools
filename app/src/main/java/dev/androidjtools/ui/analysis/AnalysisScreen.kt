@@ -55,7 +55,7 @@ fun AnalysisScreen(
         capabilities = capabilities,
         syncState = syncState,
         queuedSuggestionIds = queuedSuggestionIds,
-    )
+    ).copy(preview = previewAvailability(track))
     AnalysisAssistantContent(
         state = state,
         acceptanceEnabled = onQueueAcceptance != null,

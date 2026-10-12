@@ -7,6 +7,7 @@ import dev.androidjtools.core.model.SuggestionDecision
 import dev.androidjtools.core.model.SuggestionKind
 import dev.androidjtools.core.model.SuggestionPayload
 import dev.androidjtools.core.model.SyncState
+import dev.androidjtools.core.model.Track
 
 enum class CapabilityAvailability { AVAILABLE, DEGRADED, UNAVAILABLE, UNKNOWN }
 
@@ -86,6 +87,23 @@ data class TimelineAnalysisItemUi(
     val stale: Boolean,
 )
 
+/** Whether a suggestion's timeline position can be auditioned on this track right now. */
+data class PreviewAvailability(val enabled: Boolean, val reason: String? = null) {
+    companion object {
+        val Available = PreviewAvailability(enabled = true)
+    }
+}
+
+fun previewAvailability(track: Track): PreviewAvailability =
+    if (track.playable) {
+        PreviewAvailability.Available
+    } else {
+        PreviewAvailability(
+            enabled = false,
+            reason = track.unplayableReason?.takeIf { it.isNotBlank() } ?: "This track cannot be played yet.",
+        )
+    }
+
 data class AnalysisAssistantUiState(
     val trackId: String,
     val trackTitle: String,
@@ -97,6 +115,7 @@ data class AnalysisAssistantUiState(
     val timelineItems: List<TimelineAnalysisItemUi>,
     val partialFailure: Boolean,
     val failureMessage: String? = null,
+    val preview: PreviewAvailability = PreviewAvailability.Available,
 ) {
     val hasSuggestions: Boolean get() = candidateGroups.any { it.candidates.isNotEmpty() }
 }

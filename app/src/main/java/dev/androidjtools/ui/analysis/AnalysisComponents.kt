@@ -47,6 +47,14 @@ fun AnalysisAssistantContent(
                 if (state.offline) {
                     AssistChip(onClick = {}, label = { Text("Offline · cached intelligence") })
                 }
+                state.preview.reason?.takeUnless { state.preview.enabled }?.let { reason ->
+                    Text(
+                        "Preview unavailable: $reason",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("preview-unavailable-reason"),
+                    )
+                }
             }
         }
 
@@ -82,13 +90,13 @@ fun AnalysisAssistantContent(
         } else {
             state.candidateGroups.forEach { group ->
                 item(key = "group-${group.kind}") {
-                    CandidateGroupCard(group, state.offline, acceptanceEnabled, onAction)
+                    CandidateGroupCard(group, state.offline, acceptanceEnabled, onAction, previewEnabled = state.preview.enabled)
                 }
             }
         }
 
         if (state.timelineItems.isNotEmpty()) {
-            item { TimelineAnalysisCard(state.timelineItems, onAction) }
+            item { TimelineAnalysisCard(state.timelineItems, onAction, previewEnabled = state.preview.enabled) }
         }
     }
 }
@@ -173,6 +181,7 @@ fun CandidateGroupCard(
     offline: Boolean,
     acceptanceEnabled: Boolean,
     onAction: (AnalysisUiAction) -> Unit,
+    previewEnabled: Boolean = true,
 ) {
     OutlinedCard(Modifier.fillMaxWidth().testTag("candidate-group-${group.kind.name}")) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -184,7 +193,7 @@ fun CandidateGroupCard(
             }
             group.candidates.forEachIndexed { index, candidate ->
                 if (index > 0) HorizontalDivider()
-                CandidateCard(candidate, offline, acceptanceEnabled, onAction)
+                CandidateCard(candidate, offline, acceptanceEnabled, onAction, previewEnabled)
             }
         }
     }
@@ -196,6 +205,7 @@ fun CandidateCard(
     offline: Boolean,
     acceptanceEnabled: Boolean,
     onAction: (AnalysisUiAction) -> Unit,
+    previewEnabled: Boolean = true,
 ) {
     Column(Modifier.testTag("candidate-${candidate.id}"), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -228,7 +238,10 @@ fun CandidateCard(
             CandidateReviewState.PROPOSED -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (candidate.timelineStartMs != null) {
-                        OutlinedButton(onClick = { onAction(AnalysisUiAction.Preview(candidate.id)) }) { Text("Preview") }
+                        OutlinedButton(
+                            onClick = { onAction(AnalysisUiAction.Preview(candidate.id)) },
+                            enabled = previewEnabled,
+                        ) { Text("Preview") }
                     }
                     if (candidate.stale) {
                         OutlinedButton(
@@ -262,7 +275,11 @@ fun CandidateCard(
 }
 
 @Composable
-fun TimelineAnalysisCard(items: List<TimelineAnalysisItemUi>, onAction: (AnalysisUiAction) -> Unit) {
+fun TimelineAnalysisCard(
+    items: List<TimelineAnalysisItemUi>,
+    onAction: (AnalysisUiAction) -> Unit,
+    previewEnabled: Boolean = true,
+) {
     OutlinedCard(Modifier.fillMaxWidth().testTag("analysis-timeline")) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Timeline candidates", style = MaterialTheme.typography.titleMedium)
@@ -280,7 +297,10 @@ fun TimelineAnalysisCard(items: List<TimelineAnalysisItemUi>, onAction: (Analysi
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
-                    OutlinedButton(onClick = { onAction(AnalysisUiAction.Preview(item.id)) }) { Text("Preview") }
+                    OutlinedButton(
+                        onClick = { onAction(AnalysisUiAction.Preview(item.id)) },
+                        enabled = previewEnabled,
+                    ) { Text("Preview") }
                 }
             }
         }
