@@ -1,5 +1,9 @@
 package dev.androidjtools.ui.library
 
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -25,5 +29,14 @@ class PlaybackNoticeTest {
         val providers = fixtures.copy(playback = NoticePlayback(fixtures.playback))
         compose.setContent { AndroidDjToolsTheme { LibraryScreen(providers) } }
         compose.onNodeWithTag("playback-notice").assertIsDisplayed()
+    }
+
+    @Test
+    fun theNoticeIsAnnouncedAsAPoliteLiveRegion() {
+        val fixtures = FixtureAppProviders.create()
+        val providers = fixtures.copy(playback = NoticePlayback(fixtures.playback))
+        compose.setContent { AndroidDjToolsTheme { LibraryScreen(providers) } }
+        compose.onNodeWithTag("playback-notice")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
     }
 }

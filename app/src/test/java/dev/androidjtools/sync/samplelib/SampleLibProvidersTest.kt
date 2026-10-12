@@ -82,16 +82,27 @@ class SampleLibProvidersTest {
     }
 
     @Test
-    fun preparationExposesCuesAndLoopsPerTrackAndNothingForUnknownTracks() = runTest(UnconfinedTestDispatcher()) {
+    fun preparationFlowsTrackCacheCommitsIncludingRemovals() = runTest(UnconfinedTestDispatcher()) {
         val cache = SqlLibraryCache(JdbcSqlDatabase())
         val state = SampleLibProjectionState(cache, backgroundScope, UnconfinedTestDispatcher(testScheduler))
         val preparation = SampleLibPreparationProvider(state, backgroundScope)
 
+        // The flows are obtained BEFORE any commit, as a screen that is already collecting would.
+        val cues = preparation.cues("a1")
+        val loops = preparation.loops("a1")
+        assertTrue(cues.value.isEmpty())
+        assertTrue(loops.value.isEmpty())
+
         cache.applyPage(listOf(asset("a1", "Alpha"), interval("a1")), emptyList(), CacheMeta("c1", "g", "s"))
         advanceUntilIdle()
+        assertEquals(listOf("m-a1"), cues.value.map { it.id })
+        assertEquals(listOf("i-a1"), loops.value.map { it.id })
 
-        assertEquals(listOf("m-a1"), preparation.cues("a1").value.map { it.id })
-        assertEquals(listOf("i-a1"), preparation.loops("a1").value.map { it.id })
+        cache.applyPage(emptyList(), listOf(tombstoneOf("interval", "i-a1")), CacheMeta("c2", "g", "s"))
+        advanceUntilIdle()
+        assertTrue(cues.value.isEmpty())
+        assertTrue(loops.value.isEmpty())
+
         assertTrue(preparation.cues("nope").value.isEmpty())
         assertNull(preparation.beatGrid("a1").value)
     }
