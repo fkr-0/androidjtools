@@ -55,6 +55,10 @@ class SampleLibSyncEngine(
                 return SyncResult.NeedsReconnect
             }
 
+            if (page.hasMore && page.nextCursor == cursor) {
+                // A page that claims more data but does not move the cursor would loop forever.
+                throw SampleLibFailure.InvalidResponse("Pull cursor did not advance")
+            }
             cache.applyPage(page.changes, page.tombstones, CacheMeta(page.nextCursor, page.authorityGeneration, serverId))
             pages++
             upserts += page.changes.size

@@ -150,4 +150,16 @@ class SampleLibSyncEngineTest {
         assertEquals(SyncResult.Synced(pages = 1, upserts = 0, tombstones = 0, bootstrapped = false), sync())
         assertEquals(listOf("a1"), cache.entities("asset").map { it.entityId })
     }
+
+    @Test
+    fun aPageThatRepeatsTheCursorWhileClaimingMoreIsRejectedAndNotCommitted() {
+        transport.enqueuePage(page("c1", hasMore = true, changes = listOf(assetChange("a1"))))
+        transport.enqueuePage(page("c1", hasMore = true, changes = listOf(assetChange("a2"))))
+
+        assertThrows(SampleLibFailure.InvalidResponse::class.java) { sync() }
+
+        assertEquals(listOf(null, "c1"), transport.pullCursors)
+        assertEquals(listOf("a1"), cache.entities("asset").map { it.entityId })
+        assertEquals("c1", cache.meta().cursor)
+    }
 }
