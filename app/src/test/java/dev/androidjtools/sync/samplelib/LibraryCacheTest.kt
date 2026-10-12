@@ -72,24 +72,35 @@ class LibraryCacheTest {
     }
 
     @Test
-    fun failureMidPageRollsBackEntitiesTombstonesAndCursor() {
+    fun failureAtTheTombstoneRollsBackTheEarlierUpserts() = assertPageRollsBackWhenExecuteFails(3)
+
+    @Test
+    fun failureAtTheCursorWriteRollsBackEntitiesAndTombstone() = assertPageRollsBackWhenExecuteFails(4)
+
+    @Test
+    fun failureAtTheLastMetaWriteRollsBackEntitiesTombstoneAndCursor() = assertPageRollsBackWhenExecuteFails(6)
+
+    /** Page order is: a2 upsert (1), a3 upsert (2), a1 tombstone (3), cursor (4), generation (5), server (6). */
+    private fun assertPageRollsBackWhenExecuteFails(failingExecute: Int) {
         val failing = FailingSqlDatabase(db)
         val cache = SqlLibraryCache(failing)
-        cache.applyPage(listOf(change("asset", "a1", "r1")), emptyList(), CacheMeta("c1", "g", "s"))
+        cache.applyPage(listOf(change("asset", "a1", "r1")), emptyList(), CacheMeta("c1", "g1", "s1"))
+        val changesBefore = cache.changes.value
 
-        failing.failOnNthExecute(2)
+        failing.failOnNthExecute(failingExecute)
         try {
             cache.applyPage(
                 listOf(change("asset", "a2", "r1"), change("asset", "a3", "r1")),
                 listOf(tombstone("asset", "a1")),
-                CacheMeta("c2", "g", "s"),
+                CacheMeta("c2", "g2", "s2"),
             )
             fail("expected the injected failure")
         } catch (expected: IllegalStateException) {
         }
 
         assertEquals(listOf("a1"), cache.entities("asset").map { it.entityId })
-        assertEquals("c1", cache.meta().cursor)
+        assertEquals(CacheMeta("c1", "g1", "s1"), cache.meta())
+        assertEquals(changesBefore, cache.changes.value)
     }
 
     @Test
