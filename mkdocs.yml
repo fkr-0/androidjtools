@@ -32,4 +32,5 @@ exclude_docs: |
   wave3-preflight/
   wave4-preflight/
   debug/
+  superpowers/
 
