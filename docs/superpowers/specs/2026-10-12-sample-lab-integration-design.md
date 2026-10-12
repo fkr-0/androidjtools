@@ -120,7 +120,7 @@ unavailable.
 | 401/403 or credential revoked | `AUTH_REQUIRED`; keep cache read-only; offer re-pair |
 | Server identity differs from pinned | refuse; show mismatch; require explicit forget + re-pair |
 | `hello` 426 | `SERVER_INCOMPATIBLE` with requested/supported versions |
-| `cursor_expired` / generation change | drop cursor, fresh snapshot; cache stays readable until the new snapshot commits |
+| `cursor_expired` / generation change | drop cursor, fresh snapshot; cache stays readable until the new snapshot commits (S1 clears the cache first; a staged swap is scheduled with S2 - see the plan's deviation 4) |
 | Network failure | `OFFLINE`; library remains readable; journal keeps pending mutations |
 | Malformed or unknown response | `DEGRADED` with a diagnostic; never apply a partial batch |
 

@@ -8,9 +8,17 @@ All notable changes to Android DJ Tools are documented here.
 
 - Pair with a Sample Lib server from the Sync screen; the server's library, cues and loops are synced into a local cache and shown in the Library. The Sync screen lists which server capabilities (library, playlists, editing, analysis, audio) are and are not available, and why.
 - The credential is encrypted with an Android Keystore key and stored outside backups; `allowBackup` is now `false`, and cleartext traffic is limited to loopback.
-- Server tracks cannot be played yet (server audio arrives in S2); device tracks stay visible and playable, and tapping a server track explains why.
+- Server tracks cannot be played yet (server audio arrives in S2); device tracks stay visible and playable. Play and Load controls are disabled for server tracks with a reason text on every screen, and a banner above the navigation explains why. Tapping a server track through the playback provider still triggers the explanation as a safety net.
 - Server addresses with a reverse-proxy path prefix now work (the sync endpoints no longer drop the prefix).
 - Periodic background sync (unmetered networks) and manual refresh; Forget server removes the profile, credential and cache.
+
+### Known limitations
+
+- Non-loopback servers need HTTPS (plain `http://` is refused except loopback).
+- `allowBackup=false` means app preferences such as the playback queue are not restored from backups.
+- Server tracks cannot be played until server audio ships.
+- The local copy of the server library is cleared and re-downloaded when the server resets its sync state, so the library can briefly appear empty.
+- Keystore encryption, background sync scheduling, the Sync/Library/Prep/Offline/Suggest/Live screen behaviour on a device, network-config enforcement and backup exclusion have been built and unit-tested but NOT yet run on a device.
 
 ### Release engineering
 

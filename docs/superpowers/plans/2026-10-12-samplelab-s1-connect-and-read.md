@@ -15,6 +15,8 @@
 1. **Test-only dependency `org.xerial:sqlite-jdbc`** plus a `SqlDatabase` interface. The spec says "plain SQLite via `SQLiteOpenHelper`"; production still is. The interface exists only so the real SQL is verifiable on the JVM (there is no Robolectric or device in this environment).
 2. **Device tracks stay playable and visible after pairing.** The spec says a paired track plays from the device when its content hash matches a local file. Hashing device files is a separate expensive feature, so S1 does not dedupe: the library shows server tracks plus device tracks, server tracks are not playable and say why, and hash matching moves to S2 with server audio.
 3. **Playback notice** (`PlaybackProvider.playbackNotice`) is a small additive interface member needed so tapping an unplayable server track is never a silent no-op.
+4. **The cache is cleared as soon as the server's authority generation changes or a pull cursor expires**, before the fresh snapshot is pulled, instead of staying readable until the new snapshot commits. A correct staged swap needs its own schema design; S1 chooses never to show rows from a previous authority generation. Consequence: a brief empty library (and an empty library if the first pull fails offline) after such a reset. Scheduled with S2.
+5. `authority_generation` and the cursor live in `CacheMeta`, not in the profile store, as an undeclared-but-sensible detail.
 
 ## Global Constraints
 
