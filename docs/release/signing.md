@@ -21,34 +21,11 @@ signed GitHub Release has been verified end to end.
 
 ## One-time setup (maintainer)
 
-Generate the key outside the repository and never commit it (`*.jks`, `*.keystore`, `*.p12`
-and `keystore.properties` are git-ignored):
-
-```sh
-install -d -m 700 ~/.local/share/androidjtools-signing
-keytool -genkeypair -v \
-  -keystore ~/.local/share/androidjtools-signing/release.jks \
-  -alias androidjtools -keyalg RSA -keysize 4096 -validity 10000
-```
-
-Record the certificate fingerprint (public, safe to publish):
-
-```sh
-keytool -list -v -keystore ~/.local/share/androidjtools-signing/release.jks -alias androidjtools \
-  | grep 'SHA256:'
-```
-
-Configure the repository (these publish to GitHub; run them yourself):
-
-```sh
-base64 -w0 ~/.local/share/androidjtools-signing/release.jks | gh secret set ANDROID_KEYSTORE_BASE64
-gh secret set ANDROID_KEYSTORE_PASSWORD
-gh secret set ANDROID_KEY_ALIAS      # androidjtools
-gh secret set ANDROID_KEY_PASSWORD
-gh variable set ANDROID_RELEASE_CERT_SHA256 --body '<fingerprint, hex, colons optional>'
-```
-
-Back up `release.jks` and both passwords offline in at least two separate places.
+Follow the [Release keystore manual](keystore-manual.md): it covers key generation, the
+certificate fingerprint, encrypted backups with a restore drill, the GitHub secrets and
+variable, the first signed release, rotation and troubleshooting. In short, the repository
+needs four secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) and one variable (`ANDROID_RELEASE_CERT_SHA256`).
 
 ## Verification
 
@@ -62,8 +39,8 @@ itself may publish, because a `main` run at the same commit is debug-signed.
 Local dry run with a throwaway key (do not use the real key for experiments):
 
 ```sh
-keytool -genkeypair -keystore /tmp/test.jks -alias t -keyalg RSA -keysize 2048 -validity 30 \
-  -storepass testpass -keypass testpass -dname 'CN=test'
+keytool -genkeypair -storetype PKCS12 -keystore /tmp/test.jks -alias t -keyalg RSA -keysize 2048 \
+  -validity 30 -storepass testpass -dname 'CN=test'
 ANDROID_KEYSTORE_FILE=/tmp/test.jks ANDROID_KEYSTORE_PASSWORD=testpass \
 ANDROID_KEY_ALIAS=t ANDROID_KEY_PASSWORD=testpass \
   ./gradlew :app:assembleRelease -PrequireReleaseSigning=true
