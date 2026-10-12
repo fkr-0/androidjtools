@@ -16,3 +16,8 @@ __pycache__/
 build/
 **/build/
 local.properties
+# Signing material must never be committed
+*.jks
+*.keystore
+*.p12
+keystore.properties

@@ -4,7 +4,12 @@ All notable changes to Android DJ Tools are documented here.
 
 ## Unreleased
 
-No changes are currently queued beyond the v0.2.0-rc.1 candidate.
+### Release engineering
+
+- Release builds can be signed with a project-owned key supplied through `ANDROID_KEYSTORE_*` environment variables or a git-ignored `keystore.properties`; `-PrequireReleaseSigning=true` fails the build instead of falling back to the debug key. Tag CI requires it.
+- New `scripts/verify_release_signature.py` pins the release certificate SHA-256, rejects the Android debug certificate, and runs in both CI and the release workflow. Release provenance now records the signing certificate fingerprint.
+- The release workflow publishes only from the CI run triggered by the tag itself, closing a path where a same-commit `main` run could have supplied a debug-signed APK.
+- Added `docs/release/signing.md`. Keystore, password and `*.jks`/`*.keystore`/`*.p12` files are now git-ignored.
 
 ## 0.2.0-rc.1 - 2026-09-30
 

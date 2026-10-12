@@ -37,6 +37,7 @@ jobs:
         shell: bash
         env:
           TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+          TRIGGER_REF: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$TESTED_SHA"
@@ -44,6 +45,14 @@ jobs:
           version="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n1)"
           test -n "$version"
           tag="v${version}"
+
+          # A main-branch run can share a SHA with the tag but is not release-signed.
+          # Only the CI run triggered by the tag itself may publish.
+          if [[ "$TRIGGER_REF" != "$tag" ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "CI run was triggered by '$TRIGGER_REF', not tag '$tag'; not a release-signed run."
+            exit 0
+          fi
 
           if ! git tag --points-at "$TESTED_SHA" --list "$tag" | grep -Fxq "$tag"; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
@@ -99,6 +108,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CI_RUN_ID: ${{ github.event.workflow_run.id }}
           VERSION: ${{ steps.release.outputs.version }}
+          ANDROID_RELEASE_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
         run: |
           set -euo pipefail
           mkdir -p release-artifacts/download
@@ -110,6 +120,10 @@ jobs:
           test -n "$apk"
           test -s "$apk"
           install -m 0644 "$apk" "release-artifacts/androidjtools-v${VERSION}.apk"
+
+          # Re-verify independently of the build job: pinned release certificate, never debug.
+          python3 scripts/verify_release_signature.py "release-artifacts/androidjtools-v${VERSION}.apk" \
+            | tee release-artifacts/signature.json
           (cd release-artifacts && sha256sum "androidjtools-v${VERSION}.apk" > SHA256SUMS)
 
       - name: Write release provenance
@@ -138,7 +152,10 @@ jobs:
               'api35_e2e_run_id': int(os.environ['E2E_RUN_ID']),
               'build_type': 'release',
               'launcher': 'dev.androidjtools.shell.AndroidDjToolsActivity',
-              'signing_profile': 'development',
+              'signing_profile': 'release',
+              'signing_certificate_sha256': json.loads(
+                  (Path('release-artifacts') / 'signature.json').read_text()
+              )['sha256'],
               'artifact': {
                   'name': apk.name,
                   'size_bytes': apk.stat().st_size,

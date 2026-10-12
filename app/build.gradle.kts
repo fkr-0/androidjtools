@@ -1,6 +1,39 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+// Release signing inputs come from ANDROID_KEYSTORE_* env vars (CI) or a git-ignored
+// keystore.properties (local). Without them the release variant is debug-signed and
+// unofficial; -PrequireReleaseSigning=true turns that fallback into a build failure.
+val keystoreProperties = Properties().apply {
+    rootProject.file("keystore.properties").takeIf { it.isFile }?.inputStream()?.use(::load)
+}
+
+fun signingInput(env: String, property: String): String? =
+    System.getenv(env)?.takeIf { it.isNotBlank() }
+        ?: keystoreProperties.getProperty(property)?.takeIf { it.isNotBlank() }
+
+val releaseSigningInputs = mapOf(
+    "storeFile" to signingInput("ANDROID_KEYSTORE_FILE", "storeFile"),
+    "storePassword" to signingInput("ANDROID_KEYSTORE_PASSWORD", "storePassword"),
+    "keyAlias" to signingInput("ANDROID_KEY_ALIAS", "keyAlias"),
+    "keyPassword" to signingInput("ANDROID_KEY_PASSWORD", "keyPassword"),
+)
+val missingSigningInputs = releaseSigningInputs.filterValues { it == null }.keys
+val releaseSigningConfigured = missingSigningInputs.isEmpty()
+val requireReleaseSigning = providers.gradleProperty("requireReleaseSigning").orNull == "true"
+
+if (requireReleaseSigning && !releaseSigningConfigured) {
+    throw GradleException("Release signing is required but missing: ${missingSigningInputs.sorted().joinToString()}")
+}
+if (releaseSigningConfigured && !file(releaseSigningInputs.getValue("storeFile")!!).isFile) {
+    throw GradleException("Release keystore not found: ${releaseSigningInputs.getValue("storeFile")}")
+}
+if (!releaseSigningConfigured && missingSigningInputs.size < releaseSigningInputs.size) {
+    throw GradleException("Incomplete release signing configuration; missing: ${missingSigningInputs.sorted().joinToString()}")
 }
 
 android {
@@ -19,6 +52,17 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(releaseSigningInputs.getValue("storeFile")!!)
+                storePassword = releaseSigningInputs.getValue("storePassword")
+                keyAlias = releaseSigningInputs.getValue("keyAlias")
+                keyPassword = releaseSigningInputs.getValue("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -27,7 +71,7 @@ android {
         release {
             isDebuggable = false
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (releaseSigningConfigured) "release" else "debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

@@ -22,7 +22,7 @@ Run the release checks from the repository root:
     PYTHONDONTWRITEBYTECODE=1 PYTHONWARNINGS='error::ResourceWarning' python -m unittest discover -s test-server -p 'test_*.py' -v
     JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
 
-The local review APKs are `app/build/outputs/apk/debug/app-debug.apk` and `app/build/outputs/apk/release/app-release.apk`. The release variant is non-debuggable and currently development-signed for sideload review.
+The local review APKs are `app/build/outputs/apk/debug/app-debug.apk` and `app/build/outputs/apk/release/app-release.apk`. The release variant is non-debuggable. It is debug-signed (unofficial) unless release signing inputs are provided; official `v*` tag builds require the project release key. See `docs/release/signing.md`.
 
 ## Continuous integration
 
