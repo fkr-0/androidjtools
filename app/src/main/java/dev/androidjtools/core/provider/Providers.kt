@@ -12,6 +12,7 @@ import dev.androidjtools.core.model.Playlist
 import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.core.model.Track
 import dev.androidjtools.core.model.TrackDownloadState
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 sealed interface ProviderUiState {
@@ -51,7 +52,12 @@ interface PlaybackProvider {
     fun toggle()
     fun seek(positionMs: Long)
     fun release() = Unit
+
+    /** A short reason the last play request did nothing, or null. Providers that never refuse inherit null. */
+    val playbackNotice: StateFlow<String?> get() = NoPlaybackNotice
 }
+
+private val NoPlaybackNotice: StateFlow<String?> = MutableStateFlow<String?>(null)
 
 interface PlaylistProvider {
     val playlists: StateFlow<List<Playlist>>

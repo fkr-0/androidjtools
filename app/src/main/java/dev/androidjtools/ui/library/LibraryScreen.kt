@@ -85,6 +85,7 @@ fun LibraryScreen(
     val currentTrackId by providers.playback.currentTrackId.collectAsState()
     val isPlaying by providers.playback.isPlaying.collectAsState()
     val syncState by providers.sync.state.collectAsState()
+    val playbackNotice by providers.playback.playbackNotice.collectAsState()
     val effectiveSurfaceState = surfaceState ?: providerUiState.toLibrarySurfaceState()
 
     var query by rememberSaveable { mutableStateOf("") }
@@ -167,6 +168,17 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .testTag(if (roomy) "library-layout-roomy" else "library-layout-compact"),
         ) {
+            playbackNotice?.let { notice ->
+                Text(
+                    text = notice,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = horizontalPadding, vertical = 8.dp)
+                        .testTag("playback-notice"),
+                )
+            }
             LibraryHeader(
                 totalCount = tracks.size,
                 visibleCount = visibleTracks.size,
