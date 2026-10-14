@@ -195,5 +195,23 @@ class SampleLibRangeTransportTest {
         assertEquals(OfflineDownloadPhase.FAILED, store.get("file-1")?.phase)
     }
 
+    @Test
+    fun anUnreachableServerIsReportedWithoutItsAddress() = runBlocking {
+        val closed = media { StubResponse(200) }
+        val base = closed.baseUrl()
+        val port = closed.port
+        closed.close() // nothing listens on this port any more
+        val provider = MediaAuthProvider { MediaAuth.create(base, MobileCredential.issued("tok-secret")) }
+        val subject = SampleLibRangeTransport(provider, newMediaHttpClient(provider))
+        val (engine, store, _) = engine(subject)
+
+        val result = engine.download(asset())
+
+        assertTrue(result is DownloadAttemptResult.Retry)
+        val message = store.get("file-1")!!.error!!.message
+        assertFalse(message, message.contains("127.0.0.1") || message.contains(port.toString()) || message.contains("localhost"))
+        assertTrue(message, message.isNotBlank())
+    }
+
     private fun assertNull(value: Any?) = org.junit.Assert.assertNull(value)
 }

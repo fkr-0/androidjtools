@@ -6,6 +6,10 @@ import dev.androidjtools.offline.download.RangeResponse
 import dev.androidjtools.offline.download.RangeTransport
 import dev.androidjtools.remote.samplelib.MediaAuthProvider
 import java.io.IOException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -26,7 +30,19 @@ class SampleLibRangeTransport(
         // May read the Keystore-backed store the first time after process start.
         val credential = withContext(Dispatchers.IO) { auth.mediaAuth() } ?: throw IOException("No paired Sample Lib server.")
         val url = credential.mediaUrl(fileId).toString()
-        return delegate.open(request.copy(asset = request.asset.copy(resourceUri = url)))
+        return try {
+            delegate.open(request.copy(asset = request.asset.copy(resourceUri = url)))
+        } catch (e: IOException) {
+            // OkHttp messages embed the server address; this text ends up in the download record and the UI.
+            throw IOException(describe(e))
+        }
+    }
+
+    private fun describe(e: IOException): String = when (e) {
+        is UnknownHostException -> "The Sample Lib server could not be found."
+        is SSLException -> "A secure connection to the Sample Lib server could not be made."
+        is SocketTimeoutException, is ConnectException -> "The Sample Lib server could not be reached."
+        else -> "The connection to the Sample Lib server failed."
     }
 
     private companion object {
