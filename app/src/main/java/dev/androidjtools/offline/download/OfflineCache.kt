@@ -167,5 +167,22 @@ class OfflineMediaResolver(
         )
     }
 
+
+    /**
+     * Cheap availability check for call sites that must not block (the player's play(), deck loading, state
+     * flows): the verified-complete phase, the right revision and the expected length. The SHA-256 was verified
+     * when the download completed; [resolve] re-hashes and is for explicit revalidation off the main thread.
+     */
+    fun resolveQuick(assetId: String, expectedSha256: String? = null): OfflineCachedMedia? {
+        val record = store.get(assetId) ?: return null
+        if (record.phase != OfflineDownloadPhase.AVAILABLE) return null
+        if (expectedSha256 != null && !record.asset.normalizedSha256.equals(expectedSha256, ignoreCase = true)) return null
+        val file = storage.finalFile(assetId)
+        if (!file.isFile) return null
+        val expected = record.asset.contentLength ?: record.totalBytes
+        if (expected != null && file.length() != expected) return null
+        return OfflineCachedMedia(assetId, file.toURI().toString(), record.asset.normalizedSha256, file.length())
+    }
+
     fun revalidate(assetId: String): Boolean = resolve(assetId) != null
 }
