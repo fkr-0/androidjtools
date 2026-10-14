@@ -5,6 +5,7 @@ import dev.androidjtools.remote.samplelib.ServerCapabilities
 const val ASSET_FILE_ENTITY = "asset_file"
 
 const val NO_SERVER_AUDIO_NOTICE = "This track has no audio file on your Sample Lib server yet."
+const val PAIR_AGAIN_NOTICE = "The server no longer accepts this device. Pair again to play its tracks."
 const val DECK_NEEDS_DOWNLOAD_NOTICE = "Download this track to load it on a deck."
 
 /** One audio file the server can serve. [sha256] is lowercase; [etag] is the server's quoted validator, verbatim. */

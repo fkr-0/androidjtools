@@ -31,6 +31,8 @@ object LibraryProjector {
         assetFiles: List<CachedEntity> = emptyList(),
         audioAdvertised: Boolean = false,
         downloaded: Map<String, String> = emptyMap(),
+        /** Shown instead of the generic notice when streaming is withheld for a known reason (for example a rejected credential). */
+        audioBlockedReason: String? = null,
     ): LibraryProjection {
         val parsedIntervals = intervals.mapNotNull(::parseInterval)
         val byAsset = parsedIntervals.groupBy { it.assetId }
@@ -58,7 +60,7 @@ object LibraryProjector {
                 unplayableReason = when {
                     playable -> null
                     audioAdvertised && files == null -> NO_SERVER_AUDIO_NOTICE
-                    else -> SERVER_AUDIO_UNAVAILABLE_NOTICE
+                    else -> audioBlockedReason ?: SERVER_AUDIO_UNAVAILABLE_NOTICE
                 },
                 deckBlockedReason = if (playable && !offline) DECK_NEEDS_DOWNLOAD_NOTICE else null,
             )

@@ -300,4 +300,34 @@ class SampleLibProvidersTest {
         assertTrue(state.tracks.value.single().offlineAvailable)
         assertEquals("f1", state.projection.value.audio.getValue("a1").download.id)
     }
+
+    @Test
+    fun aRejectedCredentialWithdrawsStreamingAndSaysToPairAgainButKeepsDownloadedCopiesPlayable() = runTest(UnconfinedTestDispatcher()) {
+        val cache = SqlLibraryCache(JdbcSqlDatabase())
+        val pairingRequired = MutableStateFlow(false)
+        val downloaded = MutableStateFlow<Map<String, String>>(emptyMap())
+        val state = SampleLibProjectionState(
+            cache, backgroundScope, UnconfinedTestDispatcher(testScheduler),
+            downloaded = downloaded, pairingRequired = pairingRequired,
+        )
+        cache.applyPage(listOf(asset("a1", "Alpha"), assetFileChange("f1", "a1")), emptyList(), CacheMeta("c1", "g", "s"))
+        advanceUntilIdle()
+        assertTrue(state.tracks.value.single().playable)
+
+        pairingRequired.value = true
+        advanceUntilIdle()
+        val blocked = state.tracks.value.single()
+        assertTrue(!blocked.playable)
+        assertEquals(PAIR_AGAIN_NOTICE, blocked.unplayableReason)
+        assertTrue(!state.projection.value.audioAdvertised)
+
+        downloaded.value = mapOf("f1" to "ab".repeat(32))
+        advanceUntilIdle()
+        assertTrue("a verified local copy needs no credential", state.tracks.value.single().playable)
+
+        downloaded.value = emptyMap()
+        pairingRequired.value = false
+        advanceUntilIdle()
+        assertTrue(state.tracks.value.single().playable)
+    }
 }

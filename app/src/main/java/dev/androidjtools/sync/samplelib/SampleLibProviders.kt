@@ -39,16 +39,21 @@ class SampleLibProjectionState(
     capabilities: StateFlow<ServerCapabilities?> = MutableStateFlow(null),
     /** asset_file id -> lowercase sha256 of a verified local copy. A cold flow so the offline store loads off the main thread. */
     downloaded: Flow<Map<String, String>> = flowOf(emptyMap()),
+    /** True while the server rejects the stored credential: streaming is withheld, verified local copies still play. */
+    pairingRequired: Flow<Boolean> = flowOf(false),
 ) {
-    val projection: StateFlow<LibraryProjection> = combine(cache.changes, capabilities, downloaded) { _, caps, files -> caps to files }
-        .map { (caps, files) ->
+    val projection: StateFlow<LibraryProjection> = combine(cache.changes, capabilities, downloaded, pairingRequired) { _, caps, files, repair -> Triple(caps, files, repair) }
+        .map { (caps, files, repair) ->
             try {
                 val snap = cache.snapshot("asset", "interval", ASSET_FILE_ENTITY)
                 val assetFiles = snap[ASSET_FILE_ENTITY].orEmpty()
                 // Until the first hello of this process the capabilities are unknown (null): cached file rows
                 // are then the evidence, so a cold start does not lock a synced library out of playback.
-                val advertised = serverAudioSupport(caps).advertised || (caps == null && assetFiles.isNotEmpty())
-                LibraryProjector.project(snap["asset"].orEmpty(), snap["interval"].orEmpty(), assetFiles, advertised, files)
+                val advertised = !repair && (serverAudioSupport(caps).advertised || (caps == null && assetFiles.isNotEmpty()))
+                LibraryProjector.project(
+                    snap["asset"].orEmpty(), snap["interval"].orEmpty(), assetFiles, advertised, files,
+                    audioBlockedReason = PAIR_AGAIN_NOTICE.takeIf { repair },
+                )
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 null // keep previous value

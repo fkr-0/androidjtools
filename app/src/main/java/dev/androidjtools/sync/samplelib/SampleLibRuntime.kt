@@ -1,6 +1,7 @@
 package dev.androidjtools.sync.samplelib
 
 import android.content.Context
+import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.core.provider.AppProviders
 import dev.androidjtools.offline.download.DownloadScheduler
 import dev.androidjtools.offline.download.OFFLINE_QUOTA_BYTES
@@ -18,6 +19,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 
@@ -50,6 +52,7 @@ class SampleLibRuntime private constructor(context: Context) {
         scope = scope,
         capabilities = manager.capabilities,
         downloaded = flow { emitAll(downloadedFiles(offline.store.allRecords)) },
+        pairingRequired = manager.state.map { it == SyncState.AUTH_REQUIRED },
     )
     private val ioDispatcher = Executors.newSingleThreadExecutor { Thread(it, "samplelib-offline").apply { isDaemon = true } }
         .asCoroutineDispatcher()
