@@ -30,6 +30,32 @@ PRINCIPAL_ID = "principal:android-fixture"
 MEDIA_BYTES = (b"sample-lib-authenticated-media-fixture-v1\n" * 64)
 MEDIA_SHA256 = hashlib.sha256(MEDIA_BYTES).hexdigest()
 MEDIA_ETAG = '"fixture-media-v1"'
+PREVIEW_BYTES = MEDIA_BYTES[:512]
+ASSET_FILE_SCHEMA = "sample-lib.asset-file/v1"
+
+
+def parse_single_range(header: str, size: int) -> tuple[int, int] | None:
+    """RFC 9110 single byte range (N-, N-M, -N). None means unsatisfiable or unsupported.
+
+    Mirrors the real server, where an oversize suffix (bytes=-N with N > size) is a 416.
+    """
+    if not header.startswith("bytes=") or "," in header:
+        return None
+    spec = header.removeprefix("bytes=").strip()
+    first, _, last = spec.partition("-")
+    try:
+        if first == "":
+            length = int(last)
+            if length <= 0 or length > size:
+                return None
+            return size - length, size - 1
+        start = int(first)
+        end = int(last) if last != "" else size - 1
+    except ValueError:
+        return None
+    if start < 0 or start >= size or end < start:
+        return None
+    return start, min(end, size - 1)
 
 
 class AuthenticatedSampleLibFake:
@@ -48,6 +74,27 @@ class AuthenticatedSampleLibFake:
                 "etag": MEDIA_ETAG,
             }
         ]
+        self.media_scope_revoked = False
+        self.asset_files: dict[str, dict[str, Any]] = {
+            "file-1": {"role": "original", "bytes": MEDIA_BYTES, "mime": "audio/wav"},
+            "file-2": {"role": "preview", "bytes": PREVIEW_BYTES, "mime": "audio/mpeg"},
+        }
+        for file_id, spec in self.asset_files.items():
+            digest = hashlib.sha256(spec["bytes"]).hexdigest()
+            self.sync.entities[("asset_file", file_id)] = {
+                "revision": f"rev:asset_file:{file_id}:1",
+                "schema": ASSET_FILE_SCHEMA,
+                "value": {
+                    "id": file_id,
+                    "asset_id": "asset-1",
+                    "file_role": spec["role"],
+                    "resource_uri": f'{spec["role"]}://{file_id}',
+                    "sha256": digest,
+                    "size_bytes": len(spec["bytes"]),
+                    "mime_type": spec["mime"],
+                    "etag": f'"{digest}"',
+                },
+            }
 
     def pair(self, request: dict[str, Any]) -> dict[str, Any]:
         if request.get("pairing_code") != PAIRING_CODE:
@@ -69,6 +116,8 @@ class AuthenticatedSampleLibFake:
     def authorize(self, authorization: str | None, scope: str) -> None:
         if self.revoked or authorization != f"Bearer {ACCESS_TOKEN}":
             raise ProtocolHttpError(401, _error("auth_required", "Mobile authorization is missing, invalid, or revoked."))
+        if scope == "media.read" and self.media_scope_revoked:
+            raise ProtocolHttpError(403, _error("scope_forbidden", "Authorization does not grant the required scope."))
         allowed = {"sync.read", "sync.write", "media.read", "analysis.read"}
         if scope not in allowed:
             raise ProtocolHttpError(403, _error("scope_forbidden", "Authorization does not grant the required scope."))
@@ -128,6 +177,10 @@ class SampleLibFakeHandler(BaseHTTPRequestHandler):
                 self.server.engine.drop_after_commit = True
                 self._json(200, {"drop_after_commit": True})
                 return
+            if self.path == "/__samplelib__/deny-media":
+                self.server.engine.media_scope_revoked = True
+                self._json(200, {"media_scope_revoked": True})
+                return
             if self.path == "/__scenario__":
                 self.server.engine.sync.set_scenario(str(body.get("state", "")))
                 self._json(200, {"state": self.server.engine.sync.scenario})
@@ -170,12 +223,18 @@ class SampleLibFakeHandler(BaseHTTPRequestHandler):
                 self._auth("media.read")
                 self._send_media(include_body=True)
                 return
+            if self.path.startswith("/v1/sync/media/"):
+                self._serve_asset_file(include_body=True)
+                return
             self._json(404, _error("not_found", "Unknown Sample Lib fake endpoint."))
         except ProtocolHttpError as exc:
             self._json(exc.status, exc.payload)
 
     def do_HEAD(self) -> None:  # noqa: N802
         try:
+            if self.path.startswith("/v1/sync/media/"):
+                self._serve_asset_file(include_body=False)
+                return
             if self.path != "/v1/resources/audio-fixture":
                 self._json(404, _error("not_found", "Unknown Sample Lib fake endpoint."))
                 return
@@ -209,6 +268,43 @@ class SampleLibFakeHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         if start:
             self.send_header("Content-Range", f"bytes {start}-{len(MEDIA_BYTES) - 1}/{len(MEDIA_BYTES)}")
+        self.end_headers()
+        if include_body:
+            self.wfile.write(payload)
+
+    def _serve_asset_file(self, *, include_body: bool) -> None:
+        # Authorization first, before any lookup, like the real route.
+        self._auth("media.read")
+        file_id = unquote(self.path.removeprefix("/v1/sync/media/").split("?", 1)[0])
+        spec = self.server.engine.asset_files.get(file_id)
+        if spec is None:
+            self._json(404, {"detail": {"error": {"code": "media_not_found", "message": "No such media file."}}})
+            return
+        data: bytes = spec["bytes"]
+        size = len(data)
+        etag = f'"{hashlib.sha256(data).hexdigest()}"'
+        status, start, end = 200, 0, size - 1
+        range_header = self.headers.get("Range")
+        if_range = self.headers.get("If-Range")
+        # A stale If-Range validator makes byte offsets unsafe: ignore Range and send everything.
+        if range_header and (not if_range or if_range == etag):
+            parsed = parse_single_range(range_header, size)
+            if parsed is None:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            start, end = parsed
+            status = 206
+        payload = data[start : end + 1]
+        self.send_response(status)
+        self.send_header("Content-Type", spec["mime"])
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("ETag", etag)
+        self.send_header("Content-Length", str(len(payload)))
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
         self.end_headers()
         if include_body:
             self.wfile.write(payload)

@@ -13,7 +13,9 @@ from fake_samplelib_server import (
     MEDIA_BYTES,
     MEDIA_SHA256,
     PAIRING_CODE,
+    PREVIEW_BYTES,
     SampleLibFakeHttpServer,
+    parse_single_range,
 )
 from qualify_target import probe
 
@@ -241,6 +243,136 @@ class AuthenticatedSampleLibFakeTests(unittest.TestCase):
         self.assertEqual(200, stale_status)
         self.assertNotIn("Content-Range", stale_headers)
         self.assertEqual(MEDIA_BYTES, complete)
+
+    def raw(self, method: str, path: str, *, auth: bool = True, headers: dict | None = None) -> tuple[int, bytes, dict]:
+        """Like get() but never raises on 4xx, and supports HEAD."""
+        connection = http.client.HTTPConnection(self.host, self.port, timeout=2)
+        request_headers = dict(headers or {})
+        if auth:
+            request_headers["Authorization"] = f"Bearer {ACCESS_TOKEN}"
+        connection.request(method, path, headers=request_headers)
+        response = connection.getresponse()
+        body = response.read()
+        result = (response.status, body, {k: v for k, v in response.getheaders()})
+        connection.close()
+        return result
+
+    def library_snapshot(self) -> list[dict]:
+        self.pair()
+        _, hello = self.post("/v1/sync/hello", {"type": "hello_request", "protocol_versions": ["1"], "client_id": "android-client", "installation_id": "installation-a", "capabilities": []}, auth=True)
+        self.assertIn("asset_file", hello["capabilities"]["pull"])
+        _, page = self.post("/v1/sync/pull", {"type": "pull_request", "protocol_version": "1", "cursor": None, "scopes": ["library"], "limit": 100}, auth=True)
+        return page["changes"]
+
+    def test_library_snapshot_carries_asset_file_entities_in_the_documented_shape(self) -> None:
+        files = {c["entity_id"]: c for c in self.library_snapshot() if c["entity_type"] == "asset_file"}
+        self.assertEqual({"file-1", "file-2"}, set(files))
+        original = files["file-1"]
+        self.assertEqual("sample-lib.asset-file/v1", original["schema"])
+        value = original["value"]
+        self.assertEqual(
+            {"id", "asset_id", "file_role", "resource_uri", "sha256", "size_bytes", "mime_type", "etag"},
+            set(value),
+        )
+        self.assertEqual("original://file-1", value["resource_uri"])
+        self.assertEqual("original", value["file_role"])
+        self.assertEqual(MEDIA_SHA256, value["sha256"])
+        self.assertEqual(len(MEDIA_BYTES), value["size_bytes"])
+        self.assertEqual(f'"{MEDIA_SHA256}"', value["etag"])
+        self.assertEqual("preview://file-2", files["file-2"]["value"]["resource_uri"])
+
+    def test_media_requires_a_credential_and_the_media_read_scope(self) -> None:
+        self.pair()
+        status, _, _ = self.raw("GET", "/v1/sync/media/file-1", auth=False)
+        self.assertEqual(401, status)
+        self.post("/__samplelib__/deny-media", {}, auth=True)
+        status, body, _ = self.raw("GET", "/v1/sync/media/file-1")
+        self.assertEqual(403, status)
+        self.assertEqual("scope_forbidden", json.loads(body)["error"]["code"])
+
+    def test_media_unknown_id_is_404_without_leaking_paths(self) -> None:
+        self.pair()
+        status, body, _ = self.raw("GET", "/v1/sync/media/nope")
+        self.assertEqual(404, status)
+        payload = json.loads(body)
+        self.assertEqual("media_not_found", payload["detail"]["error"]["code"])
+        self.assertNotIn("/", payload["detail"]["error"]["message"])
+
+    def test_media_full_and_ranged_responses_match_the_descriptor(self) -> None:
+        self.pair()
+        size = len(MEDIA_BYTES)
+        etag = f'"{MEDIA_SHA256}"'
+
+        status, body, headers = self.raw("GET", "/v1/sync/media/file-1")
+        self.assertEqual(200, status)
+        self.assertEqual(MEDIA_BYTES, body)
+        self.assertEqual(etag, headers["ETag"])
+        self.assertEqual("bytes", headers["Accept-Ranges"])
+        self.assertEqual(str(size), headers["Content-Length"])
+        self.assertEqual("audio/wav", headers["Content-Type"])
+
+        status, body, headers = self.raw("GET", "/v1/sync/media/file-1", headers={"Range": "bytes=10-"})
+        self.assertEqual(206, status)
+        self.assertEqual(MEDIA_BYTES[10:], body)
+        self.assertEqual(f"bytes 10-{size - 1}/{size}", headers["Content-Range"])
+
+        status, body, headers = self.raw("GET", "/v1/sync/media/file-1", headers={"Range": "bytes=10-19"})
+        self.assertEqual(206, status)
+        self.assertEqual(MEDIA_BYTES[10:20], body)
+        self.assertEqual(f"bytes 10-19/{size}", headers["Content-Range"])
+
+        status, body, _ = self.raw("GET", "/v1/sync/media/file-1", headers={"Range": "bytes=-5"})
+        self.assertEqual(206, status)
+        self.assertEqual(MEDIA_BYTES[-5:], body)
+
+        # bytes=0- is a legitimate 206, unlike the legacy fixture route.
+        status, body, headers = self.raw("GET", "/v1/sync/media/file-1", headers={"Range": "bytes=0-"})
+        self.assertEqual(206, status)
+        self.assertEqual(f"bytes 0-{size - 1}/{size}", headers["Content-Range"])
+
+    def test_media_if_range_mismatch_restarts_and_match_resumes(self) -> None:
+        self.pair()
+        etag = f'"{MEDIA_SHA256}"'
+        status, body, headers = self.raw("GET", "/v1/sync/media/file-1", headers={"Range": "bytes=73-", "If-Range": '"stale"'})
+        self.assertEqual(200, status)
+        self.assertEqual(MEDIA_BYTES, body)
+        self.assertNotIn("Content-Range", headers)
+        status, body, _ = self.raw("GET", "/v1/sync/media/file-1", headers={"Range": "bytes=73-", "If-Range": etag})
+        self.assertEqual(206, status)
+        self.assertEqual(MEDIA_BYTES[73:], body)
+
+    def test_media_unsatisfiable_ranges_answer_416_with_the_total_size(self) -> None:
+        self.pair()
+        size = len(MEDIA_BYTES)
+        for header in (f"bytes={size}-", f"bytes=-{size + 1}", "bytes=5-2", "bytes=abc", "bytes=0-1,4-5"):
+            with self.subTest(range=header):
+                status, _, headers = self.raw("GET", "/v1/sync/media/file-1", headers={"Range": header})
+                self.assertEqual(416, status)
+                self.assertEqual(f"bytes */{size}", headers["Content-Range"])
+
+    def test_media_does_not_honour_if_none_match_like_the_real_server(self) -> None:
+        self.pair()
+        status, body, _ = self.raw("GET", "/v1/sync/media/file-1", headers={"If-None-Match": f'"{MEDIA_SHA256}"'})
+        self.assertEqual(200, status)
+        self.assertEqual(MEDIA_BYTES, body)
+
+    def test_media_head_returns_headers_without_a_body(self) -> None:
+        self.pair()
+        status, body, headers = self.raw("HEAD", "/v1/sync/media/file-2")
+        self.assertEqual(200, status)
+        self.assertEqual(b"", body)
+        self.assertEqual(str(len(PREVIEW_BYTES)), headers["Content-Length"])
+        self.assertEqual("audio/mpeg", headers["Content-Type"])
+
+    def test_parse_single_range_edge_cases(self) -> None:
+        self.assertEqual((0, 9), parse_single_range("bytes=0-9", 100))
+        self.assertEqual((90, 99), parse_single_range("bytes=-10", 100))
+        self.assertEqual((0, 99), parse_single_range("bytes=-100", 100))
+        self.assertEqual((95, 99), parse_single_range("bytes=95-500", 100))
+        self.assertIsNone(parse_single_range("bytes=-101", 100))
+        self.assertIsNone(parse_single_range("bytes=100-", 100))
+        self.assertIsNone(parse_single_range("items=0-9", 100))
+        self.assertIsNone(parse_single_range("bytes=0-1,2-3", 100))
 
     def test_secret_safe_qualification_probe_distinguishes_sync_ready_fake(self) -> None:
         result = probe(self.base, ACCESS_TOKEN)

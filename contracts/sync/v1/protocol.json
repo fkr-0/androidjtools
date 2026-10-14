@@ -56,7 +56,7 @@
     "mutation_replay_horizon_seconds": 31536000
   },
   "capabilities": {
-    "pull": ["asset", "interval", "marker", "tag", "tag_attachment", "analysis_suggestion"],
+    "pull": ["asset", "interval", "marker", "tag", "tag_attachment", "analysis_suggestion", "asset_file"],
     "mutations": ["interval.editor_state.replace", "asset.metadata.patch", "tag.ensure_attach", "tag.detach", "analysis.suggestion.accept"],
     "playlists": "canonical_v1",
     "analysis": ["suggestions.read"],
@@ -105,6 +105,7 @@
     "pull": "/v1/sync/pull",
     "push": "/v1/sync/push",
     "receipt": "/v1/sync/receipts/{mutation_id}",
+    "media": "/v1/sync/media/{asset_file_id}",
     "websocket": "/v1/sync/events",
     "fake_scenario": "/__scenario__"
   }

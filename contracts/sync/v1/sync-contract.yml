@@ -43,11 +43,12 @@ endpoints:
   pull: POST /v1/sync/pull
   push: POST /v1/sync/push
   receipt: GET /v1/sync/receipts/{mutation_id}
+  media_fetch: GET /v1/sync/media/{asset_file_id}
   websocket_optional: WS /v1/sync/events
 
 capability_negotiation:
   generic_write_flag: forbidden
-  pull_families: [asset, interval, marker, tag, tag_attachment, analysis_suggestion]
+  pull_families: [asset, interval, marker, tag, tag_attachment, analysis_suggestion, asset_file]
   mutation_families:
     - interval.editor_state.replace
     - asset.metadata.patch
@@ -142,6 +143,16 @@ media:
   integrity: content_sha256
   resumable_when_advertised: byte_range
   host_paths_on_mobile_boundary: forbidden
+  asset_file:
+    schema: sample-lib.asset-file/v1
+    value_fields: [id, asset_id, file_role, resource_uri, sha256, size_bytes, mime_type, etag]
+    roles_exposed: [original, preview]
+    resource_uri_form: "<role>://<id>"
+    etag: quoted strong validator (the quoted sha256 when a hash exists); keep verbatim
+    fetch_requires_scope: media.read
+    fetch_statuses: [200, 206, 401, 403, 404, 416]
+    conditional_requests: If-Range honoured; If-None-Match NOT honoured (always 200)
+    suffix_range_larger_than_file: 416
 
 intelligence:
   candidates: advisory_only

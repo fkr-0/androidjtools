@@ -178,6 +178,46 @@ class SyncContractSchemaTests(unittest.TestCase):
         self.assertNotIn("playlist.reorder", caps["mutations"])
         self.assertIn("interval.editor_state.replace", caps["mutations"])
 
+    def test_asset_file_family_and_media_route_are_declared(self) -> None:
+        self.assertIn("asset_file", self.protocol["capabilities"]["pull"])
+        self.assertEqual("/v1/sync/media/{asset_file_id}", self.protocol["http"]["media"])
+        prose = (CONTRACT_DIR / "sync-contract.yml").read_text(encoding="utf-8")
+        self.assertIn("asset_file", prose)
+        self.assertIn("media_fetch: GET /v1/sync/media/{asset_file_id}", prose)
+
+    def test_asset_file_pull_entity_validates(self) -> None:
+        digest = "a" * 64
+        self.validate(
+            {
+                "type": "pull_response",
+                "protocol_version": "1",
+                "mode": "snapshot",
+                "next_cursor": "opaque:cursor:8",
+                "has_more": False,
+                "changes": [
+                    {
+                        "entity_type": "asset_file",
+                        "entity_id": "file-1",
+                        "revision": "rev:asset_file:file-1:1",
+                        "schema": "sample-lib.asset-file/v1",
+                        "value": {
+                            "id": "file-1",
+                            "asset_id": "asset-1",
+                            "file_role": "original",
+                            "resource_uri": "original://file-1",
+                            "sha256": digest,
+                            "size_bytes": 2688,
+                            "mime_type": "audio/wav",
+                            "etag": f'"{digest}"',
+                        },
+                    }
+                ],
+                "tombstones": [],
+                "authority_generation": "generation:1",
+                "server_change_revision": 8,
+            }
+        )
+
     def test_intelligence_machine_contract_requires_receipt_before_applied_reply(self) -> None:
         mediated = self.intelligence["mediated_action"]
         self.assertTrue(mediated["request_id_idempotent"])
