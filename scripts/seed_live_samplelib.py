@@ -6,8 +6,27 @@ Usage: seed_live_samplelib.py SAMPLE_LIB_SRC_ROOT DATA_DIR
 
 from __future__ import annotations
 
+import hashlib
+import math
+import struct
 import sys
+import wave
 from pathlib import Path
+
+
+def write_wav(path: Path, seconds: float, hz: float) -> str:
+    """Write a small mono 16-bit WAV and return its SHA-256 (the server needs a real hash for a strong ETag)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rate = 8000
+    frames = b"".join(
+        struct.pack("<h", int(12000 * math.sin(2 * math.pi * hz * i / rate))) for i in range(int(rate * seconds))
+    )
+    with wave.open(str(path), "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(rate)
+        out.writeframes(frames)
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def main(argv: list[str]) -> int:
@@ -32,6 +51,18 @@ def main(argv: list[str]) -> int:
             "INSERT INTO markers (id, interval_id, position_ms, label, marker_type, color) "
             "VALUES ('marker-a', 'interval-1', 1500, 'A', 'slice', '#112233')"
         )
+        files = [
+            ("file-original", "original", "originals/a.wav", 0.25, 220.0),
+            ("file-preview", "preview", "previews/a-preview.wav", 0.05, 440.0),
+            ("file-stem", "stem", "stems/a-drums.wav", 0.05, 110.0),  # never exposed to mobile clients
+        ]
+        for file_id, role, relpath, seconds, hz in files:
+            digest = write_wav(data_dir / relpath, seconds, hz)
+            conn.execute(
+                "INSERT INTO asset_files (id, asset_id, file_role, relpath, mime_type, content_hash_sha256, duration_ms) "
+                "VALUES (?, 'asset-1', ?, ?, 'audio/wav', ?, ?)",
+                (file_id, role, relpath, digest, int(seconds * 1000)),
+            )
         conn.commit()
     finally:
         conn.close()

@@ -1,6 +1,6 @@
 # Sample Lab integration design
 
-Status: spec approved 2026-10-12. S1 implementation plan: `docs/superpowers/plans/2026-10-12-samplelab-s1-connect-and-read.md`. S2 to S5 not yet planned.
+Status: spec approved 2026-10-12. S1 implementation plan: `docs/superpowers/plans/2026-10-12-samplelab-s1-connect-and-read.md`. S2 (Android side) plan: `docs/superpowers/plans/2026-10-13-samplelab-s2-server-audio-android.md`. S3 to S5 not yet planned.
 Branch: `feat/samplelab-integration`.
 
 ## Purpose
@@ -67,7 +67,7 @@ Each stage ends with a verified, releasable increment.
 - **Providers**: `SampleLibLibraryProvider` (and preparation read models: intervals, markers)
   backed by the cache. `AndroidDjToolsActivity` composes `AppProviders` from these when paired and
   from the existing device providers when not. A paired track plays from the device only when its
-  content hash matches a local file; otherwise it is shown as server-only (not playable) until S2.
+  content hash matches a local file; otherwise it is shown as server-only (not playable) until content-hash matching ships (a follow-up to S2).
 - **Manifest/network**: cleartext allowed only for loopback via a network security config;
   non-loopback must be HTTPS (the transport already enforces this).
 
@@ -120,7 +120,7 @@ unavailable.
 | 401/403 or credential revoked | `AUTH_REQUIRED`; keep cache read-only; offer re-pair |
 | Server identity differs from pinned | refuse; show mismatch; require explicit forget + re-pair |
 | `hello` 426 | `SERVER_INCOMPATIBLE` with requested/supported versions |
-| `cursor_expired` / generation change | drop cursor, fresh snapshot; cache stays readable until the new snapshot commits (S1 clears the cache first; a staged swap is scheduled with S2 - see the plan's deviation 4) |
+| `cursor_expired` / generation change | drop cursor, fresh snapshot; cache stays readable until the new snapshot commits (S1 clears the cache first; a staged swap is a separate follow-up - see the S1 plan's deviation 4) |
 | Network failure | `OFFLINE`; library remains readable; journal keeps pending mutations |
 | Malformed or unknown response | `DEGRADED` with a diagnostic; never apply a partial batch |
 

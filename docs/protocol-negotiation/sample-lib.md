@@ -1,5 +1,7 @@
 # Sample Lib authority negotiation for Android DJ sync
 
+> Historical negotiation record. The shipped contract is `contracts/sync/v1` (asset_file pull family and `GET /v1/sync/media/{asset_file_id}`); resource URIs here such as `asset://…` were superseded by `<role>://<asset_file id>`.
+
 Canonical OCP task: `ANDROIDJTOOLS-PROTOCOL-SAMPLELIB-20260927`
 
 Status: **defensible current-state negotiation position, revalidated 2026-09-28 against the live Android client/contracts/tests, Sample Lib implementation/tests, and Sample Lab integration boundary**.

@@ -1,5 +1,7 @@
 # Sync protocol negotiation — Android / offline-first advocate
 
+> Historical negotiation record. The shipped contract is `contracts/sync/v1` (asset_file pull family and `GET /v1/sync/media/{asset_file_id}`); resource URIs here such as `asset://…` were superseded by `<role>://<asset_file id>`.
+
 Canonical OCP task: `ANDROIDJTOOLS-PROTOCOL-ANDROID-CLIENT-20260927`
 
 Status: **2026-09-28 repository-grounded Android/offline-first proposal; not unilateral protocol victory**

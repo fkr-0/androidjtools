@@ -95,7 +95,7 @@ class SampleLibSyncProvider(manager: SampleLibSessionManager) : SyncProvider {
     override val pendingMutationCount: StateFlow<Int> = MutableStateFlow(0).asStateFlow()
 }
 
-/** Server tracks first, then device tracks. No de-duplication until S2 brings content-hash matching. */
+/** Server tracks first, then device tracks. No de-duplication yet; content-hash matching is a follow-up. */
 class CompositeLibraryProvider(
     private val server: LibraryProvider,
     private val device: LibraryProvider,

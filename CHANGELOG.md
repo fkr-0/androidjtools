@@ -8,7 +8,7 @@ All notable changes to Android DJ Tools are documented here.
 
 - Pair with a Sample Lib server from the Sync screen; the server's library, cues and loops are synced into a local cache and shown in the Library. The Sync screen lists which server capabilities (library, playlists, editing, analysis, audio) are and are not available, and why.
 - The credential is encrypted with an Android Keystore key and stored outside backups; `allowBackup` is now `false`, and cleartext traffic is limited to loopback.
-- Server tracks cannot be played yet (server audio arrives in S2); device tracks stay visible and playable. Play and Load controls are disabled for server tracks with a reason text on every screen, and a banner above the navigation explains why. Tapping a server track through the playback provider still triggers the explanation as a safety net.
+- Without server audio (older servers, or before S2), server tracks cannot be played; device tracks stay visible and playable. Play and Load controls are disabled for server tracks with a reason text on every screen, and a banner above the navigation explains why. Tapping a server track through the playback provider still triggers the explanation as a safety net.
 - Server addresses with a reverse-proxy path prefix now work (the sync endpoints no longer drop the prefix).
 - Periodic background sync (unmetered networks) and manual refresh; Forget server removes the profile, credential and cache.
 
@@ -16,9 +16,23 @@ All notable changes to Android DJ Tools are documented here.
 
 - Non-loopback servers need HTTPS (plain `http://` is refused except loopback).
 - `allowBackup=false` means app preferences such as the playback queue are not restored from backups.
-- Server tracks cannot be played until server audio ships.
+- Server tracks can only be played when the server advertises audio (`asset_file`).
 - The local copy of the server library is cleared and re-downloaded when the server resets its sync state, so the library can briefly appear empty.
 - Keystore encryption, background sync scheduling, the Sync/Library/Prep/Offline/Suggest/Live screen behaviour on a device, network-config enforcement and backup exclusion have been built and unit-tested but NOT yet run on a device.
+
+### Sample Lab integration (S2: server audio)
+
+- Tracks on a Sample Lib server that advertises `asset_file` can now be played: they stream through Media3 over an authenticated, redirect-free HTTP client (the preview file when the server has one). The bearer is added only for the paired server's `/v1/sync/media/` route and is never placed on a media item, in work data, or in logs; player error text is scrubbed of server addresses.
+- Server tracks can be pinned for offline use from the Offline screen: downloads are resumable (Range with the server's quoted validator), SHA-256 verified before they count as available, stored outside backups, and refused when the device is nearly out of space. Unpinning removes the local copy.
+- Live decks accept device files and downloaded copies only; a server track that is only streamable shows "Download this track to load it on a deck."
+- Forget server (now with a confirmation) and switching to a different server also remove downloaded audio and stop running downloads.
+- Not in this release: matching server tracks to identical device files by content hash, and a cache that stays readable while a new snapshot loads (both follow in separate changes).
+
+### Known limitations (S2)
+
+- Right after launch, before the first successful connection of the session, the server's audio support is inferred from the cached library; a server that withdrew audio since the last sync is noticed at the next connection.
+- Cancelling an in-flight download leaves its partial file until the track is unpinned again or cache pruning runs.
+- Media3 session streaming, `OkHttpDataSource`, download scheduling through WorkManager, deck audio output and the new Forget confirmation have been built and unit-tested where possible but NOT run on a device.
 
 ### Release engineering
 
