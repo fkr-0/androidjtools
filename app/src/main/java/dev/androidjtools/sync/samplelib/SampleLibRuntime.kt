@@ -62,12 +62,11 @@ class SampleLibRuntime private constructor(context: Context) {
      */
     fun compose(device: AppProviders, wrapperScope: CoroutineScope = scope): AppProviders {
         val serverLibrary = SampleLibLibraryProvider(projection)
-        val isServer: (String) -> Boolean = { projection.projection.value.hasTrack(it) }
         return device.copy(
             runtime = CompositeRuntimeProvider(device.runtime, serverLibrary, wrapperScope),
             library = CompositeLibraryProvider(serverLibrary, device.library, wrapperScope),
             preparation = SampleLibPreparationProvider(projection, wrapperScope),
-            playback = ServerAwarePlayback(device.playback, isServer),
+            playback = ServerAwarePlayback(device.playback) { id -> playbackRefusal(projection.projection.value, id) },
             downloads = SampleLibDownloadProvider(
                 delegate = device.downloads,
                 projection = projection.projection,

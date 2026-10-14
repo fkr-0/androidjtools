@@ -235,7 +235,7 @@ private class MediaControllerPlaybackEngine(context: Context) : PlaybackEngine {
             connectionIssue != null -> connectionIssue
             current?.playerError != null -> PlaybackIssue(
                 PlaybackIssueKind.PLAYBACK_ERROR,
-                current.playerError?.message ?: "Playback failed.",
+                scrubUrls(current.playerError?.message),
             )
             current != null &&
                 current.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE ->

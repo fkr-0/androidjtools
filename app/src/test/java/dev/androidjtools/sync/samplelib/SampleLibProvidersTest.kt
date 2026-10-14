@@ -139,17 +139,40 @@ class SampleLibProvidersTest {
     }
 
     @Test
-    fun serverTracksAreNotPlayedAndSayWhy() {
+    fun aRefusedTrackIsNotPlayedAndSaysWhy() {
         val device = FakePlayback()
-        val playback = ServerAwarePlayback(device) { it.startsWith("srv-") }
+        val playback = ServerAwarePlayback(device) { if (it.startsWith("srv-")) "No audio on the server." else null }
 
         playback.play("srv-1")
         assertTrue(device.played.isEmpty())
-        assertEquals(SERVER_AUDIO_UNAVAILABLE_NOTICE, playback.playbackNotice.value)
+        assertEquals("No audio on the server.", playback.playbackNotice.value)
 
         playback.play("dev-1")
         assertEquals(listOf("dev-1"), device.played)
         assertNull(playback.playbackNotice.value)
+    }
+
+    @Test
+    fun aPlayableServerTrackReachesTheDelegate() {
+        val device = FakePlayback()
+        val playback = ServerAwarePlayback(device) { null }
+        playback.play("srv-ok")
+        assertEquals(listOf("srv-ok"), device.played)
+    }
+
+    @Test
+    fun playbackRefusalFollowsTheProjection() {
+        val playable = track("srv-ok")
+        val blocked = track("srv-no").copy(playable = false, unplayableReason = "No audio on the server.")
+        val bare = track("srv-bare").copy(playable = false, unplayableReason = null)
+        val projection = LibraryProjection(listOf(playable, blocked, bare), emptyMap(), emptyMap())
+
+        assertNull(playbackRefusal(projection, "srv-ok"))
+        assertEquals("No audio on the server.", playbackRefusal(projection, "srv-no"))
+        assertEquals(SERVER_AUDIO_UNAVAILABLE_NOTICE, playbackRefusal(projection, "srv-bare"))
+        // Not a server track (device media, or an id from before a Forget): the player decides.
+        assertNull(playbackRefusal(projection, "device-media:7"))
+        assertNull(playbackRefusal(LibraryProjection.EMPTY, "srv-ok"))
     }
 
     @Test

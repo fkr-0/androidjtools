@@ -34,8 +34,11 @@ class AndroidDjToolsActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        deviceProviders = DeviceMediaProviderBundle.create(this)
         val runtime = SampleLibRuntime.get(this)
+        deviceProviders = DeviceMediaProviderBundle.create(
+            this,
+            mediaUriResolver = { id -> mediaUriForDeviceTrack(id) ?: runtime.mediaResolver.playbackUri(id) },
+        )
         val providers = runtime.compose(deviceProviders.providers, lifecycleScope)
         val permission = requiredAudioPermission()
         val permissionGranted = ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED

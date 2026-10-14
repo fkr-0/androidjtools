@@ -128,17 +128,24 @@ class CompositeRuntimeProvider(
     }
 }
 
-/** Plays device tracks through [delegate]; refuses server tracks and says why instead of failing silently. */
+/** The reason a server track cannot be played, or null (device media and unknown ids are the player's business). */
+fun playbackRefusal(projection: LibraryProjection, trackId: String): String? {
+    val track = projection.tracks.firstOrNull { it.id == trackId } ?: return null
+    return if (track.playable) null else track.unplayableReason ?: SERVER_AUDIO_UNAVAILABLE_NOTICE
+}
+
+/** Plays through [delegate]; refuses tracks [refusalFor] gives a reason for and says why instead of failing silently. */
 class ServerAwarePlayback(
     private val delegate: PlaybackProvider,
-    private val isServerTrack: (String) -> Boolean,
+    private val refusalFor: (String) -> String?,
 ) : PlaybackProvider by delegate {
     private val notice = MutableStateFlow<String?>(null)
     override val playbackNotice: StateFlow<String?> = notice.asStateFlow()
 
     override fun play(trackId: String) {
-        if (isServerTrack(trackId)) {
-            notice.value = SERVER_AUDIO_UNAVAILABLE_NOTICE
+        val refusal = refusalFor(trackId)
+        if (refusal != null) {
+            notice.value = refusal
             return
         }
         notice.value = null

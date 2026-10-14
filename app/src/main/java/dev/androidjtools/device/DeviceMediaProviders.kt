@@ -62,12 +62,15 @@ class DeviceMediaProviderBundle private constructor(
     }
 
     companion object {
-        fun create(context: Context): DeviceMediaProviderBundle {
+        fun create(
+            context: Context,
+            mediaUriResolver: (String) -> String? = ::mediaUriForDeviceTrack,
+        ): DeviceMediaProviderBundle {
             val runtime = DeviceRuntimeProvider()
             val library = DeviceMediaLibraryProvider(context.applicationContext, runtime)
             val playback = Media3PlaybackProvider.create(
                 context = context.applicationContext,
-                mediaUriResolver = ::mediaUriForDeviceTrack,
+                mediaUriResolver = mediaUriResolver,
             )
             val providers = AppProviders(
                 runtime = runtime,
