@@ -58,7 +58,8 @@ class OfflineDownloadEngine(
         var forceFull = partialBytes == 0L
         var fallbackUsed = false
         while (true) {
-            record = store.get(asset.assetId) ?: return protocolFailure(asset.assetId, "download state disappeared")
+            // A cleared store (Forget) means the whole cache is being removed: stop, do not report a failure.
+            record = store.get(asset.assetId) ?: return cancelled(asset.assetId)
             if (record.cancelRequested) return cancelled(asset.assetId)
 
             val start = if (!forceFull) storage.partialFile(asset.assetId).length().takeIf { it > 0L } else null
@@ -125,7 +126,7 @@ class OfflineDownloadEngine(
                 FileOutputStream(part, append).use { output ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE * 8)
                     while (true) {
-                        if (store.get(asset.assetId)?.cancelRequested == true) return cancelled(asset.assetId)
+                        if (store.get(asset.assetId)?.cancelRequested != false) return cancelled(asset.assetId)
                         // A dropped or truncated connection keeps the verified-by-hash-later prefix and retries.
                         val count = try {
                             incoming.body.read(buffer)
@@ -239,6 +240,8 @@ class OfflineDownloadEngine(
         fail(assetId, DownloadFailureKind.PROTOCOL, message, retryable = false)
 
     private fun cancelled(assetId: String): DownloadAttemptResult.Cancelled {
+        // No record left means the cache was cleared (Forget): nothing may resume this partial, so remove it.
+        if (store.get(assetId) == null) storage.deletePartial(assetId)
         store.update(assetId) {
             it.copy(
                 phase = OfflineDownloadPhase.CANCELLED,

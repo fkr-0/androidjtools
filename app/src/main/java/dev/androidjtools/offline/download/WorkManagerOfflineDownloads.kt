@@ -41,6 +41,10 @@ class WorkManagerDownloadScheduler(
         workManager.cancelUniqueWork(uniqueName(assetId))
     }
 
+    override fun cancelAll() {
+        workManager.cancelAllWorkByTag(TAG)
+    }
+
     companion object {
         private const val TAG = "offline-download"
         internal fun uniqueName(assetId: String): String = "offline-download-${sha256Hex(assetId.toByteArray()).take(24)}"
@@ -54,7 +58,19 @@ class OfflineDownloadWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val asset = inputData.toOfflineAsset() ?: return Result.failure()
-        val runtime = SampleLibRuntime.get(applicationContext).offline
+        val samplelib = SampleLibRuntime.get(applicationContext)
+        val runtime = samplelib.offline
+        if (samplelib.manager.mediaAuth() == null) {
+            // Forgotten or rejected: never recreate state for a server we no longer have. update() only touches
+            // an existing record, so after Forget this is a no-op.
+            runtime.store.update(asset.assetId) {
+                it.copy(
+                    phase = OfflineDownloadPhase.FAILED,
+                    error = OfflineDownloadError(DownloadFailureKind.HTTP, "The server connection is no longer valid. Pair again.", retryable = true),
+                )
+            }
+            return Result.failure()
+        }
         return when (val result = runtime.engine.download(asset)) {
             DownloadAttemptResult.Success -> Result.success()
             DownloadAttemptResult.Cancelled -> Result.failure()

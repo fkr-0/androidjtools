@@ -45,6 +45,16 @@ class OfflineDownloadStore(
 
     fun get(assetId: String): OfflineDownloadRecord? = synchronized(lock) { records[assetId] }
 
+    /** Removes every record (memory, observers and files). False if a state file could not be deleted. */
+    fun clear(): Boolean = synchronized(lock) {
+        var clean = true
+        directory.listFiles().orEmpty().filter(File::isFile).forEach { if (!it.delete()) clean = false }
+        records.clear()
+        observers.values.forEach { it.value = null }
+        mutableRecords.value = emptyMap()
+        clean
+    }
+
     fun observe(assetId: String): StateFlow<OfflineDownloadRecord?> = synchronized(lock) {
         observers.getOrPut(assetId) { MutableStateFlow(records[assetId]) }.asStateFlow()
     }

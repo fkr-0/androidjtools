@@ -5,6 +5,9 @@ import kotlinx.coroutines.flow.StateFlow
 interface DownloadScheduler {
     fun enqueue(asset: OfflineAsset, replace: Boolean = false)
     fun cancel(assetId: String)
+
+    /** Stops every queued and running download job. */
+    fun cancelAll()
 }
 
 class OfflineDownloadCoordinator(

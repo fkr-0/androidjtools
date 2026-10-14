@@ -40,6 +40,7 @@ class SampleLibDownloadProviderTest {
     private val audio = ServerAudio(stream = preview, download = original)
 
     private class RecordingScheduler : DownloadScheduler {
+        override fun cancelAll() = Unit
         val enqueued = mutableListOf<OfflineAsset>()
         val cancelled = mutableListOf<String>()
         override fun enqueue(asset: OfflineAsset, replace: Boolean) {

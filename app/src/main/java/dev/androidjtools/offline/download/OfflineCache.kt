@@ -10,6 +10,12 @@ class OfflineCacheStorage(private val directory: File) {
         directory.mkdirs()
     }
 
+    /** Deletes every partial and completed file. False if anything is left. */
+    fun deleteAll(): Boolean {
+        directory.listFiles().orEmpty().forEach { it.deleteRecursively() }
+        return directory.listFiles().orEmpty().isEmpty()
+    }
+
     fun partialFile(assetId: String): File = File(directory, "${cacheKey(assetId)}.part")
     fun finalFile(assetId: String): File = File(directory, "${cacheKey(assetId)}.media")
 

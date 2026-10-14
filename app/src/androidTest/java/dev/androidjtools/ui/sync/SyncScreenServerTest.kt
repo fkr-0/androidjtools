@@ -30,11 +30,13 @@ class SyncScreenServerTest {
         override val state = MutableStateFlow(SyncState.UNCONFIGURED)
         override val capabilities = MutableStateFlow<ServerCapabilities?>(null)
         override val error = MutableStateFlow<String?>(null)
-        override val serverUrl: StateFlow<String?> = MutableStateFlow(null)
+        val savedUrl = MutableStateFlow<String?>(null)
+        override val serverUrl: StateFlow<String?> = savedUrl
+        var forgets = 0
         val pairs = mutableListOf<Pair<String, String>>()
         override fun pair(baseUrl: String, code: String) { pairs += baseUrl to code }
         override fun refresh() = Unit
-        override fun forget() = Unit
+        override fun forget() { forgets++ }
     }
 
     private fun show(controller: FakeController) {
@@ -97,5 +99,23 @@ class SyncScreenServerTest {
 
         compose.onNodeWithTag("sync-state").assertTextEquals("State: ${syncStateLabel(SyncState.PAIRING)}")
         compose.onNodeWithTag("pair-button").assertIsNotEnabled()
+    }
+
+    @Test
+    fun forgetAsksForConfirmationAndMentionsDownloads() {
+        val controller = FakeController().also { it.savedUrl.value = "https://samplelab.example" }
+        show(controller)
+
+        compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("forget-button"))
+        compose.onNodeWithTag("forget-button").performClick()
+        assertEquals(0, controller.forgets)
+        compose.onNodeWithTag("forget-dialog-text").assertTextContains("downloaded", substring = true)
+
+        compose.onNodeWithTag("forget-cancel").performClick()
+        assertEquals(0, controller.forgets)
+
+        compose.onNodeWithTag("forget-button").performClick()
+        compose.onNodeWithTag("forget-confirm").performClick()
+        assertEquals(1, controller.forgets)
     }
 }

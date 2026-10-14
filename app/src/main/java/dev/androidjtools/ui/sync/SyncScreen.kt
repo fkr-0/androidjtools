@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -66,6 +67,7 @@ private fun ServerSyncContent(server: ServerSessionController, pending: Int) {
     var url by rememberSaveable(savedUrl) { mutableStateOf(savedUrl.orEmpty()) }
     // Deliberately not rememberSaveable: the pairing code must never be written into saved instance state.
     var code by remember { mutableStateOf("") }
+    var confirmForget by remember { mutableStateOf(false) }
     val rows = remember(capabilities) { capabilityRows(capabilities) }
     val busy = state == SyncState.PAIRING || state == SyncState.PULLING
 
@@ -119,10 +121,34 @@ private fun ServerSyncContent(server: ServerSessionController, pending: Int) {
                         modifier = Modifier.testTag("refresh-button"),
                     ) { Text("Refresh") }
                     TextButton(
-                        onClick = server::forget,
+                        onClick = { confirmForget = true },
                         enabled = savedUrl != null,
                         modifier = Modifier.testTag("forget-button"),
                     ) { Text("Forget server") }
+                }
+                if (confirmForget) {
+                    AlertDialog(
+                        onDismissRequest = { confirmForget = false },
+                        title = { Text("Forget this server?") },
+                        text = {
+                            Text(
+                                "This removes the server connection, its synced library and any audio downloaded from it from this device.",
+                                modifier = Modifier.testTag("forget-dialog-text"),
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    confirmForget = false
+                                    server.forget()
+                                },
+                                modifier = Modifier.testTag("forget-confirm"),
+                            ) { Text("Forget") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { confirmForget = false }, modifier = Modifier.testTag("forget-cancel")) { Text("Cancel") }
+                        },
+                    )
                 }
             }
         }

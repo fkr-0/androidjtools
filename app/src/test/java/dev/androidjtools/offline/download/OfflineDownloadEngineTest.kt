@@ -309,6 +309,38 @@ class OfflineDownloadEngineTest {
         assertEquals(DownloadFailureKind.NETWORK, restored?.error?.kind)
     }
 
+    @Test
+    fun aDownloadWhoseStateWasClearedStopsAndLeavesNothingBehind() = runTest {
+        val root = tempRoot()
+        val store = OfflineDownloadStore(File(root, "state"))
+        val storage = OfflineCacheStorage(File(root, "media"))
+        val content = ByteArray(300) { it.toByte() }
+        val asset = asset("asset-cleared", content)
+        val body = object : java.io.InputStream() {
+            private var served = 0
+            override fun read(): Int = throw UnsupportedOperationException()
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                if (served >= content.size) return -1
+                if (served == 0) store.clear() // Forget happens while the first chunk is in flight
+                val count = minOf(100, content.size - served, length)
+                content.copyInto(buffer, offset, served, served + count)
+                served += count
+                return count
+            }
+        }
+        val transport = object : RangeTransport {
+            override suspend fun open(request: RangeRequest) =
+                RangeResponse(200, body, content.size.toLong(), null, null, null)
+        }
+
+        val result = engine(store, storage, transport, quotaBytes = 4096).download(asset)
+
+        assertTrue(result is DownloadAttemptResult.Cancelled)
+        assertFalse(storage.finalFile(asset.assetId).exists())
+        assertFalse("the orphaned partial must not outlive the cleared state", storage.partialFile(asset.assetId).exists())
+        assertTrue(store.all().isEmpty())
+    }
+
     private fun engine(
         store: OfflineDownloadStore,
         storage: OfflineCacheStorage,
@@ -365,6 +397,7 @@ class OfflineDownloadEngineTest {
     }
 
     private class FakeScheduler : DownloadScheduler {
+        override fun cancelAll() = Unit
         data class Enqueued(val assetId: String, val replace: Boolean)
         val enqueued = mutableListOf<Enqueued>()
         val cancelled = mutableListOf<String>()

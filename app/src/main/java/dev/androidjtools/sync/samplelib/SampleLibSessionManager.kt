@@ -33,6 +33,8 @@ class SampleLibSessionManager(
     private val cache: LibraryCache,
     private val clientFactory: (baseUrl: String, installationId: String) -> SampleLibClient = defaultSampleLibClientFactory,
     private val newInstallationId: () -> String = { UUID.randomUUID().toString() },
+    /** Removes server-derived local data outside the library cache (downloaded audio). False aborts the caller's operation. */
+    private val onLibraryDiscarded: suspend () -> Boolean = { true },
 ) : MediaAuthProvider {
     private val lock = Mutex()
     private val mutableState = MutableStateFlow(SyncState.UNCONFIGURED)
@@ -139,7 +141,15 @@ class SampleLibSessionManager(
 
         guarded(previousState, ::applyRefreshFailure) {
             val cachedServer = cache.meta().serverId
-            if (cachedServer != null && cachedServer != session.identity.serverId) cache.reset()
+            if (cachedServer != null && cachedServer != session.identity.serverId) {
+                // The old server's files are meaningless (and unmanageable) under a new server.
+                if (!attempt { onLibraryDiscarded() }) {
+                    mutableState.value = previousState
+                    mutableError.value = "Could not remove the previous server's downloads. Try pairing again."
+                    return@guarded
+                }
+                cache.reset()
+            }
             val saved = SampleLibProfile(baseUrl, session.identity.serverId, session.principalId, installationId)
             store.save(saved, session.credential)
             mutableProfile.value = saved
@@ -154,12 +164,13 @@ class SampleLibSessionManager(
      */
     suspend fun forget() = lock.withLock {
         revokeMediaAuth()
+        val downloadsCleared = attempt { onLibraryDiscarded() }
         val storeCleared = attempt { store.clear() }
         val cacheReset = attempt {
             cache.reset()
             true
         }
-        if (storeCleared && cacheReset) {
+        if (downloadsCleared && storeCleared && cacheReset) {
             mutableProfile.value = null
             mutableCapabilities.value = null
             mutableError.value = null

@@ -371,4 +371,81 @@ class SampleLibSessionManagerTest {
         manager.refresh()
         assertNull(manager.mediaAuth())
     }
+
+    private fun managerWith(hook: suspend () -> Boolean) =
+        SampleLibSessionManager(store, cache, { _, _ -> client }, { "install-1" }, hook)
+
+    @Test
+    fun forgetAlsoDiscardsTheDownloadsAndNeedsThemGone() = runBlocking {
+        var calls = 0
+        val subject = managerWith { calls++; true }
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+        subject.pair("https://samplelab.example", "246810")
+
+        subject.forget()
+
+        assertEquals(1, calls)
+        assertEquals(SyncState.UNCONFIGURED, subject.state.value)
+    }
+
+    @Test
+    fun aFailedDownloadCleanupKeepsTheConnectionSoForgetCanBeRetried() = runBlocking {
+        val subject = managerWith { false }
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+        subject.pair("https://samplelab.example", "246810")
+
+        subject.forget()
+
+        assertEquals(SyncState.DEGRADED, subject.state.value)
+        assertTrue(subject.profile.value != null)
+    }
+
+    @Test
+    fun aThrowingCleanupIsReportedNotPropagated() = runBlocking {
+        val subject = managerWith { error("disk gone") }
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+        subject.pair("https://samplelab.example", "246810")
+
+        subject.forget()
+
+        assertEquals(SyncState.DEGRADED, subject.state.value)
+    }
+
+    @Test
+    fun pairingADifferentServerDiscardsTheOldServersDownloadsFirst() = runBlocking {
+        var calls = 0
+        cache.applyPage(listOf(assetChange("old")), emptyList(), CacheMeta("c0", "gen-0", "old-server"))
+        val subject = managerWith { calls++; true }
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+
+        subject.pair("https://samplelab.example", "246810")
+
+        assertEquals(1, calls)
+        assertEquals(listOf("a1"), cache.entities("asset").map { it.entityId })
+    }
+
+    @Test
+    fun pairingTheSameServerKeepsItsDownloads() = runBlocking {
+        var calls = 0
+        cache.applyPage(listOf(assetChange("a1")), emptyList(), CacheMeta("c0", "gen-1", "server-1"))
+        val subject = managerWith { calls++; true }
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+
+        subject.pair("https://samplelab.example", "246810")
+
+        assertEquals(0, calls)
+    }
+
+    @Test
+    fun ifTheOldDownloadsCannotBeRemovedThePairingIsAbortedBeforeAnythingIsSaved() = runBlocking {
+        cache.applyPage(listOf(assetChange("old")), emptyList(), CacheMeta("c0", "gen-0", "old-server"))
+        val subject = managerWith { false }
+
+        subject.pair("https://samplelab.example", "246810")
+
+        assertEquals(StoredSessionResult.Absent, store.load())
+        assertEquals(listOf("old"), cache.entities("asset").map { it.entityId })
+        assertTrue(subject.error.value.orEmpty().contains("downloads"))
+        assertEquals(SyncState.UNCONFIGURED, subject.state.value)
+    }
 }

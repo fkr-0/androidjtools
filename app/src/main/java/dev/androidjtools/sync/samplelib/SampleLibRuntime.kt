@@ -8,6 +8,7 @@ import dev.androidjtools.offline.download.OfflineDownloadCoordinator
 import dev.androidjtools.offline.download.OfflineDownloadRuntime
 import dev.androidjtools.offline.download.RangeTransport
 import dev.androidjtools.offline.download.WorkManagerDownloadScheduler
+import dev.androidjtools.offline.download.clearOfflineDownloads
 import dev.androidjtools.remote.samplelib.newMediaHttpClient
 import java.io.File
 import java.util.concurrent.Executors
@@ -17,6 +18,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 
 /** Process-wide Sample Lib stack shared by the activity and the background worker. */
@@ -28,7 +30,11 @@ class SampleLibRuntime private constructor(context: Context) {
 
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val cache: LibraryCache = SqlLibraryCache(AndroidSqlDatabase(appContext, File(directory, "library-cache.db").path))
-    val manager = SampleLibSessionManager(SampleLibProfileStore(directory, AesGcmKeystoreCipher()), cache)
+    val manager = SampleLibSessionManager(
+        SampleLibProfileStore(directory, AesGcmKeystoreCipher()),
+        cache,
+        onLibraryDiscarded = { withContext(Dispatchers.IO) { clearOfflineDownloads(offline.store, offline.storage, downloadScheduler) } },
+    )
     val scheduler: SyncScheduler = WorkManagerSyncScheduler(appContext)
     val controller: ServerSessionController = SampleLibSessionController(manager, scope, scheduler)
 

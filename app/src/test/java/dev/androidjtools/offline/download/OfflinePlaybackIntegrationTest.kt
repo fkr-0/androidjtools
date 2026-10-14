@@ -54,6 +54,7 @@ class OfflinePlaybackIntegrationTest {
     }
 
     private class RejectingScheduler : DownloadScheduler {
+        override fun cancelAll() = error("unexpected cancelAll")
         override fun enqueue(asset: OfflineAsset, replace: Boolean) {
             error("offline playback must not enqueue network work")
         }
