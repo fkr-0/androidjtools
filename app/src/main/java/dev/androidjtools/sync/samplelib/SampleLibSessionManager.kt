@@ -166,7 +166,9 @@ class SampleLibSessionManager(
         revokeMediaAuth()
         val downloadsCleared = attempt { onLibraryDiscarded() }
         val storeCleared = attempt { store.clear() }
-        val cacheReset = attempt {
+        // Keep the cached server identity while foreign downloads remain: it is what lets a later pairing or a
+        // retried Forget recognise them as belonging to another server.
+        val cacheReset = downloadsCleared && attempt {
             cache.reset()
             true
         }

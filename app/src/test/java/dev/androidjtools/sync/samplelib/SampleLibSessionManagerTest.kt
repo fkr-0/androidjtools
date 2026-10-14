@@ -401,6 +401,26 @@ class SampleLibSessionManagerTest {
     }
 
     @Test
+    fun aFailedDownloadCleanupKeepsTheCachedServerIdentitySoALaterPairingOrForgetRetriesIt() = runBlocking {
+        var downloadsRemovable = false
+        val subject = managerWith { downloadsRemovable }
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+        subject.pair("https://samplelab.example", "246810")
+
+        subject.forget()
+
+        assertEquals(SyncState.DEGRADED, subject.state.value)
+        // Without the cached server id a later pairing to another server could not tell the old downloads are foreign.
+        assertEquals("server-1", cache.meta().serverId)
+
+        downloadsRemovable = true
+        subject.forget()
+
+        assertEquals(SyncState.UNCONFIGURED, subject.state.value)
+        assertEquals(null, cache.meta().serverId)
+    }
+
+    @Test
     fun aThrowingCleanupIsReportedNotPropagated() = runBlocking {
         val subject = managerWith { error("disk gone") }
         transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
