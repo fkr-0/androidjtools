@@ -15,6 +15,7 @@ import dev.androidjtools.offline.download.OfflineMediaResolver
 import java.io.File
 import java.security.MessageDigest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -85,8 +86,8 @@ class SampleLibDownloadProviderTest {
         )
         val provider = SampleLibDownloadProvider(
             delegate = device, projection = projection, rangeSupported = { range },
-            coordinator = OfflineDownloadCoordinator(store, scheduler, OfflineMediaResolver(store, storage)),
-            store = store, storage = storage, scope = scope + dispatcher, maxBytes = 1L shl 30,
+            offline = lazyOf(OfflineParts(OfflineDownloadCoordinator(store, scheduler, OfflineMediaResolver(store, storage)), store, storage)),
+            scope = scope + dispatcher, maxBytes = 1L shl 30,
             freeSpaceBytes = { free }, dispatcher = dispatcher, reserveBytes = 1000,
         )
     }
@@ -293,5 +294,43 @@ class SampleLibDownloadProviderTest {
 
         assertEquals(setOf("track:a1"), f.store.get("f-orig")!!.pinOwners)
         assertTrue(f.storage.finalFile("f-orig").exists())
+    }
+
+    @Test
+    fun theOfflineStoreIsFirstTouchedOnTheProviderDispatcherNeverOnTheCaller() {
+        val ioThread = java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "offline-io-test") }
+        val dispatcher = ioThread.asCoroutineDispatcher()
+        val touchedOn = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val root = tmp.newFolder()
+        val store = OfflineDownloadStore(File(root, "state"))
+        val storage = OfflineCacheStorage(File(root, "media"))
+        val parts = lazy {
+            touchedOn.set(Thread.currentThread().name)
+            OfflineParts(OfflineDownloadCoordinator(store, RecordingScheduler(), OfflineMediaResolver(store, storage)), store, storage)
+        }
+        val job = kotlinx.coroutines.Job()
+        val scope = kotlinx.coroutines.CoroutineScope(job + dispatcher)
+        try {
+            val projection = MutableStateFlow(
+                LibraryProjection(
+                    tracks = listOf(dev.androidjtools.core.model.Track("a1", "A", "B", durationMs = 1)),
+                    cues = emptyMap(), loops = emptyMap(), audio = mapOf("a1" to audio), audioAdvertised = true,
+                ),
+            )
+            val provider = SampleLibDownloadProvider(
+                delegate = FakeDevice(), projection = projection, rangeSupported = { true }, offline = parts,
+                scope = scope, maxBytes = 1L shl 30, freeSpaceBytes = { 10L shl 30 }, dispatcher = dispatcher,
+            )
+            provider.state("a1")
+            provider.pinTrack("a1")
+            val deadline = System.nanoTime() + 5_000_000_000L
+            while (touchedOn.get() == null && System.nanoTime() < deadline) Thread.sleep(10)
+
+            assertTrue(touchedOn.get(), touchedOn.get().orEmpty().startsWith("offline-io-test")) // coroutine debug adds a suffix
+            assertTrue(parts.isInitialized())
+        } finally {
+            job.cancel()
+            ioThread.shutdownNow()
+        }
     }
 }

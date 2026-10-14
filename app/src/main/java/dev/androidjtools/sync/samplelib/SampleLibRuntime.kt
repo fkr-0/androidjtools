@@ -80,9 +80,9 @@ class SampleLibRuntime private constructor(context: Context) {
                 delegate = device.downloads,
                 projection = projection.projection,
                 rangeSupported = { serverAudioSupport(manager.capabilities.value).range },
-                coordinator = OfflineDownloadCoordinator(offline.store, downloadScheduler, offline.resolver),
-                store = offline.store,
-                storage = offline.storage,
+                offline = lazy {
+                    OfflineParts(OfflineDownloadCoordinator(offline.store, downloadScheduler, offline.resolver), offline.store, offline.storage)
+                },
                 scope = wrapperScope,
                 maxBytes = OFFLINE_QUOTA_BYTES,
                 freeSpaceBytes = { offline.root.usableSpace },

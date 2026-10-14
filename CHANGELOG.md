@@ -31,7 +31,7 @@ All notable changes to Android DJ Tools are documented here.
 ### Known limitations (S2)
 
 - Right after launch, before the first successful connection of the session, the server's audio support is inferred from the cached library; a server that withdrew audio since the last sync is noticed at the next connection.
-- Cancelling an in-flight download leaves its partial file until the track is unpinned again or cache pruning runs.
+- Cancelling an in-flight download keeps its partial file (so it can resume) until the track is unpinned; pruning skips pinned tracks.
 - Media3 session streaming, `OkHttpDataSource`, download scheduling through WorkManager, deck audio output and the new Forget confirmation have been built and unit-tested where possible but NOT run on a device.
 
 ### Release engineering

@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -26,6 +28,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 private const val TRACK_OWNER_PREFIX = "track:"
+
+/** The offline engine's collaborators the provider needs, bundled so they can be created lazily off the main thread. */
+class OfflineParts(
+    val coordinator: OfflineDownloadCoordinator,
+    val store: OfflineDownloadStore,
+    val storage: OfflineCacheStorage,
+)
 
 /** asset_file id to the lowercase sha256 of every complete local copy. */
 fun downloadedFiles(records: Flow<Map<String, OfflineDownloadRecord>>): Flow<Map<String, String>> =
@@ -45,9 +54,8 @@ class SampleLibDownloadProvider(
     private val delegate: DownloadProvider,
     private val projection: StateFlow<LibraryProjection>,
     private val rangeSupported: () -> Boolean,
-    private val coordinator: OfflineDownloadCoordinator,
-    private val store: OfflineDownloadStore,
-    private val storage: OfflineCacheStorage,
+    /** Lazy so the first disk read of the offline store happens on [dispatcher], never on the thread building the providers. */
+    offline: Lazy<OfflineParts>,
     private val scope: CoroutineScope,
     private val maxBytes: Long,
     private val freeSpaceBytes: () -> Long,
@@ -55,8 +63,15 @@ class SampleLibDownloadProvider(
     private val reserveBytes: Long = 256L * 1024L * 1024L,
 ) : DownloadProvider {
     private val states = ConcurrentHashMap<String, StateFlow<TrackDownloadState>>()
+    private val parts by offline
+    private val coordinator get() = parts.coordinator
+    private val store get() = parts.store
+    private val storage get() = parts.storage
 
-    override val cacheSummary: StateFlow<OfflineCacheSummary> = store.allRecords
+    /** Cold: the store is first touched when this is collected on [dispatcher]. */
+    private val records: Flow<Map<String, OfflineDownloadRecord>> = flow { emitAll(store.allRecords) }.flowOn(dispatcher)
+
+    override val cacheSummary: StateFlow<OfflineCacheSummary> = flow { emitAll(store.allRecords) }
         .map(::summarize)
         .flowOn(dispatcher)
         .stateIn(scope, SharingStarted.Eagerly, OfflineCacheSummary(maxBytes = maxBytes))
@@ -68,8 +83,8 @@ class SampleLibDownloadProvider(
         if (!isServerTrack(trackId)) return delegate.state(trackId)
         return states.getOrPut(trackId) {
             val fileId = projection.map { it.audio[trackId]?.download }.distinctUntilChanged()
-            combine(fileId, store.allRecords) { descriptor, records -> toState(trackId, descriptor, records) }
-                .stateIn(scope, SharingStarted.Eagerly, toState(trackId, downloadOf(trackId), store.allRecords.value))
+            combine(fileId, records) { descriptor, all -> toState(trackId, descriptor, all) }
+                .stateIn(scope, SharingStarted.Eagerly, toState(trackId, downloadOf(trackId), emptyMap()))
         }
     }
 
