@@ -10,9 +10,9 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import dev.androidjtools.sync.samplelib.SampleLibRuntime
 import java.io.File
 import java.util.concurrent.TimeUnit
-import okhttp3.OkHttpClient
 
 class WorkManagerDownloadScheduler(
     context: Context,
@@ -54,7 +54,7 @@ class OfflineDownloadWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val asset = inputData.toOfflineAsset() ?: return Result.failure()
-        val runtime = OfflineDownloadRuntime.get(applicationContext)
+        val runtime = SampleLibRuntime.get(applicationContext).offline
         return when (val result = runtime.engine.download(asset)) {
             DownloadAttemptResult.Success -> Result.success()
             DownloadAttemptResult.Cancelled -> Result.failure()
@@ -79,6 +79,7 @@ class OfflineDownloadWorker(
 }
 
 data class OfflineDownloadRuntime(
+    val root: File,
     val store: OfflineDownloadStore,
     val storage: OfflineCacheStorage,
     val resolver: OfflineMediaResolver,
@@ -86,25 +87,16 @@ data class OfflineDownloadRuntime(
 ) {
     companion object {
         private const val DEFAULT_QUOTA_BYTES = 4L * 1024L * 1024L * 1024L
-        @Volatile private var instance: OfflineDownloadRuntime? = null
 
-        fun get(context: Context): OfflineDownloadRuntime = instance ?: synchronized(this) {
-            instance ?: create(context.applicationContext).also { instance = it }
-        }
-
-        fun coordinator(context: Context): OfflineDownloadCoordinator {
-            val runtime = get(context)
-            return OfflineDownloadCoordinator(runtime.store, WorkManagerDownloadScheduler(context), runtime.resolver)
-        }
-
-        private fun create(context: Context): OfflineDownloadRuntime {
-            val root = File(context.filesDir, "offline-downloads")
+        /** The cache lives in noBackupFilesDir: excluded from device backups even if the manifest policy changes. */
+        fun create(context: Context, transport: RangeTransport): OfflineDownloadRuntime {
+            val root = File(context.noBackupFilesDir, "offline-downloads")
             val store = OfflineDownloadStore(File(root, "state"))
             val storage = OfflineCacheStorage(File(root, "media"))
             val resolver = OfflineMediaResolver(store, storage)
             val quota = OfflineCacheQuotaManager(store, storage, DEFAULT_QUOTA_BYTES)
-            val transport = OkHttpRangeTransport(OkHttpClient())
             return OfflineDownloadRuntime(
+                root = root,
                 store = store,
                 storage = storage,
                 resolver = resolver,

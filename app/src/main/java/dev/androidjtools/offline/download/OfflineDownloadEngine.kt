@@ -126,7 +126,12 @@ class OfflineDownloadEngine(
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE * 8)
                     while (true) {
                         if (store.get(asset.assetId)?.cancelRequested == true) return cancelled(asset.assetId)
-                        val count = incoming.body.read(buffer)
+                        // A dropped or truncated connection keeps the verified-by-hash-later prefix and retries.
+                        val count = try {
+                            incoming.body.read(buffer)
+                        } catch (e: IOException) {
+                            return retry(asset.assetId, DownloadFailureKind.NETWORK, e.message ?: "network I/O failed")
+                        }
                         if (count < 0) break
                         val quotaResult = quota.writeWithinQuota(asset.assetId, count.toLong()) {
                             output.write(buffer, 0, count)

@@ -2,10 +2,16 @@ package dev.androidjtools.sync.samplelib
 
 import android.content.Context
 import dev.androidjtools.core.provider.AppProviders
+import dev.androidjtools.offline.download.DownloadScheduler
+import dev.androidjtools.offline.download.OfflineDownloadRuntime
+import dev.androidjtools.offline.download.RangeTransport
+import dev.androidjtools.offline.download.WorkManagerDownloadScheduler
+import dev.androidjtools.remote.samplelib.newMediaHttpClient
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import okhttp3.OkHttpClient
 
 /** Process-wide Sample Lib stack shared by the activity and the background worker. */
 class SampleLibRuntime private constructor(context: Context) {
@@ -19,6 +25,14 @@ class SampleLibRuntime private constructor(context: Context) {
     val manager = SampleLibSessionManager(SampleLibProfileStore(directory, AesGcmKeystoreCipher()), cache)
     val scheduler: SyncScheduler = WorkManagerSyncScheduler(appContext)
     val controller: ServerSessionController = SampleLibSessionController(manager, scope, scheduler)
+
+    /** One authenticating client for Media3 streaming and downloads: bearer only for the paired media path, no redirects. */
+    val mediaHttpClient: OkHttpClient = newMediaHttpClient(manager)
+    val rangeTransport: RangeTransport = SampleLibRangeTransport(manager, mediaHttpClient)
+
+    /** Lazy: reading the offline state is disk I/O that the service and the sync worker never need. */
+    val offline: OfflineDownloadRuntime by lazy { OfflineDownloadRuntime.create(appContext, rangeTransport) }
+    val downloadScheduler: DownloadScheduler by lazy { WorkManagerDownloadScheduler(appContext) }
     private val projection = SampleLibProjectionState(cache, scope)
 
     /**
