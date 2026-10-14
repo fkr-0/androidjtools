@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.androidjtools.core.model.BeatGrid
@@ -37,6 +38,7 @@ import dev.androidjtools.core.model.Track
 import dev.androidjtools.core.provider.AppProviders
 import dev.androidjtools.live.CrossfaderCurve
 import dev.androidjtools.live.DeckId
+import dev.androidjtools.live.deckLoadAvailability
 import dev.androidjtools.live.LiveDeckState
 import dev.androidjtools.live.LiveEffectType
 import dev.androidjtools.live.LivePerformanceController
@@ -159,6 +161,7 @@ private fun TrackLoader(
             } else {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(tracks.take(32), key = { it.id }) { track ->
+                        val availability = deckLoadAvailability(track)
                         Card(Modifier.width(210.dp)) {
                             Column(
                                 Modifier.padding(10.dp),
@@ -166,17 +169,18 @@ private fun TrackLoader(
                             ) {
                                 Text(track.title, maxLines = 1)
                                 Text(track.artist, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                                track.unplayableReason?.let { reason ->
+                                availability.reason?.let { reason ->
                                     Text(
                                         reason,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.error,
                                         maxLines = 2,
+                                        modifier = Modifier.testTag("deck-blocked-reason"),
                                     )
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Button(onClick = { onLoad(DeckId.A, track) }, enabled = track.playable) { Text("Deck A") }
-                                    Button(onClick = { onLoad(DeckId.B, track) }, enabled = track.playable) { Text("Deck B") }
+                                    Button(onClick = { onLoad(DeckId.A, track) }, enabled = availability.enabled) { Text("Deck A") }
+                                    Button(onClick = { onLoad(DeckId.B, track) }, enabled = availability.enabled) { Text("Deck B") }
                                 }
                             }
                         }

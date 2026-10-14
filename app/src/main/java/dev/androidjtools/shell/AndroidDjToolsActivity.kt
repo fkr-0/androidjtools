@@ -54,13 +54,15 @@ class AndroidDjToolsActivity : ComponentActivity() {
                 livePerformanceController.reportPosition(deck, positionMs)
             }
         }
+        // Decks get device files and verified local copies only; deckUri never returns a network address.
+        val deckUri: (String) -> String? = { id -> mediaUriForDeviceTrack(id) ?: runtime.mediaResolver.deckUri(id) }
         val liveEngine = NativeAaudioLiveAudioEngine.createOrNull(
             context = this,
-            mediaUriResolver = ::mediaUriForDeviceTrack,
+            mediaUriResolver = deckUri,
             onPosition = onLivePosition,
         ) ?: Media3LiveAudioEngine(
             context = this,
-            mediaUriResolver = ::mediaUriForDeviceTrack,
+            mediaUriResolver = deckUri,
             onPosition = onLivePosition,
         )
         livePerformanceController = LivePerformanceController(liveEngine)

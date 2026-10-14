@@ -238,4 +238,22 @@ class LivePerformanceControllerTest {
             effects[deck to type] = state
         }
     }
+
+    @Test
+    fun aStreamOnlyServerTrackIsRefusedByLoadDeckUntilItIsDownloaded() {
+        val engine = RecordingEngine()
+        val controller = LivePerformanceController(engine)
+        val streamOnly = Track(
+            id = "srv-1", title = "S", artist = "A", durationMs = 120_000L, bpm = 128.0,
+            playable = true, deckBlockedReason = "Download this track to load it on a deck.",
+        )
+
+        controller.loadDeck(DeckId.A, streamOnly, grid("srv-1", 128.0))
+
+        assertTrue(engine.loadedTracks.isEmpty())
+        assertEquals(null, controller.state.value.deckA.trackId)
+
+        controller.loadDeck(DeckId.A, streamOnly.copy(deckBlockedReason = null, offlineAvailable = true), grid("srv-1", 128.0))
+        assertEquals("srv-1", engine.loadedTracks[DeckId.A])
+    }
 }

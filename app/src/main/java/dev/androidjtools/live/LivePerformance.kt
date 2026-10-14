@@ -196,7 +196,7 @@ class LivePerformanceController(
     }
 
     fun loadDeck(deck: DeckId, track: Track, beatGrid: BeatGrid? = null) {
-        if (!track.playable) return
+        if (!deckLoadAvailability(track).enabled) return
         val nextDeck = LiveDeckState(
             trackId = track.id,
             durationMs = track.durationMs.coerceAtLeast(0L),
