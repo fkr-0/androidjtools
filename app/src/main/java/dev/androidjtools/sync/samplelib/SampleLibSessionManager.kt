@@ -1,6 +1,8 @@
 package dev.androidjtools.sync.samplelib
 
 import dev.androidjtools.core.model.SyncState
+import dev.androidjtools.remote.samplelib.MediaAuth
+import dev.androidjtools.remote.samplelib.MediaAuthProvider
 import dev.androidjtools.remote.samplelib.PairingCode
 import dev.androidjtools.remote.samplelib.SampleLibClient
 import dev.androidjtools.remote.samplelib.SampleLibFailure
@@ -31,12 +33,47 @@ class SampleLibSessionManager(
     private val cache: LibraryCache,
     private val clientFactory: (baseUrl: String, installationId: String) -> SampleLibClient = defaultSampleLibClientFactory,
     private val newInstallationId: () -> String = { UUID.randomUUID().toString() },
-) {
+) : MediaAuthProvider {
     private val lock = Mutex()
     private val mutableState = MutableStateFlow(SyncState.UNCONFIGURED)
     private val mutableCapabilities = MutableStateFlow<ServerCapabilities?>(null)
     private val mutableError = MutableStateFlow<String?>(null)
     private val mutableProfile = MutableStateFlow<SampleLibProfile?>(null)
+
+    // The media bearer is cached in memory so playback does not touch the Keystore per request. The generation
+    // counter stops a slow store load from re-caching a credential that was forgotten or rejected meanwhile.
+    private val authLock = Any()
+    private var cachedAuth: MediaAuth? = null
+    private var authUsable = true
+    private var authGeneration = 0L
+
+    override fun mediaAuth(): MediaAuth? {
+        val generation: Long
+        synchronized(authLock) {
+            if (!authUsable) return null
+            cachedAuth?.let { return it }
+            generation = authGeneration
+        }
+        val session = (store.load() as? StoredSessionResult.Loaded)?.session ?: return null
+        val auth = MediaAuth.create(session.profile.baseUrl, session.credential) ?: return null
+        synchronized(authLock) {
+            if (!authUsable || authGeneration != generation) return null
+            cachedAuth = auth
+        }
+        return auth
+    }
+
+    private fun revokeMediaAuth() = synchronized(authLock) {
+        authGeneration++
+        authUsable = false
+        cachedAuth = null
+    }
+
+    private fun acceptMediaAuth(baseUrl: String, session: SampleLibSession) = synchronized(authLock) {
+        authGeneration++
+        authUsable = true
+        cachedAuth = MediaAuth.create(baseUrl, session.credential)
+    }
 
     val state: StateFlow<SyncState> = mutableState.asStateFlow()
     val capabilities: StateFlow<ServerCapabilities?> = mutableCapabilities.asStateFlow()
@@ -48,11 +85,13 @@ class SampleLibSessionManager(
         val startState = mutableState.value
         when (val loaded = store.load()) {
             StoredSessionResult.Absent -> {
+                revokeMediaAuth()
                 mutableProfile.value = null
                 mutableCapabilities.value = null
                 mutableState.value = SyncState.UNCONFIGURED
             }
             is StoredSessionResult.Unreadable -> {
+                revokeMediaAuth()
                 mutableProfile.value = loaded.profile
                 mutableCapabilities.value = null
                 fail(SyncState.AUTH_REQUIRED, "The stored server credential could not be read. Pair again.")
@@ -114,6 +153,7 @@ class SampleLibSessionManager(
      * profile still known so the person can retry. Never throws (except to propagate cancellation).
      */
     suspend fun forget() = lock.withLock {
+        revokeMediaAuth()
         val storeCleared = attempt { store.clear() }
         val cacheReset = attempt {
             cache.reset()
@@ -138,6 +178,7 @@ class SampleLibSessionManager(
     }
 
     private suspend fun syncSession(client: SampleLibClient, session: SampleLibSession) {
+        mutableProfile.value?.let { acceptMediaAuth(it.baseUrl, session) }
         mutableCapabilities.value = session.capabilities
         mutableState.value = SyncState.PULLING
         val engine = SampleLibSyncEngine(client, cache)
@@ -168,8 +209,10 @@ class SampleLibSessionManager(
 
     private fun applyRefreshFailure(failure: Exception) {
         when (failure) {
-            is SampleLibFailure.AuthRequired ->
+            is SampleLibFailure.AuthRequired -> {
+                revokeMediaAuth()
                 fail(SyncState.AUTH_REQUIRED, "The server rejected the stored credential. Pair again.")
+            }
             is SampleLibFailure.Incompatible ->
                 fail(SyncState.SERVER_INCOMPATIBLE, "This server does not support a compatible sync protocol.")
             is SampleLibFailure.Offline ->

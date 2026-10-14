@@ -331,4 +331,44 @@ class SampleLibSessionManagerTest {
     private companion object {
         const val FORGET_FAILED = "Could not remove the stored server connection from this device. Try again."
     }
+
+    @Test
+    fun theMediaCredentialIsAvailableAfterPairingAndGoneAfterForget() = runBlocking {
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+        manager.pair("https://samplelab.example", "246810")
+
+        val auth = manager.mediaAuth()!!
+        assertEquals("samplelab.example", auth.base.host)
+
+        manager.forget()
+        assertNull(manager.mediaAuth())
+    }
+
+    @Test
+    fun aColdManagerLoadsTheMediaCredentialFromTheStoreOnDemand() = runBlocking {
+        seedStoredSession()
+        assertEquals("samplelab.example", manager.mediaAuth()!!.base.host)
+    }
+
+    @Test
+    fun aRejectedCredentialWithdrawsTheMediaCredentialUntilTheNextAcceptedSession() = runBlocking {
+        seedStoredSession()
+        transport.helloFailure = SampleLibFailure.AuthRequired()
+
+        manager.refresh()
+
+        assertEquals(SyncState.AUTH_REQUIRED, manager.state.value)
+        assertNull(manager.mediaAuth())
+
+        transport.helloFailure = null
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+        manager.refresh()
+        assertEquals("samplelab.example", manager.mediaAuth()!!.base.host)
+    }
+
+    @Test
+    fun withNothingStoredThereIsNoMediaCredential() = runBlocking {
+        manager.refresh()
+        assertNull(manager.mediaAuth())
+    }
 }
