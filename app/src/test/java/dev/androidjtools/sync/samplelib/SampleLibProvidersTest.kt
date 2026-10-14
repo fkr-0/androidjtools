@@ -297,4 +297,40 @@ class SampleLibProvidersTest {
         assertEquals(0, provider.pendingMutationCount.value)
         db.close()
     }
+
+    private fun assetFileChange(id: String, assetId: String) = json(
+        "asset_file", id,
+        """{"id":"$id","asset_id":"$assetId","file_role":"original","resource_uri":"original://$id","sha256":"${"ab".repeat(32)}","size_bytes":9,"mime_type":"audio/wav","etag":"\"${"ab".repeat(32)}\""}""",
+    )
+
+    private fun caps(vararg pull: String) = dev.androidjtools.remote.samplelib.ServerCapabilities(
+        pull.toSet(), emptySet(), "canonical_v1", emptySet(), setOf("resource_uri", "content_hash", "range"),
+    )
+
+    @Test
+    fun tracksBecomePlayableWhenTheServerAdvertisesAudioAndFollowTheDownloadedFiles() = runTest(UnconfinedTestDispatcher()) {
+        val cache = SqlLibraryCache(JdbcSqlDatabase())
+        val capabilities = MutableStateFlow<dev.androidjtools.remote.samplelib.ServerCapabilities?>(null)
+        val downloaded = MutableStateFlow<Map<String, String>>(emptyMap())
+        val state = SampleLibProjectionState(cache, backgroundScope, UnconfinedTestDispatcher(testScheduler), capabilities, downloaded)
+        cache.applyPage(listOf(asset("a1", "Alpha"), assetFileChange("f1", "a1")), emptyList(), CacheMeta("c1", "g", "s"))
+        advanceUntilIdle()
+
+        // Capabilities not known yet (cold start): cached file rows are the evidence, so tracks are not locked out.
+        assertTrue(state.tracks.value.single().playable)
+
+        capabilities.value = caps("asset", "interval")
+        advanceUntilIdle()
+        assertTrue("server without asset_file", !state.tracks.value.single().playable)
+
+        capabilities.value = caps("asset", "asset_file")
+        advanceUntilIdle()
+        assertTrue(state.tracks.value.single().playable)
+        assertTrue(!state.tracks.value.single().offlineAvailable)
+
+        downloaded.value = mapOf("f1" to "ab".repeat(32))
+        advanceUntilIdle()
+        assertTrue(state.tracks.value.single().offlineAvailable)
+        assertEquals("f1", state.projection.value.audio.getValue("a1").download.id)
+    }
 }

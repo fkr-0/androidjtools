@@ -175,4 +175,85 @@ class LibraryProjectionTest {
         assertTrue(track.playable)
         assertNull(track.unplayableReason)
     }
+
+    private val digest = "cd".repeat(32)
+
+    private fun assetFile(id: String, assetId: String, role: String = "original", sha: String = digest) = CachedEntity(
+        "asset_file", id, "r", "sample-lib.asset-file/v1",
+        """{"id":"$id","asset_id":"$assetId","file_role":"$role","resource_uri":"$role://$id","sha256":"$sha","size_bytes":100,"mime_type":"audio/wav","etag":"\"$sha\""}""",
+    )
+
+    private val oneAsset = listOf(asset("a1", """{"title":"Alpha","duration_ms":10000}"""))
+
+    @Test
+    fun anAdvertisedServerWithAnAudioFileMakesTheTrackPlayableButNotDeckReady() {
+        val projection = LibraryProjector.project(oneAsset, emptyList(), listOf(assetFile("f1", "a1")), audioAdvertised = true)
+        val track = projection.tracks.single()
+        assertTrue(track.playable)
+        assertNull(track.unplayableReason)
+        assertFalse(track.offlineAvailable)
+        assertEquals(DECK_NEEDS_DOWNLOAD_NOTICE, track.deckBlockedReason)
+        assertEquals("f1", projection.audio.getValue("a1").download.id)
+        assertTrue(projection.audioAdvertised)
+    }
+
+    @Test
+    fun aVerifiedLocalCopyMakesTheTrackOfflineAndDeckReady() {
+        val projection = LibraryProjector.project(
+            oneAsset, emptyList(), listOf(assetFile("f1", "a1")), audioAdvertised = true, downloaded = mapOf("f1" to digest),
+        )
+        val track = projection.tracks.single()
+        assertTrue(track.offlineAvailable)
+        assertNull(track.deckBlockedReason)
+        assertTrue(track.playable)
+    }
+
+    @Test
+    fun aLocalCopyOfAnOlderRevisionDoesNotCountAsDownloaded() {
+        val projection = LibraryProjector.project(
+            oneAsset, emptyList(), listOf(assetFile("f1", "a1", sha = digest)), audioAdvertised = true,
+            downloaded = mapOf("f1" to "ee".repeat(32)),
+        )
+        assertFalse(projection.tracks.single().offlineAvailable)
+        assertEquals(DECK_NEEDS_DOWNLOAD_NOTICE, projection.tracks.single().deckBlockedReason)
+    }
+
+    @Test
+    fun aDownloadedTrackStaysPlayableWhenTheServerIsNotAdvertisingAudio() {
+        val projection = LibraryProjector.project(
+            oneAsset, emptyList(), listOf(assetFile("f1", "a1")), audioAdvertised = false, downloaded = mapOf("f1" to digest),
+        )
+        assertTrue(projection.tracks.single().playable)
+        assertFalse(projection.audioAdvertised)
+    }
+
+    @Test
+    fun withoutAdvertisedAudioAStreamOnlyTrackExplainsWhy() {
+        val projection = LibraryProjector.project(oneAsset, emptyList(), listOf(assetFile("f1", "a1")), audioAdvertised = false)
+        val track = projection.tracks.single()
+        assertFalse(track.playable)
+        assertEquals(SERVER_AUDIO_UNAVAILABLE_NOTICE, track.unplayableReason)
+        assertNull(track.deckBlockedReason)
+    }
+
+    @Test
+    fun anAdvertisedServerWithoutAFileForTheTrackSaysThereIsNoAudio() {
+        val projection = LibraryProjector.project(oneAsset, emptyList(), emptyList(), audioAdvertised = true)
+        val track = projection.tracks.single()
+        assertFalse(track.playable)
+        assertEquals(NO_SERVER_AUDIO_NOTICE, track.unplayableReason)
+    }
+
+    @Test
+    fun audioForAssetsThatAreNotInTheLibraryIsNotExposed() {
+        val projection = LibraryProjector.project(oneAsset, emptyList(), listOf(assetFile("f9", "ghost")), audioAdvertised = true)
+        assertTrue(projection.audio.isEmpty())
+    }
+
+    @Test
+    fun theDefaultsKeepEveryServerTrackUnplayableLikeStageS1() {
+        val track = LibraryProjector.project(oneAsset, emptyList()).tracks.single()
+        assertFalse(track.playable)
+        assertEquals(SERVER_AUDIO_UNAVAILABLE_NOTICE, track.unplayableReason)
+    }
 }

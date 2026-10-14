@@ -14,10 +14,12 @@ import dev.androidjtools.core.provider.PlaybackProvider
 import dev.androidjtools.core.provider.PreparationProvider
 import dev.androidjtools.core.provider.ProviderUiState
 import dev.androidjtools.core.provider.SyncProvider
+import dev.androidjtools.remote.samplelib.ServerCapabilities
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
@@ -36,12 +39,19 @@ class SampleLibProjectionState(
     cache: LibraryCache,
     scope: CoroutineScope,
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    capabilities: StateFlow<ServerCapabilities?> = MutableStateFlow(null),
+    /** asset_file id -> lowercase sha256 of a verified local copy. A cold flow so the offline store loads off the main thread. */
+    downloaded: Flow<Map<String, String>> = flowOf(emptyMap()),
 ) {
-    val projection: StateFlow<LibraryProjection> = cache.changes
-        .map {
+    val projection: StateFlow<LibraryProjection> = combine(cache.changes, capabilities, downloaded) { _, caps, files -> caps to files }
+        .map { (caps, files) ->
             try {
-                val snap = cache.snapshot("asset", "interval")
-                LibraryProjector.project(snap["asset"].orEmpty(), snap["interval"].orEmpty())
+                val snap = cache.snapshot("asset", "interval", ASSET_FILE_ENTITY)
+                val assetFiles = snap[ASSET_FILE_ENTITY].orEmpty()
+                // Until the first hello of this process the capabilities are unknown (null): cached file rows
+                // are then the evidence, so a cold start does not lock a synced library out of playback.
+                val advertised = serverAudioSupport(caps).advertised || (caps == null && assetFiles.isNotEmpty())
+                LibraryProjector.project(snap["asset"].orEmpty(), snap["interval"].orEmpty(), assetFiles, advertised, files)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 null // keep previous value

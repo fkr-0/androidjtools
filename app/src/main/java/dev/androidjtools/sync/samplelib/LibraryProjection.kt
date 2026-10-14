@@ -3,18 +3,17 @@ package dev.androidjtools.sync.samplelib
 import dev.androidjtools.core.model.Cue
 import dev.androidjtools.core.model.Loop
 import dev.androidjtools.core.model.Track
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.longOrNull
 
 data class LibraryProjection(
     val tracks: List<Track>,
     val cues: Map<String, List<Cue>>,
     val loops: Map<String, List<Loop>>,
+    /** Audio files by track (asset) id, whether or not the server currently advertises streaming. */
+    val audio: Map<String, ServerAudio> = emptyMap(),
+    /** True when the server advertises audio, so [audio] may be streamed. A downloaded copy never needs it. */
+    val audioAdvertised: Boolean = false,
 ) {
     private val trackIds: Set<String> by lazy { tracks.mapTo(HashSet()) { it.id } }
 
@@ -26,15 +25,25 @@ data class LibraryProjection(
 }
 
 object LibraryProjector {
-    fun project(assets: List<CachedEntity>, intervals: List<CachedEntity>): LibraryProjection {
+    fun project(
+        assets: List<CachedEntity>,
+        intervals: List<CachedEntity>,
+        assetFiles: List<CachedEntity> = emptyList(),
+        audioAdvertised: Boolean = false,
+        downloaded: Map<String, String> = emptyMap(),
+    ): LibraryProjection {
         val parsedIntervals = intervals.mapNotNull(::parseInterval)
         val byAsset = parsedIntervals.groupBy { it.assetId }
+        val audio = AssetFiles.audioByAsset(assetFiles)
 
         val tracks = assets.mapNotNull { entity ->
-            val value = parseObject(entity.valueJson) ?: return@mapNotNull null
+            val value = parseJsonObject(entity.valueJson) ?: return@mapNotNull null
             val duration = value.long("duration_ms") ?: 0L
             val fullSpan = byAsset[entity.entityId].orEmpty()
                 .firstOrNull { duration > 0 && it.startMs == 0L && it.endMs >= duration }
+            val files = audio[entity.entityId]
+            val offline = files != null && downloaded[files.download.id] == files.download.sha256
+            val playable = files != null && (audioAdvertised || offline)
             Track(
                 id = entity.entityId,
                 title = value.string("title") ?: value.string("original_filename") ?: entity.entityId,
@@ -44,14 +53,23 @@ object LibraryProjector {
                 bpm = fullSpan?.bpm,
                 key = fullSpan?.key,
                 rating = value.long("rating")?.toInt(),
-                playable = false,
-                unplayableReason = SERVER_AUDIO_UNAVAILABLE_NOTICE,
+                offlineAvailable = offline,
+                playable = playable,
+                unplayableReason = when {
+                    playable -> null
+                    audioAdvertised && files == null -> NO_SERVER_AUDIO_NOTICE
+                    else -> SERVER_AUDIO_UNAVAILABLE_NOTICE
+                },
+                deckBlockedReason = if (playable && !offline) DECK_NEEDS_DOWNLOAD_NOTICE else null,
             )
         }
+        val trackIds = tracks.mapTo(HashSet()) { it.id }
         return LibraryProjection(
             tracks = tracks,
             cues = parsedIntervals.flatMap { it.cues }.groupBy { it.trackId },
             loops = parsedIntervals.flatMap { it.loops }.groupBy { it.trackId },
+            audio = audio.filterKeys { it in trackIds },
+            audioAdvertised = audioAdvertised,
         )
     }
 
@@ -68,7 +86,7 @@ object LibraryProjector {
     private class ParsedMarker(val id: String, val positionMs: Long, val type: String, val label: String?, val color: String?)
 
     private fun parseInterval(entity: CachedEntity): ParsedInterval? {
-        val root = parseObject(entity.valueJson) ?: return null
+        val root = parseJsonObject(entity.valueJson) ?: return null
         val interval = root["interval"] as? JsonObject ?: return null
         val assetId = interval.string("asset_id") ?: return null
         val start = interval.long("start_ms") ?: return null
@@ -126,22 +144,4 @@ object LibraryProjector {
 
     private fun parseColor(value: String?): Long? =
         value?.let { colour.matchEntire(it) }?.groupValues?.get(1)?.toLong(16)?.let { 0xFF000000L or it }
-
-    private fun parseObject(json: String): JsonObject? =
-        try {
-            Json.parseToJsonElement(json) as? JsonObject
-        } catch (_: SerializationException) {
-            null
-        } catch (_: IllegalArgumentException) {
-            null
-        }
-
-    private fun JsonObject.string(key: String): String? =
-        (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
-
-    private fun JsonObject.long(key: String): Long? =
-        (this[key] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull
-
-    private fun JsonObject.double(key: String): Double? =
-        (this[key] as? JsonPrimitive)?.takeUnless { it.isString }?.doubleOrNull
 }

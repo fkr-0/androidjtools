@@ -15,6 +15,8 @@ data class Track(
     val offlineAvailable: Boolean = false,
     val playable: Boolean = true,
     val unplayableReason: String? = null,
+    /** Why this track cannot go on a Live deck even though it can be played (for example: not downloaded). */
+    val deckBlockedReason: String? = null,
 )
 
 data class Cue(
