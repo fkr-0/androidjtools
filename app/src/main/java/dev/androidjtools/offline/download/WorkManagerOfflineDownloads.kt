@@ -78,6 +78,8 @@ class OfflineDownloadWorker(
     }
 }
 
+internal const val OFFLINE_QUOTA_BYTES = 4L * 1024L * 1024L * 1024L
+
 data class OfflineDownloadRuntime(
     val root: File,
     val store: OfflineDownloadStore,
@@ -86,15 +88,13 @@ data class OfflineDownloadRuntime(
     val engine: OfflineDownloadEngine,
 ) {
     companion object {
-        private const val DEFAULT_QUOTA_BYTES = 4L * 1024L * 1024L * 1024L
-
         /** The cache lives in noBackupFilesDir: excluded from device backups even if the manifest policy changes. */
         fun create(context: Context, transport: RangeTransport): OfflineDownloadRuntime {
             val root = File(context.noBackupFilesDir, "offline-downloads")
             val store = OfflineDownloadStore(File(root, "state"))
             val storage = OfflineCacheStorage(File(root, "media"))
             val resolver = OfflineMediaResolver(store, storage)
-            val quota = OfflineCacheQuotaManager(store, storage, DEFAULT_QUOTA_BYTES)
+            val quota = OfflineCacheQuotaManager(store, storage, OFFLINE_QUOTA_BYTES)
             return OfflineDownloadRuntime(
                 root = root,
                 store = store,

@@ -3,14 +3,20 @@ package dev.androidjtools.sync.samplelib
 import android.content.Context
 import dev.androidjtools.core.provider.AppProviders
 import dev.androidjtools.offline.download.DownloadScheduler
+import dev.androidjtools.offline.download.OFFLINE_QUOTA_BYTES
+import dev.androidjtools.offline.download.OfflineDownloadCoordinator
 import dev.androidjtools.offline.download.OfflineDownloadRuntime
 import dev.androidjtools.offline.download.RangeTransport
 import dev.androidjtools.offline.download.WorkManagerDownloadScheduler
 import dev.androidjtools.remote.samplelib.newMediaHttpClient
 import java.io.File
+import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import okhttp3.OkHttpClient
 
 /** Process-wide Sample Lib stack shared by the activity and the background worker. */
@@ -33,7 +39,20 @@ class SampleLibRuntime private constructor(context: Context) {
     /** Lazy: reading the offline state is disk I/O that the service and the sync worker never need. */
     val offline: OfflineDownloadRuntime by lazy { OfflineDownloadRuntime.create(appContext, rangeTransport) }
     val downloadScheduler: DownloadScheduler by lazy { WorkManagerDownloadScheduler(appContext) }
-    private val projection = SampleLibProjectionState(cache, scope)
+    private val projection = SampleLibProjectionState(
+        cache = cache,
+        scope = scope,
+        capabilities = manager.capabilities,
+        downloaded = flow { emitAll(downloadedFiles(offline.store.allRecords)) },
+    )
+    private val ioDispatcher = Executors.newSingleThreadExecutor { Thread(it, "samplelib-offline").apply { isDaemon = true } }
+        .asCoroutineDispatcher()
+
+    val mediaResolver = SampleLibMediaResolver(
+        projection = { projection.projection.value },
+        baseUrl = { manager.profile.value?.baseUrl },
+        offline = { offline.resolver },
+    )
 
     /**
      * Wraps the device providers; their content then follows pairing state at runtime.
@@ -49,7 +68,18 @@ class SampleLibRuntime private constructor(context: Context) {
             library = CompositeLibraryProvider(serverLibrary, device.library, wrapperScope),
             preparation = SampleLibPreparationProvider(projection, wrapperScope),
             playback = ServerAwarePlayback(device.playback, isServer),
-            downloads = ServerAwareDownloads(device.downloads, isServer),
+            downloads = SampleLibDownloadProvider(
+                delegate = device.downloads,
+                projection = projection.projection,
+                rangeSupported = { serverAudioSupport(manager.capabilities.value).range },
+                coordinator = OfflineDownloadCoordinator(offline.store, downloadScheduler, offline.resolver),
+                store = offline.store,
+                storage = offline.storage,
+                scope = wrapperScope,
+                maxBytes = OFFLINE_QUOTA_BYTES,
+                freeSpaceBytes = { offline.root.usableSpace },
+                dispatcher = ioDispatcher,
+            ),
             sync = SampleLibSyncProvider(manager),
         )
     }
