@@ -60,16 +60,19 @@ class OfflineDownloadWorker(
         val asset = inputData.toOfflineAsset() ?: return Result.failure()
         val samplelib = SampleLibRuntime.get(applicationContext)
         val runtime = samplelib.offline
-        if (samplelib.manager.mediaAuth() == null) {
-            // Forgotten or rejected: never recreate state for a server we no longer have. update() only touches
-            // an existing record, so after Forget this is a no-op.
-            runtime.store.update(asset.assetId) {
-                it.copy(
-                    phase = OfflineDownloadPhase.FAILED,
-                    error = OfflineDownloadError(DownloadFailureKind.HTTP, "The server connection is no longer valid. Pair again.", retryable = true),
-                )
+        when (downloadJobGate(runtime.store, asset.assetId, hasMediaAuth = samplelib.manager.mediaAuth() != null)) {
+            // Forgotten, switched or cleared meanwhile: never recreate state for a download nobody asked for.
+            DownloadJobGate.STALE -> return Result.failure()
+            DownloadJobGate.UNAUTHORIZED -> {
+                runtime.store.update(asset.assetId) {
+                    it.copy(
+                        phase = OfflineDownloadPhase.FAILED,
+                        error = OfflineDownloadError(DownloadFailureKind.HTTP, "The server connection is no longer valid. Pair again.", retryable = true),
+                    )
+                }
+                return Result.failure()
             }
-            return Result.failure()
+            DownloadJobGate.RUN -> Unit
         }
         return when (val result = runtime.engine.download(asset)) {
             DownloadAttemptResult.Success -> Result.success()

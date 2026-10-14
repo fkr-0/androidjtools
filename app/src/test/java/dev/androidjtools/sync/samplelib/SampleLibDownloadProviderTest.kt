@@ -250,4 +250,48 @@ class SampleLibDownloadProviderTest {
 
         assertEquals(mapOf("done" to "ab".repeat(32)), downloadedFiles(f.store.allRecords).first())
     }
+
+    @Test
+    fun retryIsRefusedOnAFullDiskLikePinning() = runTest {
+        val f = Fixture(backgroundScope, UnconfinedTestDispatcher(testScheduler), free = 500)
+
+        f.provider.retry("a1")
+
+        assertTrue(f.scheduler.enqueued.isEmpty())
+        assertEquals(DownloadStatus.FAILED, f.provider.state("a1").value.status)
+        assertEquals(DownloadFailureKind.QUOTA, f.store.get("f-orig")!!.error!!.kind)
+    }
+
+    @Test
+    fun pruneDropsPinsForTracksTheServerDeletedOrReissuedUnderAnotherFileId() = runTest {
+        val f = Fixture(backgroundScope, UnconfinedTestDispatcher(testScheduler))
+        f.provider.pinTrack("a1")
+        for (id in listOf("f-reissued", "f-deleted")) {
+            f.store.ensure(OfflineAsset(id, "original://$id", "ab".repeat(32), 3))
+            f.store.update(id) { it.copy(phase = OfflineDownloadPhase.AVAILABLE) }
+            f.storage.finalFile(id).writeBytes("abc".toByteArray())
+        }
+        f.store.update("f-reissued") { it.copy(pinOwners = setOf("track:a1")) } // a1's current file is f-orig
+        f.store.update("f-deleted") { it.copy(pinOwners = setOf("track:gone")) } // track no longer in the library
+
+        f.provider.pruneUnpinned()
+
+        assertFalse(f.storage.finalFile("f-reissued").exists())
+        assertFalse(f.storage.finalFile("f-deleted").exists())
+        assertEquals(setOf("track:a1"), f.store.get("f-orig")!!.pinOwners)
+    }
+
+    @Test
+    fun pruneNeverDropsPinsWhileTheLibraryIsEmpty() = runTest {
+        val f = Fixture(backgroundScope, UnconfinedTestDispatcher(testScheduler))
+        f.provider.pinTrack("a1")
+        f.storage.finalFile("f-orig").writeBytes(bytes)
+        f.store.update("f-orig") { it.copy(phase = OfflineDownloadPhase.AVAILABLE) }
+        f.projection.value = LibraryProjection.EMPTY // a cache reset or cold start, not a real deletion
+
+        f.provider.pruneUnpinned()
+
+        assertEquals(setOf("track:a1"), f.store.get("f-orig")!!.pinOwners)
+        assertTrue(f.storage.finalFile("f-orig").exists())
+    }
 }

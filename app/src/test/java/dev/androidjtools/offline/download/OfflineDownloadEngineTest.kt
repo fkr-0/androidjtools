@@ -341,6 +341,30 @@ class OfflineDownloadEngineTest {
         assertTrue(store.all().isEmpty())
     }
 
+    @Test
+    fun aStorageWriteFailureIsAVisibleRetryableFailureNotAnEscapedException() = runTest {
+        val root = tempRoot()
+        val store = OfflineDownloadStore(File(root, "state"))
+        val storage = OfflineCacheStorage(File(root, "media"))
+        val content = ByteArray(300) { it.toByte() }
+        val asset = asset("asset-disk", content)
+        // A non-empty directory where the partial file belongs makes opening it for writing fail with an IOException.
+        storage.partialFile(asset.assetId).apply {
+            mkdirs()
+            File(this, "blocker").writeBytes(byteArrayOf(1))
+        }
+        val transport = FakeRangeTransport(response(200, content))
+
+        val result = engine(store, storage, transport, quotaBytes = 4096).download(asset)
+
+        assertTrue(result is DownloadAttemptResult.Failed)
+        val error = (result as DownloadAttemptResult.Failed).error
+        assertEquals(DownloadFailureKind.QUOTA, error.kind)
+        assertTrue(error.retryable)
+        assertEquals(OfflineDownloadPhase.FAILED, store.get(asset.assetId)?.phase)
+        assertFalse(storage.finalFile(asset.assetId).exists())
+    }
+
     private fun engine(
         store: OfflineDownloadStore,
         storage: OfflineCacheStorage,

@@ -78,21 +78,24 @@ class SampleLibDownloadProvider(
         val descriptor = downloadOf(trackId) ?: return
         val asset = offlineAsset(descriptor)
         scope.launch(dispatcher) {
-            val complete = store.get(asset.assetId)?.let {
-                it.phase == OfflineDownloadPhase.AVAILABLE && it.asset.normalizedSha256 == asset.normalizedSha256
-            } == true
-            if (!complete && freeSpaceBytes() < descriptor.sizeBytes + reserveBytes) {
-                store.ensure(asset)
-                store.update(asset.assetId) {
-                    it.copy(
-                        phase = OfflineDownloadPhase.FAILED,
-                        error = OfflineDownloadError(DownloadFailureKind.QUOTA, "Not enough free space on this device.", retryable = true),
-                    )
-                }
-                return@launch
-            }
-            coordinator.pinTrack(asset, trackId)
+            if (hasRoomFor(descriptor, asset)) coordinator.pinTrack(asset, trackId)
         }
+    }
+
+    /** Refuses visibly (FAILED/QUOTA) when the device cannot hold the file plus the reserve. A complete copy needs no room. */
+    private fun hasRoomFor(descriptor: AssetFileDescriptor, asset: OfflineAsset): Boolean {
+        val complete = store.get(asset.assetId)?.let {
+            it.phase == OfflineDownloadPhase.AVAILABLE && it.asset.normalizedSha256 == asset.normalizedSha256
+        } == true
+        if (complete || freeSpaceBytes() >= descriptor.sizeBytes + reserveBytes) return true
+        store.ensure(asset)
+        store.update(asset.assetId) {
+            it.copy(
+                phase = OfflineDownloadPhase.FAILED,
+                error = OfflineDownloadError(DownloadFailureKind.QUOTA, "Not enough free space on this device.", retryable = true),
+            )
+        }
+        return false
     }
 
     override fun unpinTrack(trackId: String) {
@@ -118,7 +121,10 @@ class SampleLibDownloadProvider(
     override fun retry(trackId: String) {
         if (!isServerTrack(trackId)) return delegate.retry(trackId)
         val descriptor = downloadOf(trackId) ?: return
-        scope.launch(dispatcher) { coordinator.retry(offlineAsset(descriptor)) }
+        val asset = offlineAsset(descriptor)
+        scope.launch(dispatcher) {
+            if (hasRoomFor(descriptor, asset)) coordinator.retry(asset)
+        }
     }
 
     override fun cancel(trackId: String) {
@@ -130,8 +136,33 @@ class SampleLibDownloadProvider(
     override fun pruneUnpinned() {
         delegate.pruneUnpinned()
         scope.launch(dispatcher) {
+            dropPinsOfVanishedTracks()
             store.all().filter { !it.pinned }.forEach { record ->
                 store.evictIfEligible(record.asset.assetId) { storage.evict(record.asset.assetId) }
+            }
+        }
+    }
+
+    /**
+     * A track the server deleted, or whose file it re-issued under a new id, can no longer be unpinned from any
+     * screen. On an explicit prune its pins are dropped so the bytes can be reclaimed. An empty library (a cache
+     * reset or a cold start) proves nothing, so then nothing is dropped.
+     */
+    private fun dropPinsOfVanishedTracks() {
+        val library = projection.value
+        if (library.tracks.isEmpty()) return
+        store.all().forEach { record ->
+            val stale = record.pinOwners.filter { owner ->
+                owner.startsWith(TRACK_OWNER_PREFIX) &&
+                    library.audio[owner.removePrefix(TRACK_OWNER_PREFIX)]?.download?.id != record.asset.assetId
+            }
+            if (stale.isEmpty()) return@forEach
+            store.update(record.asset.assetId) { it.copy(pinOwners = it.pinOwners - stale.toSet()) }
+            val after = store.get(record.asset.assetId)
+            if (after != null && !after.pinned &&
+                (after.phase == OfflineDownloadPhase.QUEUED || after.phase == OfflineDownloadPhase.DOWNLOADING)
+            ) {
+                coordinator.cancel(record.asset.assetId)
             }
         }
     }

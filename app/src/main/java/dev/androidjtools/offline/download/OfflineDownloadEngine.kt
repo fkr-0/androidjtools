@@ -10,7 +10,17 @@ class OfflineDownloadEngine(
     private val transport: RangeTransport,
     private val progressPersistBytes: Long = 256L * 1024L,
 ) {
-    suspend fun download(asset: OfflineAsset): DownloadAttemptResult {
+    suspend fun download(asset: OfflineAsset): DownloadAttemptResult =
+        try {
+            downloadUnguarded(asset)
+        } catch (e: IOException) {
+            // Opening, writing, syncing, hashing or publishing the file failed (typically a full disk). The partial
+            // is dropped to free space; the failure is visible and retryable instead of a stuck "downloading".
+            storage.deletePartial(asset.assetId)
+            fail(asset.assetId, DownloadFailureKind.QUOTA, "Could not write to device storage (it may be full).", retryable = true)
+        }
+
+    private suspend fun downloadUnguarded(asset: OfflineAsset): DownloadAttemptResult {
         val previous = store.get(asset.assetId)
         if (
             previous != null &&
