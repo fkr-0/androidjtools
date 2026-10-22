@@ -10,8 +10,14 @@ import dev.androidjtools.offline.download.OfflineDownloadRuntime
 import dev.androidjtools.offline.download.RangeTransport
 import dev.androidjtools.offline.download.WorkManagerDownloadScheduler
 import dev.androidjtools.offline.download.clearOfflineDownloads
+import dev.androidjtools.remote.samplelib.SampleLibClient
+import dev.androidjtools.remote.samplelib.SampleLibSession
 import dev.androidjtools.remote.samplelib.newMediaHttpClient
+import dev.androidjtools.sync.journal.DurableMutationJournal
+import dev.androidjtools.sync.journal.FileMutationJournalStorage
+import dev.androidjtools.sync.journal.JournalEditOutbox
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,10 +38,36 @@ class SampleLibRuntime private constructor(context: Context) {
 
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val cache: LibraryCache = SqlLibraryCache(AndroidSqlDatabase(appContext, File(directory, "library-cache.db").path))
+
+    /**
+     * Cue and loop edits waiting for (or answered by) the server. Lazy: opening it reads a file, which must not
+     * happen on the main thread; saved edits from an earlier run are dropped when it is first opened.
+     */
+    val journal: Lazy<DurableMutationJournal> = lazy {
+        DurableMutationJournal(FileMutationJournalStorage(File(directory, "mutations.journal"))).also { it.compactAcknowledged() }
+    }
+    private val journalOutbox by lazy { JournalEditOutbox(journal.value) }
+    private val outbox = object : EditOutbox {
+        override fun hasPending(): Boolean = journalOutbox.hasPending()
+        override suspend fun deliver(client: SampleLibClient, session: SampleLibSession) = journalOutbox.deliver(client, session)
+    }
+
     val manager = SampleLibSessionManager(
         SampleLibProfileStore(directory, AesGcmKeystoreCipher()),
         cache,
-        onLibraryDiscarded = { withContext(Dispatchers.IO) { clearOfflineDownloads(offline.store, offline.storage, downloadScheduler) } },
+        onLibraryDiscarded = {
+            withContext(Dispatchers.IO) {
+                // Unsent edits were made for the server being discarded; they must never reach another one.
+                val editsDropped = try {
+                    journal.value.clear()
+                    true
+                } catch (_: IOException) {
+                    false
+                }
+                editsDropped && clearOfflineDownloads(offline.store, offline.storage, downloadScheduler)
+            }
+        },
+        outbox = outbox,
     )
     val scheduler: SyncScheduler = WorkManagerSyncScheduler(appContext)
     val controller: ServerSessionController = SampleLibSessionController(manager, scope, scheduler)
@@ -71,6 +103,7 @@ class SampleLibRuntime private constructor(context: Context) {
      */
     fun compose(device: AppProviders, wrapperScope: CoroutineScope = scope): AppProviders {
         val serverLibrary = SampleLibLibraryProvider(projection)
+        val journalProvider = SampleLibJournalProvider(journal, wrapperScope, Dispatchers.IO)
         return device.copy(
             runtime = CompositeRuntimeProvider(device.runtime, serverLibrary, wrapperScope),
             library = CompositeLibraryProvider(serverLibrary, device.library, wrapperScope),
@@ -89,7 +122,17 @@ class SampleLibRuntime private constructor(context: Context) {
                 freeSpaceBytes = { offline.root.usableSpace },
                 dispatcher = ioDispatcher,
             ),
-            sync = SampleLibSyncProvider(manager),
+            journal = journalProvider,
+            sync = SampleLibSyncProvider(manager, journalProvider.pendingCount),
+            edits = SampleLibServerEditProvider(
+                lazyJournal = journal,
+                projection = projection.projection,
+                capabilities = manager.capabilities,
+                syncState = manager.state,
+                requestFlush = controller::refresh,
+                ioDispatcher = Dispatchers.IO,
+                scope = wrapperScope,
+            ),
         )
     }
 

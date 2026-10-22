@@ -104,4 +104,6 @@ data class AppProviders(
     val journal: MutationJournalProvider,
     val sync: SyncProvider,
     val analysis: AnalysisProvider,
+    /** Saving cue and loop edits to a paired server. Unavailable (with a reason) until one is paired. */
+    val edits: ServerEditProvider = NoServerEdits,
 )

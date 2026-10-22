@@ -132,7 +132,7 @@ private fun ServerSyncContent(server: ServerSessionController, pending: Int) {
                         title = { Text("Forget this server?") },
                         text = {
                             Text(
-                                "This removes the server connection, its synced library and any audio downloaded from it from this device.",
+                                "This removes the server connection, its synced library, any audio downloaded from it and any edits that were not yet sent from this device.",
                                 modifier = Modifier.testTag("forget-dialog-text"),
                             )
                         },

@@ -2,8 +2,18 @@ package dev.androidjtools.sync.samplelib
 
 import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.remote.samplelib.MobileCredential
+import dev.androidjtools.remote.samplelib.MutationConflict
+import dev.androidjtools.remote.samplelib.MutationReceipt
+import dev.androidjtools.remote.samplelib.OpaqueRevision
+import dev.androidjtools.remote.samplelib.PushResult
+import dev.androidjtools.remote.samplelib.ReceiptOutcome
 import dev.androidjtools.remote.samplelib.SampleLibClient
 import dev.androidjtools.remote.samplelib.SampleLibFailure
+import dev.androidjtools.sync.journal.DurableMutationJournal
+import dev.androidjtools.sync.journal.JournalEditOutbox
+import dev.androidjtools.sync.journal.JournalMutationState
+import dev.androidjtools.sync.journal.JournalSnapshot
+import dev.androidjtools.sync.journal.MutationJournalStorage
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -467,5 +477,116 @@ class SampleLibSessionManagerTest {
         assertEquals(listOf("old"), cache.entities("asset").map { it.entityId })
         assertTrue(subject.error.value.orEmpty().contains("downloads"))
         assertEquals(SyncState.UNCONFIGURED, subject.state.value)
+    }
+
+    private class MemoryJournalStorage : MutationJournalStorage {
+        var durable = JournalSnapshot()
+        override fun load() = durable
+        override fun store(snapshot: JournalSnapshot) {
+            durable = snapshot
+        }
+    }
+
+    private lateinit var lastManager: SampleLibSessionManager
+
+    private fun managerWithEdits(journal: DurableMutationJournal): SampleLibSessionManager =
+        SampleLibSessionManager(store, cache, { _, _ -> client }, { "install-1" }, outbox = JournalEditOutbox(journal)).also { lastManager = it }
+
+    private fun queueEdit(journal: DurableMutationJournal, id: String = "mutation-edit-1") = journal.enqueue(
+        mutationId = id,
+        entityType = "interval",
+        entityId = "interval-1",
+        baseRevision = "rev-old",
+        operation = "interval.editor_state.replace",
+        payloadJson = """{"start_ms":0,"end_ms":5000,"markers":[]}""",
+        provenanceJson = """{"source":"android_manual"}""",
+        createdAtEpochMillis = 1000,
+    )
+
+    private fun applied(id: String) = MutationReceipt(id, ReceiptOutcome.APPLIED, 5L, OpaqueRevision("rev-new"))
+
+    @Test
+    fun refreshDeliversQueuedEditsBeforeItPullsSoThePulledStateIncludesThem() = runBlocking {
+        seedStoredSession()
+        val journal = DurableMutationJournal(MemoryJournalStorage())
+        queueEdit(journal)
+        transport.pushScript = { sent -> PushResult(sent.map { applied(it.mutationId) }, 5L) }
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+
+        managerWithEdits(journal).refresh()
+
+        assertEquals(listOf("hello", "push", "pull"), transport.calls)
+        assertEquals(JournalMutationState.RECEIPT_RECORDED, journal.mutation("mutation-edit-1")?.state)
+        assertEquals(SyncState.ONLINE_IDLE, lastManager.state.value)
+    }
+
+    @Test
+    fun noQueuedEditsMeansNoPushAtAll() = runBlocking {
+        seedStoredSession()
+        transport.enqueuePage(page("c1"))
+
+        managerWithEdits(DurableMutationJournal(MemoryJournalStorage())).refresh()
+
+        assertEquals(listOf("hello", "pull"), transport.calls)
+    }
+
+    @Test
+    fun anUnreachablePushKeepsTheEditPendingAndTheLibraryStillSyncs() = runBlocking {
+        seedStoredSession()
+        val journal = DurableMutationJournal(MemoryJournalStorage())
+        queueEdit(journal)
+        transport.pushScript = { throw SampleLibFailure.Offline() }
+        transport.receiptScript = { throw SampleLibFailure.ReceiptNotFound(it) }
+        transport.enqueuePage(page("c1", changes = listOf(assetChange("a1"))))
+
+        managerWithEdits(journal).refresh()
+
+        assertEquals(JournalMutationState.PENDING, journal.mutation("mutation-edit-1")?.state)
+        assertEquals(listOf("a1"), cache.entities("asset").map { it.entityId })
+        assertEquals(SyncState.ONLINE_IDLE, lastManager.state.value)
+    }
+
+    @Test
+    fun aServerThatDoesNotAdvertiseEditingLeavesTheEditPendingAndNeverPushes() = runBlocking {
+        seedStoredSession()
+        val journal = DurableMutationJournal(MemoryJournalStorage())
+        queueEdit(journal)
+        transport.capabilities = transport.capabilities.copy(mutations = emptySet())
+        transport.enqueuePage(page("c1"))
+
+        managerWithEdits(journal).refresh()
+
+        assertFalse("push" in transport.calls)
+        assertEquals(JournalMutationState.PENDING, journal.mutation("mutation-edit-1")?.state)
+        assertEquals(SyncState.ONLINE_IDLE, lastManager.state.value)
+    }
+
+    @Test
+    fun aConflictReceiptIsRecordedWithItsEvidenceAndTheSyncContinues() = runBlocking {
+        seedStoredSession()
+        val journal = DurableMutationJournal(MemoryJournalStorage())
+        queueEdit(journal)
+        transport.pushScript = { sent ->
+            PushResult(
+                sent.map {
+                    MutationReceipt(
+                        it.mutationId, ReceiptOutcome.CONFLICT, 6L,
+                        conflict = MutationConflict(
+                            it.mutationId, "interval-1", OpaqueRevision("rev-old"), OpaqueRevision("rev-remote"),
+                            null, null, "editor_aggregate", "stale_base_revision",
+                        ),
+                    )
+                },
+                6L,
+            )
+        }
+        transport.enqueuePage(page("c1"))
+
+        managerWithEdits(journal).refresh()
+
+        val recorded = journal.mutation("mutation-edit-1")!!
+        assertEquals(JournalMutationState.CONFLICT, recorded.state)
+        assertEquals("rev-remote", recorded.receipt?.conflict?.authoritativeRevision)
+        assertEquals(listOf("hello", "push", "pull"), transport.calls)
     }
 }

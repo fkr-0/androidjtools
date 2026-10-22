@@ -1,6 +1,7 @@
 package dev.androidjtools.remote.samplelib
 
 import dev.androidjtools.core.model.SyncState
+import dev.androidjtools.core.provider.EditAvailability
 import dev.androidjtools.offline.download.DownloadAttemptResult
 import dev.androidjtools.offline.download.OfflineAsset
 import dev.androidjtools.offline.download.OfflineCacheQuotaManager
@@ -11,7 +12,18 @@ import dev.androidjtools.offline.download.OfflineDownloadStore
 import dev.androidjtools.offline.download.RangeRequest
 import dev.androidjtools.offline.download.RangeResponse
 import dev.androidjtools.offline.download.RangeTransport
+import dev.androidjtools.prep.cues.CueEditorState
+import dev.androidjtools.prep.cues.PreparationStageResult
+import dev.androidjtools.sync.journal.DurableMutationJournal
+import dev.androidjtools.sync.journal.JournalEditOutbox
+import dev.androidjtools.sync.journal.JournalMutationStager
+import dev.androidjtools.sync.journal.JournalMutationState
+import dev.androidjtools.sync.journal.JournalReceiptOutcome
+import dev.androidjtools.sync.journal.JournalSnapshot
+import dev.androidjtools.sync.journal.MutationJournalStorage
 import dev.androidjtools.sync.samplelib.AssetFiles
+import dev.androidjtools.sync.samplelib.LibraryProjection
+import dev.androidjtools.sync.samplelib.SampleLibServerEditProvider
 import dev.androidjtools.sync.samplelib.FakeCipher
 import dev.androidjtools.sync.samplelib.JdbcSqlDatabase
 import dev.androidjtools.sync.samplelib.LibraryProjector
@@ -26,6 +38,11 @@ import java.nio.file.Files
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -241,6 +258,148 @@ class SampleLibLiveContractTest {
         } finally {
             db.close()
             dir.deleteRecursively()
+        }
+    }
+
+    // ---- S3: editing through the journal against the real server ----
+
+    private class MemoryJournalStorage : MutationJournalStorage {
+        var durable = JournalSnapshot()
+        override fun load() = durable
+        override fun store(snapshot: JournalSnapshot) {
+            durable = snapshot
+        }
+    }
+
+    private inner class EditHarness {
+        val dir: File = Files.createTempDirectory("samplelib-live-edits").toFile()
+        val db = JdbcSqlDatabase()
+        val cache = SqlLibraryCache(db)
+        val journal = DurableMutationJournal(MemoryJournalStorage())
+        val manager = SampleLibSessionManager(SampleLibProfileStore(dir, FakeCipher()), cache, outbox = JournalEditOutbox(journal))
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val provider = SampleLibServerEditProvider(
+            lazyOf(journal), MutableStateFlow(LibraryProjection.EMPTY), manager.capabilities, manager.state,
+            requestFlush = {}, ioDispatcher = Dispatchers.Unconfined, scope = scope,
+        )
+
+        fun library() = LibraryProjector.project(cache.entities("asset"), cache.entities("interval"))
+        fun intervalRevision() = cache.entities("interval").single { it.entityId == "interval-1" }.revision
+
+        /** A cue rename built exactly as the Preparation screen builds it: the editor, then the journal stager. */
+        fun stageRename(newLabel: String, mutationId: String = "android-live-" + UUID.randomUUID()): String {
+            val library = library()
+            val cues = library.cues.getValue("asset-1")
+            val editor = CueEditorState.fromDomain("asset-1", 10_000L, library.aggregate("interval-1")!!, cues)
+                .rename(cues.first { it.id == "marker-a" }.id, newLabel).editor
+            val result = editor.stage(mutationId, System.currentTimeMillis(), JournalMutationStager(journal))
+            assertTrue("staging failed: $result", result is PreparationStageResult.Queued)
+            return mutationId
+        }
+
+        fun cueLabel() = library().cues.getValue("asset-1").first { it.id == "marker-a" }.label
+
+        fun close() {
+            scope.cancel()
+            db.close()
+            dir.deleteRecursively()
+        }
+    }
+
+    /** Another installation changes the interval behind our back, so our cached revision goes stale. */
+    private suspend fun changeIntervalFromAnotherDevice(label: String) {
+        val other = SampleLibClient(SampleLibHttpTransport(baseUrl), "android-dj-tools", "other-device-" + UUID.randomUUID())
+        val session = other.pair(PairingCode.entered(pairingCode))
+        val (changes, _) = pullAll(other, session)
+        val interval = changes.last { it.entityType == "interval" && it.entityId == "interval-1" }
+        val receipt = (other.pushWithRecovery(session, mutation("android-other-" + UUID.randomUUID(), interval.revision, editorPayload(interval.value, label))) as MutationDelivery.Confirmed).receipt
+        assertEquals(ReceiptOutcome.APPLIED, receipt.outcome)
+    }
+
+    @Test
+    fun aQueuedCueEditIsDeliveredOnRefreshAndOnlyThenShowsInTheLibrary() = runBlocking {
+        requireLive()
+        val h = EditHarness()
+        try {
+            h.manager.pair(baseUrl, pairingCode)
+            assertEquals(h.manager.error.value, SyncState.ONLINE_IDLE, h.manager.state.value)
+            assertEquals(EditAvailability.Available, h.provider.availability.value)
+            val before = h.intervalRevision()
+            val label = "live-edit-" + UUID.randomUUID().toString().take(8)
+
+            val id = h.stageRename(label)
+
+            // Queued is not effective: the library still shows the server's version.
+            assertEquals(JournalMutationState.PENDING, h.journal.mutation(id)?.state)
+            assertNotEquals(label, h.cueLabel())
+
+            h.manager.refresh()
+
+            assertEquals(SyncState.ONLINE_IDLE, h.manager.state.value)
+            assertEquals(JournalReceiptOutcome.APPLIED, h.journal.mutation(id)?.receipt?.outcome)
+            assertNotEquals("the server must have produced a new revision", before, h.intervalRevision())
+            assertEquals(label, h.cueLabel())
+            // The server's own vocabulary and colour format survived the round trip.
+            val cue = h.library().cues.getValue("asset-1").first { it.id == "marker-a" }
+            assertEquals("slice", cue.role)
+            assertEquals(0xFF112233L, cue.colorArgb)
+        } finally {
+            h.close()
+        }
+    }
+
+    @Test
+    fun aStaleEditIsAConflictAndReapplyingTheDraftThenSucceeds() = runBlocking {
+        requireLive()
+        val h = EditHarness()
+        try {
+            h.manager.pair(baseUrl, pairingCode)
+            val mine = "mine-" + UUID.randomUUID().toString().take(8)
+            val theirs = "theirs-" + UUID.randomUUID().toString().take(8)
+            val id = h.stageRename(mine)
+            changeIntervalFromAnotherDevice(theirs)
+
+            h.manager.refresh()
+
+            val conflicted = h.journal.mutation(id)!!
+            assertEquals(JournalMutationState.CONFLICT, conflicted.state)
+            assertEquals("editor_aggregate", conflicted.receipt?.conflict?.mergeClass)
+            // Never a silent overwrite: the library now shows the other device's version.
+            assertEquals(theirs, h.cueLabel())
+
+            val reapplied = h.provider.reapplyDraft(id)
+            val newId = (reapplied as PreparationStageResult.Queued).mutationId
+            assertEquals(JournalMutationState.RESOLVED, h.journal.mutation(id)?.state)
+            h.manager.refresh()
+
+            assertEquals(JournalReceiptOutcome.APPLIED, h.journal.mutation(newId)?.receipt?.outcome)
+            assertEquals(mine, h.cueLabel())
+        } finally {
+            h.close()
+        }
+    }
+
+    @Test
+    fun useServerStateDropsTheLocalEditAndKeepsTheServersVersion() = runBlocking {
+        requireLive()
+        val h = EditHarness()
+        try {
+            h.manager.pair(baseUrl, pairingCode)
+            val mine = "mine-" + UUID.randomUUID().toString().take(8)
+            val theirs = "theirs-" + UUID.randomUUID().toString().take(8)
+            val id = h.stageRename(mine)
+            changeIntervalFromAnotherDevice(theirs)
+            h.manager.refresh()
+            assertEquals(JournalMutationState.CONFLICT, h.journal.mutation(id)?.state)
+
+            assertTrue(h.provider.useServerState(id))
+            h.manager.refresh()
+
+            assertEquals(JournalMutationState.RESOLVED, h.journal.mutation(id)?.state)
+            assertTrue(h.journal.replayBatch().isEmpty())
+            assertEquals(theirs, h.cueLabel())
+        } finally {
+            h.close()
         }
     }
 

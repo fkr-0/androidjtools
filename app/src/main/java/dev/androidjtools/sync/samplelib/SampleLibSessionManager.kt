@@ -35,6 +35,8 @@ class SampleLibSessionManager(
     private val newInstallationId: () -> String = { UUID.randomUUID().toString() },
     /** Removes server-derived local data outside the library cache (downloaded audio). False aborts the caller's operation. */
     private val onLibraryDiscarded: suspend () -> Boolean = { true },
+    /** Queued local edits, delivered right after connecting and before the library is pulled. */
+    private val outbox: EditOutbox = EditOutbox.None,
 ) : MediaAuthProvider {
     private val lock = Mutex()
     private val mutableState = MutableStateFlow(SyncState.UNCONFIGURED)
@@ -193,6 +195,10 @@ class SampleLibSessionManager(
     private suspend fun syncSession(client: SampleLibClient, session: SampleLibSession) {
         mutableProfile.value?.let { acceptMediaAuth(it.baseUrl, session) }
         mutableCapabilities.value = session.capabilities
+        if (outbox.hasPending()) {
+            mutableState.value = SyncState.PUSHING
+            outbox.deliver(client, session)
+        }
         mutableState.value = SyncState.PULLING
         val engine = SampleLibSyncEngine(client, cache)
         var result = engine.sync(session)

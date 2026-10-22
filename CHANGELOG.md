@@ -34,6 +34,23 @@ All notable changes to Android DJ Tools are documented here.
 - Cancelling an in-flight download keeps its partial file (so it can resume) until the track is unpinned; pruning skips pinned tracks.
 - Media3 session streaming, `OkHttpDataSource`, download scheduling through WorkManager, deck audio output and the new Forget confirmation have been built and unit-tested where possible but NOT run on a device.
 
+### Sample Lab integration (S3: saving cue and loop edits)
+
+- The Preparation screen can now save to a paired server: add a cue at the playhead, move or delete the selected cue, and save new bounds for a loop. Each edit becomes an `interval.editor_state.replace` mutation written to a durable journal on the device before any network attempt, and is delivered as part of the next connect (immediately after you save, on a refresh, and by the periodic sync), before the library is pulled.
+- Every edit is listed with its state: waiting to send, sending, saved on server, needs your decision, or not accepted. Only an edit the server has acknowledged says "saved", and the cue and loop shown on the screen change only when the server's version has been pulled.
+- A conflict (the server's version changed since the app last synced) offers exactly two actions: "Use server version" drops your change, "Reapply my change" sends the same change again as a new mutation on the server's current version. There is no automatic newest-wins merge.
+- Fixed before it could reach a user: the cue editor used marker types the server does not store (it only stores `slice`, `loop_start`, `loop_end` and `custom`), editing any cue would have turned the track's slice markers into plain cues, and `#AARRGGBB` colours were sent in a form the server's own projection could not read back. A replacement is also refused when it would leave a marker outside the section's bounds, or when the server's marker list could not be read completely.
+- Forget server and switching servers discard edits that were not yet sent, so they can never be delivered to a different server (the Forget dialog says so). The journal is safe to use from the UI and the sync worker at the same time.
+- Verified against a real Sample Lib server: an edit is delivered and then visible after the pull with its slice type and colour intact; a stale edit becomes a recorded conflict; "Reapply my change" then succeeds; "Use server version" keeps the other device's change.
+
+### Known limitations (S3)
+
+- Only the cue label/position/existence and a loop's bounds are stored by the server today. Mix-in/mix-out/drop roles and hot-cue numbers stay on the device, and a role change is saved as a plain cue.
+- A loop made from a start and an end marker is read-only; it cannot be created or deleted from the app (the server has no operation for that). There is no rename control yet.
+- Edits for a section need the section to be synced; a cue cannot be added where no synced section covers the playhead.
+- Saved edits are listed until the app is next started.
+- The Preparation panel, background delivery through WorkManager and the Keystore-backed credential have been built, linted and unit-tested at the logic level but NOT run on a device.
+
 ### Sample Lab integration (S4: playlists, read-only)
 
 - Playlists on a paired Sample Lib server now appear under Collections > Playlists. Folders on the server become the crate path; tracks keep the server's explicit `position` order (never the pull order), and a track that appears twice stays twice. Tracks the app has not synced yet are skipped.

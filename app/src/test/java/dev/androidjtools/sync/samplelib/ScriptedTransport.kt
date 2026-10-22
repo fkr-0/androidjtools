@@ -41,6 +41,10 @@ class ScriptedTransport : SampleLibTransport {
     var helloCalls = 0
     val pullCursors = mutableListOf<String?>()
     var onPull: (suspend () -> Unit)? = null
+    /** Transport calls in order ("hello", "push", "pull"), so tests can prove delivery happens before the pull. */
+    val calls = mutableListOf<String>()
+    var pushScript: ((List<SampleLibMutation>) -> PushResult)? = null
+    var receiptScript: ((String) -> MutationReceipt)? = null
     private val script = ArrayDeque<() -> PullPage>()
 
     fun enqueuePage(page: PullPage) {
@@ -59,22 +63,26 @@ class ScriptedTransport : SampleLibTransport {
 
     override suspend fun hello(credential: MobileCredential, request: HelloRequest): HelloAccepted {
         helloCalls++
+        calls += "hello"
         helloFailure?.let { throw it }
         return HelloAccepted("1", ServerIdentity(serverId, generation), 1L, capabilities, limits)
     }
 
     override suspend fun pull(credential: MobileCredential, cursor: String?, scopes: Set<String>, limit: Int): PullPage {
         pullCursors += cursor
+        calls += "pull"
         onPull?.invoke()
         val next = script.removeFirstOrNull() ?: error("no scripted pull page")
         return next()
     }
 
-    override suspend fun push(credential: MobileCredential, clientId: String, mutations: List<SampleLibMutation>): PushResult =
-        error("push is not scripted")
+    override suspend fun push(credential: MobileCredential, clientId: String, mutations: List<SampleLibMutation>): PushResult {
+        calls += "push"
+        return (pushScript ?: error("push is not scripted"))(mutations)
+    }
 
     override suspend fun receipt(credential: MobileCredential, mutationId: String): MutationReceipt =
-        error("receipt is not scripted")
+        (receiptScript ?: error("receipt is not scripted"))(mutationId)
 
     override suspend fun fetchResource(credential: MobileCredential, descriptor: ResourceDescriptor, offset: Long): ResourceChunk =
         error("fetchResource is not scripted")

@@ -109,9 +109,11 @@ class SampleLibPreparationProvider(
     override fun beatGrid(trackId: String): StateFlow<BeatGrid?> = noBeatGrid
 }
 
-class SampleLibSyncProvider(manager: SampleLibSessionManager) : SyncProvider {
+class SampleLibSyncProvider(
+    manager: SampleLibSessionManager,
+    override val pendingMutationCount: StateFlow<Int> = MutableStateFlow(0).asStateFlow(),
+) : SyncProvider {
     override val state: StateFlow<SyncState> = manager.state
-    override val pendingMutationCount: StateFlow<Int> = MutableStateFlow(0).asStateFlow()
 }
 
 /** Server tracks first, then device tracks. No de-duplication yet; content-hash matching is a follow-up. */

@@ -54,6 +54,7 @@ import dev.androidjtools.core.model.BeatGrid
 import dev.androidjtools.core.model.Track
 import dev.androidjtools.core.provider.AppProviders
 import dev.androidjtools.core.provider.ProviderUiState
+import java.util.UUID
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
@@ -74,6 +75,7 @@ fun WaveformScreen(providers: AppProviders) {
     val loops by collectPreparation(trackId, emptyList()) { providers.preparation.loops(it) }
     val beatGrid by collectPreparation<BeatGrid?>(trackId, null) { providers.preparation.beatGrid(it) }
     val suggestions by collectPreparation(trackId, emptyList()) { providers.analysis.suggestions(it) }
+    val serverEdits by providers.edits.edits.collectAsState()
 
     if (track == null) {
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -101,6 +103,16 @@ fun WaveformScreen(providers: AppProviders) {
     }
     val selected = overlays.firstOrNull { it.id == selectedOverlayId }
     val visibleViewport = viewport.normalized(track.durationMs)
+    val editPlanner = remember(track, cues, loops) {
+        ServerEditPlanner(
+            track = track,
+            cues = cues,
+            loops = loops,
+            aggregates = providers.edits.aggregates(track.id),
+            nowMs = System::currentTimeMillis,
+            newMutationId = { "android-" + UUID.randomUUID() },
+        )
+    }
 
     val selectOverlay: (String?) -> Unit = { id ->
         selectedOverlayId = id
@@ -191,6 +203,17 @@ fun WaveformScreen(providers: AppProviders) {
                 onHaptic = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
             )
         }
+
+        ServerEditPanel(
+            edits = providers.edits,
+            planner = editPlanner,
+            trackEdits = visibleServerEdits(serverEdits, track.id),
+            selected = selected,
+            loopDraft = rangeHistory?.current,
+            positionMs = positionMs,
+            // The saved draft stays pending in the list below; show the server's bounds until it has answered.
+            onQueued = { selectOverlay(selectedOverlayId) },
+        )
 
         gridHistory?.let { history ->
             GridEditPanel(
