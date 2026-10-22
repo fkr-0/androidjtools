@@ -52,16 +52,19 @@ class AnalysisSuggestionAcceptanceCoordinator(
     }
 
     fun state(candidate: SampleLibAnalysisCandidate): AnalysisAcceptanceState {
-        val mutation = journal.mutation(mutationIdFor(candidate.candidateId)) ?: return when (candidate.decision) {
+        val serverDecision = when (candidate.decision) {
             AnalysisCandidateDecision.ACCEPTED -> AnalysisAcceptanceState.ACCEPTED
             AnalysisCandidateDecision.REJECTED -> AnalysisAcceptanceState.REJECTED
             else -> AnalysisAcceptanceState.PROPOSED
         }
+        val mutation = journal.mutation(mutationIdFor(candidate.candidateId)) ?: return serverDecision
         return when (mutation.state) {
             JournalMutationState.PENDING, JournalMutationState.APPLYING -> AnalysisAcceptanceState.QUEUED
             JournalMutationState.RECEIPT_RECORDED -> AnalysisAcceptanceState.ACCEPTED
             JournalMutationState.REJECTED -> AnalysisAcceptanceState.REJECTED
             JournalMutationState.CONFLICT -> AnalysisAcceptanceState.CONFLICT
+            // A closed local intent no longer says anything: the server's own decision is what remains.
+            JournalMutationState.RESOLVED -> serverDecision
         }
     }
 

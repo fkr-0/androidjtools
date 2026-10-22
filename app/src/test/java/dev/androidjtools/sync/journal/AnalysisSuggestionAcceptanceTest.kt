@@ -153,6 +153,23 @@ class AnalysisSuggestionAcceptanceTest {
     }
 
     @Test
+    fun `a resolved rejection falls back to the server's own decision`() {
+        val journal = DurableMutationJournal(MemoryStorage())
+        val coordinator = AnalysisSuggestionAcceptanceCoordinator(journal)
+        val candidate = bpmCandidate()
+        val mutation = coordinator.queue(candidate, 1000)
+        coordinator.recordAuthoritativeReceipt(
+            candidate,
+            MutationReceipt(mutation.mutationId, ReceiptOutcome.REJECTED, 7, error = MutationError("fixture_rejected", "no")),
+        )
+        assertEquals(AnalysisAcceptanceState.REJECTED, coordinator.state(candidate))
+
+        journal.resolve(mutation.mutationId)
+
+        assertEquals(AnalysisAcceptanceState.PROPOSED, coordinator.state(candidate))
+    }
+
+    @Test
     fun `stale or unknown candidates fail before creating a journal mutation`() {
         for (freshness in listOf(AnalysisCandidateFreshness.STALE, AnalysisCandidateFreshness.UNKNOWN)) {
             val journal = DurableMutationJournal(MemoryStorage())

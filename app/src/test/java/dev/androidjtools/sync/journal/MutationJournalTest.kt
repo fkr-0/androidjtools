@@ -197,6 +197,154 @@ class MutationJournalTest {
     }
 
     @Test
+    fun `resolving a conflict closes it durably and compaction then removes it`() {
+        val storage = RecordingStorage()
+        val journal = DurableMutationJournal(storage)
+        val conflict = sample(journal, "mutation-c01")
+        journal.recordReceipt(conflictReceipt(conflict.mutationId))
+
+        val resolved = journal.resolve(conflict.mutationId)
+
+        assertEquals(JournalMutationState.RESOLVED, resolved.state)
+        assertEquals(JournalMutationState.RESOLVED, DurableMutationJournal(storage).mutation(conflict.mutationId)?.state)
+        assertTrue(journal.replayBatch().isEmpty())
+        assertEquals(1, journal.compactAcknowledged())
+        assertNull(DurableMutationJournal(storage).mutation(conflict.mutationId))
+    }
+
+    @Test
+    fun `a rejected edit can be dismissed but an unsent or unreceipted intent cannot be resolved away`() {
+        val journal = DurableMutationJournal(RecordingStorage())
+        val rejected = sample(journal, "mutation-c02")
+        journal.recordReceipt(JournalReceipt(rejected.mutationId, JournalReceiptOutcome.REJECTED, detail = "invalid"))
+        assertEquals(JournalMutationState.RESOLVED, journal.resolve(rejected.mutationId).state)
+
+        val pending = sample(journal, "mutation-c03")
+        assertThrows(IllegalArgumentException::class.java) { journal.resolve(pending.mutationId) }
+        assertEquals(JournalMutationState.PENDING, journal.mutation(pending.mutationId)?.state)
+
+        val applied = sample(journal, "mutation-c04")
+        journal.recordReceipt(JournalReceipt(applied.mutationId, JournalReceiptOutcome.APPLIED, "rev:new"))
+        assertThrows(IllegalArgumentException::class.java) { journal.resolve(applied.mutationId) }
+        assertThrows(IllegalArgumentException::class.java) { journal.resolve("unknown-id") }
+    }
+
+    @Test
+    fun `a resolved conflict survives the file format and keeps its evidence`() {
+        val file = Files.createTempFile("journal", ".log").toFile().also { it.delete() }
+        try {
+            val journal = DurableMutationJournal(FileMutationJournalStorage(file))
+            val conflict = sample(journal, "mutation-c05")
+            journal.recordReceipt(conflictReceipt(conflict.mutationId))
+            journal.resolve(conflict.mutationId)
+
+            val reloaded = DurableMutationJournal(FileMutationJournalStorage(file)).mutation(conflict.mutationId)!!
+            assertEquals(JournalMutationState.RESOLVED, reloaded.state)
+            assertEquals("rev:remote", reloaded.receipt?.conflict?.authoritativeRevision)
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun `observers are told about every durable change and about nothing that failed to persist`() {
+        val storage = RecordingStorage()
+        val journal = DurableMutationJournal(storage)
+        val start = journal.changes.value
+
+        val queued = sample(journal, "mutation-o01")
+        val afterEnqueue = journal.changes.value
+        assertTrue(afterEnqueue > start)
+
+        journal.markApplying(queued.mutationId)
+        val afterApplying = journal.changes.value
+        assertTrue(afterApplying > afterEnqueue)
+
+        journal.recordReceipt(JournalReceipt(queued.mutationId, JournalReceiptOutcome.APPLIED, "rev:new"))
+        val afterReceipt = journal.changes.value
+        assertTrue(afterReceipt > afterApplying)
+
+        storage.failStores = 1
+        assertThrows(IOException::class.java) { sample(journal, "mutation-o02") }
+        assertEquals(afterReceipt, journal.changes.value)
+
+        // Setting a state it already has is not a change.
+        sample(journal, "mutation-o03")
+        val settled = journal.changes.value
+        journal.markPending("mutation-o03")
+        assertEquals(settled, journal.changes.value)
+    }
+
+    @Test
+    fun `clearing drops every mutation durably so a forgotten server's edits cannot reach another one`() {
+        val storage = RecordingStorage()
+        val journal = DurableMutationJournal(storage)
+        sample(journal, "mutation-x01")
+        val rejected = sample(journal, "mutation-x02")
+        journal.recordReceipt(JournalReceipt(rejected.mutationId, JournalReceiptOutcome.REJECTED, detail = "no"))
+        val before = journal.changes.value
+
+        journal.clear()
+
+        assertTrue(journal.all().isEmpty())
+        assertTrue(journal.replayBatch().isEmpty())
+        assertTrue(DurableMutationJournal(storage).all().isEmpty())
+        assertTrue(journal.changes.value > before)
+        // The sequence restarts cleanly: a later edit is accepted and replayable.
+        sample(journal, "mutation-x03")
+        assertEquals(listOf("mutation-x03"), journal.replayBatch().map { it.mutationId })
+    }
+
+    @Test
+    fun `concurrent staging and receipt recording never lose a mutation or a receipt`() {
+        // The UI queues edits while the sync worker records receipts, on different threads. A slow disk makes
+        // the interleaving certain instead of rare.
+        val storage = object : MutationJournalStorage {
+            @Volatile var durable = JournalSnapshot()
+            override fun load() = durable
+            override fun store(snapshot: JournalSnapshot) {
+                Thread.sleep(1)
+                durable = snapshot
+            }
+        }
+        val journal = DurableMutationJournal(storage)
+        val seeded = (0 until 20).map { sample(journal, "mutation-s%02d".format(it)) }
+        val failures = java.util.concurrent.ConcurrentLinkedQueue<Throwable>()
+        val start = java.util.concurrent.CountDownLatch(1)
+
+        val stagers = (0 until 4).map { worker ->
+            Thread {
+                start.await()
+                try {
+                    repeat(20) { sample(journal, "mutation-w%d-%02d".format(worker, it)) }
+                } catch (t: Throwable) {
+                    failures += t
+                }
+            }
+        }
+        val receivers = Thread {
+            start.await()
+            try {
+                seeded.forEach {
+                    journal.markApplying(it.mutationId)
+                    journal.recordReceipt(JournalReceipt(it.mutationId, JournalReceiptOutcome.APPLIED, "rev-${it.mutationId}"))
+                }
+            } catch (t: Throwable) {
+                failures += t
+            }
+        }
+        (stagers + receivers).forEach(Thread::start)
+        start.countDown()
+        (stagers + receivers).forEach { it.join(30_000) }
+
+        assertTrue("worker failed: ${failures.firstOrNull()}", failures.isEmpty())
+        assertEquals("no mutation may be lost", 20 + 4 * 20, journal.all().size)
+        assertEquals("no receipt may be lost", 20, journal.all().count { it.receipt != null })
+        assertEquals("sequence numbers must stay unique", journal.all().size, journal.all().map { it.sequence }.toSet().size)
+        assertEquals("what is on disk is what is in memory", journal.all(), storage.durable.mutations)
+    }
+
+    @Test
     fun `receipt persistence is atomic from client view`() {
         val storage = RecordingStorage()
         val journal = DurableMutationJournal(storage)
@@ -452,6 +600,12 @@ class MutationJournalTest {
         assertNull(transport.effectCounts[conflict.mutationId])
         assertNull(transport.effectCounts[rejected.mutationId])
     }
+
+    private fun conflictReceipt(mutationId: String) = JournalReceipt(
+        mutationId,
+        JournalReceiptOutcome.CONFLICT,
+        conflict = JournalConflict("revision_conflict", "editor_aggregate", "rev:remote", "{\"cue\":1}", "{\"cue\":2}"),
+    )
 
     private fun sample(journal: DurableMutationJournal, id: String, payload: String = "{\"title\":\"New\"}") =
         journal.enqueue(

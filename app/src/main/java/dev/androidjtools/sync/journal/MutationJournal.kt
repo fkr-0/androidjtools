@@ -17,6 +17,10 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Instant
 import java.util.Base64
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -24,7 +28,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-enum class JournalMutationState { PENDING, APPLYING, RECEIPT_RECORDED, REJECTED, CONFLICT }
+enum class JournalMutationState { PENDING, APPLYING, RECEIPT_RECORDED, REJECTED, CONFLICT, RESOLVED }
 
 enum class JournalReceiptOutcome { APPLIED, NO_OP, REJECTED, CONFLICT }
 
@@ -76,16 +80,28 @@ interface MutationJournalStorage {
 class IdempotencyKeyReuseException(mutationId: String) :
     IllegalArgumentException("mutation_id $mutationId was already used with a different canonical body")
 
+/**
+ * Thread-safe: edits are queued from the UI while the sync worker records receipts, and each of those is a
+ * read-modify-write of one snapshot. Every operation holds the journal's lock, including its durable write.
+ */
 class DurableMutationJournal(
     private val storage: MutationJournalStorage,
 ) {
     private var snapshot: JournalSnapshot = normalizeForRecovery(storage.load())
 
+    private val version = MutableStateFlow(0L)
+
+    /** Increments after every durable change, so observers can recompute what they show from [all]. */
+    val changes: StateFlow<Long> = version.asStateFlow()
+
+    @Synchronized
     fun all(): List<JournalMutation> = snapshot.mutations.toList()
 
+    @Synchronized
     fun mutation(mutationId: String): JournalMutation? =
         snapshot.mutations.firstOrNull { it.mutationId == mutationId }
 
+    @Synchronized
     fun enqueue(
         mutationId: String,
         entityType: String,
@@ -134,6 +150,7 @@ class DurableMutationJournal(
         return next
     }
 
+    @Synchronized
     fun replayBatch(limit: Int = Int.MAX_VALUE): List<JournalMutation> {
         require(limit > 0)
         return snapshot.mutations
@@ -145,16 +162,19 @@ class DurableMutationJournal(
             .toList()
     }
 
+    @Synchronized
     fun markApplying(mutationId: String): JournalMutation = update(mutationId) { current ->
         require(current.receipt == null) { "terminal mutation cannot return to applying" }
         current.copy(state = JournalMutationState.APPLYING)
     }
 
+    @Synchronized
     fun markPending(mutationId: String): JournalMutation = update(mutationId) { current ->
         require(current.receipt == null) { "terminal mutation cannot return to pending" }
         current.copy(state = JournalMutationState.PENDING)
     }
 
+    @Synchronized
     fun recordReceipt(receipt: JournalReceipt): JournalMutation = update(receipt.mutationId) { current ->
         current.receipt?.let { existing ->
             require(existing == receipt) { "authoritative receipt changed for ${receipt.mutationId}" }
@@ -175,10 +195,32 @@ class DurableMutationJournal(
         current.copy(state = terminalState, receipt = receipt)
     }
 
+    /**
+     * Closes a conflicted or rejected intent the person has dealt with. Only those two states can be closed:
+     * an unsent or unconfirmed intent still has to be delivered, and an applied one is already history.
+     */
+    @Synchronized
+    fun resolve(mutationId: String): JournalMutation = update(mutationId) { current ->
+        require(current.state == JournalMutationState.CONFLICT || current.state == JournalMutationState.REJECTED) {
+            "only a conflicted or rejected mutation can be resolved"
+        }
+        current.copy(state = JournalMutationState.RESOLVED)
+    }
+
+    /** Drops every mutation. Edits belong to the server they were made for, so forgetting it must not leave them behind. */
+    @Synchronized
+    fun clear() {
+        if (snapshot.mutations.isNotEmpty()) persist(snapshot.copy(mutations = emptyList()))
+    }
+
+    @Synchronized
     fun compactAcknowledged(): Int {
         val survivors = snapshot.mutations.filterNot { mutation ->
-            mutation.state == JournalMutationState.RECEIPT_RECORDED &&
-                mutation.receipt?.outcome in setOf(JournalReceiptOutcome.APPLIED, JournalReceiptOutcome.NO_OP)
+            mutation.state == JournalMutationState.RESOLVED ||
+                (
+                    mutation.state == JournalMutationState.RECEIPT_RECORDED &&
+                        mutation.receipt?.outcome in setOf(JournalReceiptOutcome.APPLIED, JournalReceiptOutcome.NO_OP)
+                    )
         }
         val removed = snapshot.mutations.size - survivors.size
         if (removed > 0) persist(snapshot.copy(mutations = survivors))
@@ -199,6 +241,7 @@ class DurableMutationJournal(
         val versioned = next.copy(formatVersion = JournalSnapshot.CURRENT_FORMAT_VERSION)
         storage.store(versioned)
         snapshot = versioned
+        version.update { it + 1 }
     }
 
     private fun normalizeForRecovery(loaded: JournalSnapshot): JournalSnapshot = loaded.copy(
