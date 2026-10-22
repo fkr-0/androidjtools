@@ -27,6 +27,8 @@ data class Cue(
     val label: String? = null,
     val colorArgb: Long? = null,
     val hotCueNumber: Int? = null,
+    /** The synced interval (editor aggregate) this marker belongs to; null for device-side cues. */
+    val intervalId: String? = null,
 )
 
 data class Loop(
@@ -36,6 +38,8 @@ data class Loop(
     val endMs: Long,
     val role: String = "loop",
     val label: String? = null,
+    /** The synced interval this loop was read from. The loop is editable only when its id is this interval's id. */
+    val intervalId: String? = null,
 )
 
 data class BeatGrid(

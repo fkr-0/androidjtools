@@ -5,6 +5,8 @@ import dev.androidjtools.core.model.Cue
 
 enum class HotCueRole(val markerType: String) {
     CUE("cue"),
+    /** A server slice marker. Kept as its own role so editing another cue never turns it into a plain cue. */
+    SLICE("slice"),
     MIX_IN("mix_in"),
     MIX_OUT("mix_out"),
     FADE_IN("fade_in"),

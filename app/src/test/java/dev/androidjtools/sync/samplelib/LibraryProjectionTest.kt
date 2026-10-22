@@ -256,4 +256,60 @@ class LibraryProjectionTest {
         assertFalse(track.playable)
         assertEquals(SERVER_AUDIO_UNAVAILABLE_NOTICE, track.unplayableReason)
     }
+
+    @Test
+    fun cuesAndLoopsRememberTheIntervalTheyWereReadFrom() {
+        val projection = LibraryProjector.project(
+            listOf(asset("a1", """{"title":"Alpha","duration_ms":10000}""")),
+            listOf(
+                interval(
+                    "iv-main",
+                    intervalJson(
+                        "a1", extra = ""","loopable":1""",
+                        markers = marker("m1", 1500, "custom") + "," + marker("ls", 2000, "loop_start") + "," + marker("le", 4000, "loop_end"),
+                    ),
+                ),
+            ),
+        )
+        assertEquals(listOf("iv-main"), projection.cues.getValue("a1").map { it.intervalId })
+        val loops = projection.loops.getValue("a1")
+        assertEquals(listOf("iv-main", "iv-main"), loops.map { it.intervalId })
+        // The loopable interval is editable (its id is the interval id); the marker-pair loop is not.
+        assertEquals(listOf(true, false), loops.map { it.id == it.intervalId })
+    }
+
+    @Test
+    fun theProjectionOffersTheEditableAggregateOfEachSyncedInterval() {
+        val projection = LibraryProjector.project(
+            listOf(asset("a1", """{"title":"Alpha","duration_ms":10000}""")),
+            listOf(interval("iv-main", intervalJson("a1", markers = marker("m1", 1500, "custom")))),
+        )
+        assertEquals(listOf("m1"), projection.aggregate("iv-main")?.markers?.map { it.id })
+        assertNull(projection.aggregate("unknown"))
+    }
+
+    @Test
+    fun anIntervalKnowsWhichTrackItBelongsTo() {
+        val projection = LibraryProjector.project(
+            listOf(asset("a1", """{"title":"Alpha","duration_ms":10000}""")),
+            listOf(interval("iv-main", intervalJson("a1"))),
+        )
+        assertEquals("a1", projection.trackOfInterval("iv-main"))
+        assertNull(projection.trackOfInterval("unknown"))
+    }
+
+    @Test
+    fun aTrackListsEveryEditableIntervalOrderedByStart() {
+        val projection = LibraryProjector.project(
+            listOf(asset("a1", """{"title":"Alpha","duration_ms":10000}"""), asset("a2", """{"title":"Beta","duration_ms":10000}""")),
+            listOf(
+                interval("iv-late", intervalJson("a1", start = 6000, end = 9000)),
+                interval("iv-early", intervalJson("a1", start = 1000, end = 4000)),
+                interval("iv-other", intervalJson("a2", start = 0, end = 5000)),
+            ),
+        )
+        assertEquals(listOf("iv-early", "iv-late"), projection.aggregatesOfTrack("a1").map { it.intervalId })
+        assertEquals(listOf("iv-other"), projection.aggregatesOfTrack("a2").map { it.intervalId })
+        assertEquals(emptyList<String>(), projection.aggregatesOfTrack("unknown").map { it.intervalId })
+    }
 }

@@ -4,6 +4,7 @@ import dev.androidjtools.core.model.Cue
 import dev.androidjtools.core.model.Loop
 import dev.androidjtools.core.model.Playlist
 import dev.androidjtools.core.model.Track
+import dev.androidjtools.prep.cues.IntervalEditorStateContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 
@@ -16,10 +17,23 @@ data class LibraryProjection(
     /** True when the server advertises audio, so [audio] may be streamed. A downloaded copy never needs it. */
     val audioAdvertised: Boolean = false,
     val playlists: List<Playlist> = emptyList(),
+    /** Cached interval entities by id, so an editor can start from the exact revision the server last sent. */
+    private val intervalEntities: Map<String, CachedEntity> = emptyMap(),
+    private val intervalTracks: Map<String, String> = emptyMap(),
 ) {
     private val trackIds: Set<String> by lazy { tracks.mapTo(HashSet()) { it.id } }
 
     fun hasTrack(id: String): Boolean = id in trackIds
+
+    fun trackOfInterval(intervalId: String): String? = intervalTracks[intervalId]
+
+    fun aggregatesOfTrack(trackId: String): List<IntervalEditorStateContext> =
+        intervalTracks.filterValues { it == trackId }.keys
+            .mapNotNull(::aggregate)
+            .sortedWith(compareBy({ it.startMs }, { it.intervalId }))
+
+    fun aggregate(intervalId: String): IntervalEditorStateContext? =
+        intervalEntities[intervalId]?.let(EditorAggregates::contextOf)
 
     companion object {
         val EMPTY = LibraryProjection(emptyList(), emptyMap(), emptyMap())
@@ -77,6 +91,8 @@ object LibraryProjector {
             audio = audio.filterKeys { it in trackIds },
             audioAdvertised = audioAdvertised,
             playlists = projectPlaylists(playlists, playlistItems, trackIds),
+            intervalEntities = intervals.associateBy { it.entityId },
+            intervalTracks = parsedIntervals.associate { it.id to it.assetId },
         )
     }
 
@@ -136,6 +152,7 @@ object LibraryProjector {
     }
 
     private class ParsedInterval(
+        val id: String,
         val assetId: String,
         val startMs: Long,
         val endMs: Long,
@@ -171,12 +188,12 @@ object LibraryProjector {
                 "custom" -> "cue"
                 else -> return@mapNotNull null
             }
-            Cue(id = marker.id, trackId = assetId, positionMs = marker.positionMs, role = role, label = marker.label, colorArgb = parseColor(marker.color))
+            Cue(id = marker.id, trackId = assetId, positionMs = marker.positionMs, role = role, label = marker.label, colorArgb = parseColor(marker.color), intervalId = entity.entityId)
         }
 
         val loops = mutableListOf<Loop>()
         if (interval.long("loopable") == 1L) {
-            loops += Loop(id = entity.entityId, trackId = assetId, startMs = start, endMs = end, role = "loop", label = interval.string("label"))
+            loops += Loop(id = entity.entityId, trackId = assetId, startMs = start, endMs = end, role = "loop", label = interval.string("label"), intervalId = entity.entityId)
         }
         var openStart: ParsedMarker? = null
         for (marker in markers.sortedBy { it.positionMs }) {
@@ -192,6 +209,7 @@ object LibraryProjector {
                             endMs = marker.positionMs,
                             role = "loop",
                             label = opened.label,
+                            intervalId = entity.entityId,
                         )
                         openStart = null
                     }
@@ -199,7 +217,7 @@ object LibraryProjector {
             }
         }
 
-        return ParsedInterval(assetId, start, end, interval.double("bpm"), interval.string("key_label"), cues, loops)
+        return ParsedInterval(entity.entityId, assetId, start, end, interval.double("bpm"), interval.string("key_label"), cues, loops)
     }
 
     private val colour = Regex("^#([0-9a-fA-F]{6})$")

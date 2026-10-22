@@ -1,6 +1,7 @@
 package dev.androidjtools.prep.cues
 
 import dev.androidjtools.core.model.BeatGrid
+import dev.androidjtools.core.model.Cue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -175,6 +176,31 @@ class CueEditorTest {
         assertEquals("opaque-revision-1", intent.baseRevision)
         assertEquals("Edited intro", intent.payload.markers.first { it.id == "cue-a" }.label)
         assertEquals("Transcript", intent.payload.markers.first { it.id == "foreign" }.label)
+    }
+
+    @Test
+    fun editingOneCueKeepsTheServersSliceMarkersAsSlices() {
+        val serverAggregate = aggregate.copy(
+            markers = listOf(
+                EditorMarkerDraft("m-custom", 20_000L, "Intro", "custom"),
+                EditorMarkerDraft("m-slice", 30_000L, null, "slice"),
+            ),
+        )
+        val cues = listOf(
+            Cue("m-custom", "track", 20_000L, role = "cue", label = "Intro"),
+            Cue("m-slice", "track", 30_000L, role = "slice"),
+        )
+        val editor = CueEditorState.fromDomain("track", durationMs, serverAggregate, cues).rename("m-custom", "Edited").editor
+
+        var captured: IntervalEditorStateReplaceIntent? = null
+        editor.stage("mutation-cue-0007", 1234L, PreparationMutationStager { intent ->
+            captured = intent
+            PreparationStageResult.Queued(intent.mutationId)
+        })
+
+        val markers = requireNotNull(captured).payload.markers
+        assertEquals("slice", markers.first { it.id == "m-slice" }.markerType)
+        assertEquals("Edited", markers.first { it.id == "m-custom" }.label)
     }
 
     @Test
