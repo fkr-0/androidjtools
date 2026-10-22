@@ -51,6 +51,7 @@ import dev.androidjtools.ui.playlist.LocalPlaylistIdAllocator
 import dev.androidjtools.ui.playlist.PlaylistDeleteUndo
 import dev.androidjtools.ui.playlist.PlaylistDraft
 import dev.androidjtools.ui.playlist.PlaylistMutationIntent
+import dev.androidjtools.ui.playlist.READ_ONLY_PLAYLIST_NOTICE
 import dev.androidjtools.ui.playlist.SavedSmartFilter
 import dev.androidjtools.ui.playlist.SmartField
 import dev.androidjtools.ui.playlist.SmartMatchMode
@@ -135,6 +136,7 @@ private fun PlaylistWorkspace(sourceDrafts: List<PlaylistDraft>, tracks: List<Tr
     val localIdAllocator = remember { LocalPlaylistIdAllocator() }
 
     val selected = drafts.firstOrNull { it.id == selectedId }
+    val serverManaged = sourceDrafts.any { it.readOnly }
     Row(Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.weight(0.42f).fillMaxSize().padding(start = 12.dp, end = 6.dp, bottom = 12.dp),
@@ -143,25 +145,29 @@ private fun PlaylistWorkspace(sourceDrafts: List<PlaylistDraft>, tracks: List<Tr
             item {
                 Text("Crates & playlists", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
-                OutlinedTextField(newName, { newName = it }, label = { Text("New playlist") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(newCrate, { newCrate = it }, label = { Text("Crate path") }, modifier = Modifier.fillMaxWidth())
-                Button(
-                    onClick = {
-                        val draft = PlaylistDraft(
-                            id = localIdAllocator.next(drafts.map(PlaylistDraft::id)),
-                            name = newName.trim(),
-                            cratePath = CratePath.parse(newCrate),
-                        )
-                        if (validatePlaylistDraft(draft, drafts).isEmpty()) {
-                            drafts = drafts + draft
-                            selectedId = draft.id
-                            latestIntent = PlaylistMutationIntent(draft.id, "create", draft.name, "Create in ${draft.cratePath.displayName}")
-                            newName = ""
-                        }
-                    },
-                    enabled = newName.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Create locally") }
+                if (serverManaged) {
+                    Text(READ_ONLY_PLAYLIST_NOTICE, style = MaterialTheme.typography.bodySmall)
+                } else {
+                    OutlinedTextField(newName, { newName = it }, label = { Text("New playlist") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(newCrate, { newCrate = it }, label = { Text("Crate path") }, modifier = Modifier.fillMaxWidth())
+                    Button(
+                        onClick = {
+                            val draft = PlaylistDraft(
+                                id = localIdAllocator.next(drafts.map(PlaylistDraft::id)),
+                                name = newName.trim(),
+                                cratePath = CratePath.parse(newCrate),
+                            )
+                            if (validatePlaylistDraft(draft, drafts).isEmpty()) {
+                                drafts = drafts + draft
+                                selectedId = draft.id
+                                latestIntent = PlaylistMutationIntent(draft.id, "create", draft.name, "Create in ${draft.cratePath.displayName}")
+                                newName = ""
+                            }
+                        },
+                        enabled = newName.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Create locally") }
+                }
                 deleteUndo?.let { undo ->
                     TextButton(
                         onClick = {
@@ -178,7 +184,7 @@ private fun PlaylistWorkspace(sourceDrafts: List<PlaylistDraft>, tracks: List<Tr
                         Text(draft.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
                         Text(draft.cratePath.displayName, style = MaterialTheme.typography.labelMedium)
                         Text("${draft.trackIds.size} tracks${if (draft.isSmart) " · smart" else ""}", style = MaterialTheme.typography.bodySmall)
-                        TextButton(onClick = { selectedId = draft.id }) { Text(if (selectedId == draft.id) "Selected" else "Edit") }
+                        TextButton(onClick = { selectedId = draft.id }) { Text(if (selectedId == draft.id) "Selected" else if (draft.readOnly) "Open" else "Edit") }
                     }
                 }
             }
@@ -195,6 +201,8 @@ private fun PlaylistWorkspace(sourceDrafts: List<PlaylistDraft>, tracks: List<Tr
             }
             if (selected == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Select or create a playlist") }
+            } else if (selected.readOnly) {
+                ReadOnlyPlaylist(selected, tracks)
             } else {
                 PlaylistEditor(
                     draft = selected,
@@ -213,6 +221,25 @@ private fun PlaylistWorkspace(sourceDrafts: List<PlaylistDraft>, tracks: List<Tr
                         selectedId = next.firstOrNull()?.id
                     },
                 )
+            }
+        }
+    }
+}
+
+/** A server playlist: ordered membership only. Rows are keyed by position because the server may repeat a track. */
+@Composable
+private fun ReadOnlyPlaylist(draft: PlaylistDraft, tracks: List<Track>) {
+    Text(draft.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    Text(draft.cratePath.displayName, style = MaterialTheme.typography.labelMedium)
+    Text(READ_ONLY_PLAYLIST_NOTICE, style = MaterialTheme.typography.bodySmall)
+    HorizontalDivider()
+    if (draft.trackIds.isEmpty()) Text("This playlist has no tracks yet.", style = MaterialTheme.typography.bodyMedium)
+    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        itemsIndexed(draft.trackIds, key = { index, id -> "$index:$id" }) { index, trackId ->
+            val track = tracks.firstOrNull { it.id == trackId }
+            Column(Modifier.fillMaxWidth()) {
+                Text("${index + 1}. ${track?.title ?: "Track not synced yet"}", style = MaterialTheme.typography.bodyMedium)
+                Text(track?.artist ?: "", style = MaterialTheme.typography.bodySmall)
             }
         }
     }

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Seed a disposable Sample Lib database with the sync fixture (asset-1 / interval-1 / marker-a).
+"""Seed a disposable Sample Lib database with the sync fixture (asset-1 / interval-1 / marker-a, asset-2,
+and the folder "Sets" holding the playlist "Warmup").
 
 Usage: seed_live_samplelib.py SAMPLE_LIB_SRC_ROOT DATA_DIR
 """
@@ -50,6 +51,21 @@ def main(argv: list[str]) -> int:
         conn.execute(
             "INSERT INTO markers (id, interval_id, position_ms, label, marker_type, color) "
             "VALUES ('marker-a', 'interval-1', 1500, 'A', 'slice', '#112233')"
+        )
+        conn.execute(
+            "INSERT INTO assets (id, content_hash_sha256, storage_relpath, duration_ms, title, artist, rating) "
+            "VALUES ('asset-2', 'hash-2', 'originals/b.wav', 8000, 'B', 'Artist', 2)"
+        )
+        conn.execute("INSERT INTO playlists (id, name, kind) VALUES ('folder-sets', 'Sets', 'folder')")
+        conn.execute(
+            "INSERT INTO playlists (id, name, kind, parent_id) VALUES ('playlist-warmup', 'Warmup', 'playlist', 'folder-sets')"
+        )
+        # Position 1 is inserted before position 0 so only the explicit position yields the right order.
+        conn.execute(
+            "INSERT INTO playlist_items (id, playlist_id, asset_id, position) VALUES ('item-second', 'playlist-warmup', 'asset-1', 1)"
+        )
+        conn.execute(
+            "INSERT INTO playlist_items (id, playlist_id, asset_id, position) VALUES ('item-first', 'playlist-warmup', 'asset-2', 0)"
         )
         files = [
             ("file-original", "original", "originals/a.wav", 0.25, 220.0),

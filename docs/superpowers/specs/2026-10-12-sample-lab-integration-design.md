@@ -1,6 +1,6 @@
 # Sample Lab integration design
 
-Status: spec approved 2026-10-12. S1 implementation plan: `docs/superpowers/plans/2026-10-12-samplelab-s1-connect-and-read.md`. S2 (Android side) plan: `docs/superpowers/plans/2026-10-13-samplelab-s2-server-audio-android.md`. S3 to S5 not yet planned.
+Status: spec approved 2026-10-12. S1 implementation plan: `docs/superpowers/plans/2026-10-12-samplelab-s1-connect-and-read.md`. S2 (Android side) plan: `docs/superpowers/plans/2026-10-13-samplelab-s2-server-audio-android.md`. S4 (read-only playlists) implemented on `main` (see CHANGELOG). S3 and S5 not yet planned.
 Branch: `feat/samplelab-integration`.
 
 ## Purpose

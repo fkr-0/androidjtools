@@ -34,6 +34,16 @@ All notable changes to Android DJ Tools are documented here.
 - Cancelling an in-flight download keeps its partial file (so it can resume) until the track is unpinned; pruning skips pinned tracks.
 - Media3 session streaming, `OkHttpDataSource`, download scheduling through WorkManager, deck audio output and the new Forget confirmation have been built and unit-tested where possible but NOT run on a device.
 
+### Sample Lab integration (S4: playlists, read-only)
+
+- Playlists on a paired Sample Lib server now appear under Collections > Playlists. Folders on the server become the crate path; tracks keep the server's explicit `position` order (never the pull order), and a track that appears twice stays twice. Tracks the app has not synced yet are skipped.
+- Server playlists are read-only: the create form is replaced by a note, the editor shows an ordered list without reorder, add, remove or delete controls, and the underlying edit functions refuse a server playlist, since the server advertises no playlist write operation.
+
+### Known limitations (S4)
+
+- Smart playlists are not synced (the server has none); the Collections screen's local create and smart-filter features still only work on the in-app fixture data.
+- The Collections screen change has been built, linted and unit-tested at the logic level but NOT run on a device.
+
 ### Release engineering
 
 - Release builds can be signed with a project-owned key supplied through `ANDROID_KEYSTORE_*` environment variables or a git-ignored `keystore.properties`; `-PrequireReleaseSigning=true` fails the build instead of falling back to the debug key. Tag CI requires it.

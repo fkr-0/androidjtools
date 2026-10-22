@@ -216,6 +216,35 @@ class SampleLibLiveContractTest {
     }
 
     @Test
+    fun serverPlaylistsArePulledAndProjectedReadOnlyInPositionOrder() = runBlocking {
+        requireLive()
+        val dir = Files.createTempDirectory("samplelib-live-playlists").toFile()
+        val db = JdbcSqlDatabase()
+        try {
+            val cache = SqlLibraryCache(db)
+            val manager = SampleLibSessionManager(SampleLibProfileStore(dir, FakeCipher()), cache)
+            manager.pair(baseUrl, pairingCode)
+            assertEquals(manager.error.value, SyncState.ONLINE_IDLE, manager.state.value)
+            assertEquals("canonical_v1", manager.capabilities.value!!.playlists)
+
+            val snap = cache.snapshot("asset", "interval", "playlist", "playlist_item")
+            val projection = LibraryProjector.project(
+                snap.getValue("asset"), snap.getValue("interval"),
+                playlists = snap.getValue("playlist"), playlistItems = snap.getValue("playlist_item"),
+            )
+            val warmup = projection.playlists.single { it.name == "Warmup" }
+            assertEquals(listOf("Sets"), warmup.crate)
+            // The seed inserts position 1 before position 0, so only the explicit position gives this order.
+            assertEquals(listOf("asset-2", "asset-1"), warmup.trackIds)
+            assertTrue(warmup.readOnly)
+            assertTrue("a folder is a crate, not a playlist", projection.playlists.none { it.name == "Sets" })
+        } finally {
+            db.close()
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun managerPairsSyncsAndProjectsTheRealLibraryThenForgets() = runBlocking {
         requireLive()
         val dir = Files.createTempDirectory("samplelib-live-store").toFile()

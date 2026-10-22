@@ -3,11 +3,13 @@ package dev.androidjtools.sync.samplelib
 import dev.androidjtools.core.model.BeatGrid
 import dev.androidjtools.core.model.Cue
 import dev.androidjtools.core.model.Loop
+import dev.androidjtools.core.model.Playlist
 import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.core.model.Track
 import dev.androidjtools.core.provider.AppRuntimeProvider
 import dev.androidjtools.core.provider.LibraryProvider
 import dev.androidjtools.core.provider.PlaybackProvider
+import dev.androidjtools.core.provider.PlaylistProvider
 import dev.androidjtools.core.provider.PreparationProvider
 import dev.androidjtools.core.provider.ProviderUiState
 import dev.androidjtools.core.provider.SyncProvider
@@ -45,7 +47,7 @@ class SampleLibProjectionState(
     val projection: StateFlow<LibraryProjection> = combine(cache.changes, capabilities, downloaded, pairingRequired) { _, caps, files, repair -> Triple(caps, files, repair) }
         .map { (caps, files, repair) ->
             try {
-                val snap = cache.snapshot("asset", "interval", ASSET_FILE_ENTITY)
+                val snap = cache.snapshot("asset", "interval", ASSET_FILE_ENTITY, "playlist", "playlist_item")
                 val assetFiles = snap[ASSET_FILE_ENTITY].orEmpty()
                 // Until the first hello of this process the capabilities are unknown (null): cached file rows
                 // are then the evidence, so a cold start does not lock a synced library out of playback.
@@ -53,6 +55,8 @@ class SampleLibProjectionState(
                 LibraryProjector.project(
                     snap["asset"].orEmpty(), snap["interval"].orEmpty(), assetFiles, advertised, files,
                     audioBlockedReason = PAIR_AGAIN_NOTICE.takeIf { repair },
+                    playlists = snap["playlist"].orEmpty(),
+                    playlistItems = snap["playlist_item"].orEmpty(),
                 )
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -66,11 +70,21 @@ class SampleLibProjectionState(
     val tracks: StateFlow<List<Track>> = projection
         .map { it.tracks }
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    val playlists: StateFlow<List<Playlist>> = projection
+        .map { it.playlists }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
 }
 
 class SampleLibLibraryProvider(private val state: SampleLibProjectionState) : LibraryProvider {
     override val tracks: StateFlow<List<Track>> = state.tracks
     override fun track(id: String): Track? = state.projection.value.tracks.firstOrNull { it.id == id }
+}
+
+/** The server's playlists, read-only: this protocol advertises no playlist write operation. */
+class SampleLibPlaylistProvider(private val state: SampleLibProjectionState) : PlaylistProvider {
+    override val playlists: StateFlow<List<Playlist>> = state.playlists
+    override fun playlist(id: String): Playlist? = state.projection.value.playlists.firstOrNull { it.id == id }
 }
 
 class SampleLibPreparationProvider(

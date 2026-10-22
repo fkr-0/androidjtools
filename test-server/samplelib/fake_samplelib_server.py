@@ -32,6 +32,8 @@ MEDIA_SHA256 = hashlib.sha256(MEDIA_BYTES).hexdigest()
 MEDIA_ETAG = '"fixture-media-v1"'
 PREVIEW_BYTES = MEDIA_BYTES[:512]
 ASSET_FILE_SCHEMA = "sample-lib.asset-file/v1"
+PLAYLIST_SCHEMA = "sample-lib.playlist/v1"
+PLAYLIST_ITEM_SCHEMA = "sample-lib.playlist-item/v1"
 
 
 def parse_single_range(header: str, size: int) -> tuple[int, int] | None:
@@ -94,6 +96,24 @@ class AuthenticatedSampleLibFake:
                     "mime_type": spec["mime"],
                     "etag": f'"{digest}"',
                 },
+            }
+
+        # Canonical playlists as the real server emits them: a folder, a playlist inside it, and items whose
+        # explicit `position` is the opposite of their pull (entity id) order.
+        for playlist_id, name, kind, parent in (
+            ("folder-sets", "Sets", "folder", None),
+            ("playlist-warmup", "Warmup", "playlist", "folder-sets"),
+        ):
+            self.sync.entities[("playlist", playlist_id)] = {
+                "revision": "1",
+                "schema": PLAYLIST_SCHEMA,
+                "value": {"id": playlist_id, "name": name, "kind": kind, "parent_id": parent},
+            }
+        for item_id, position in (("item-first", 1), ("item-second", 0)):
+            self.sync.entities[("playlist_item", item_id)] = {
+                "revision": f"rev:playlist_item:{item_id}:1",
+                "schema": PLAYLIST_ITEM_SCHEMA,
+                "value": {"id": item_id, "playlist_id": "playlist-warmup", "asset_id": "asset-1", "position": position},
             }
 
     def pair(self, request: dict[str, Any]) -> dict[str, Any]:

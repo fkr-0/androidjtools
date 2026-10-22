@@ -2,6 +2,7 @@ package dev.androidjtools.sync.samplelib
 
 import dev.androidjtools.core.model.Cue
 import dev.androidjtools.core.model.Loop
+import dev.androidjtools.core.model.Playlist
 import dev.androidjtools.core.model.Track
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -14,6 +15,7 @@ data class LibraryProjection(
     val audio: Map<String, ServerAudio> = emptyMap(),
     /** True when the server advertises audio, so [audio] may be streamed. A downloaded copy never needs it. */
     val audioAdvertised: Boolean = false,
+    val playlists: List<Playlist> = emptyList(),
 ) {
     private val trackIds: Set<String> by lazy { tracks.mapTo(HashSet()) { it.id } }
 
@@ -33,6 +35,8 @@ object LibraryProjector {
         downloaded: Map<String, String> = emptyMap(),
         /** Shown instead of the generic notice when streaming is withheld for a known reason (for example a rejected credential). */
         audioBlockedReason: String? = null,
+        playlists: List<CachedEntity> = emptyList(),
+        playlistItems: List<CachedEntity> = emptyList(),
     ): LibraryProjection {
         val parsedIntervals = intervals.mapNotNull(::parseInterval)
         val byAsset = parsedIntervals.groupBy { it.assetId }
@@ -72,6 +76,62 @@ object LibraryProjector {
             loops = parsedIntervals.flatMap { it.loops }.groupBy { it.trackId },
             audio = audio.filterKeys { it in trackIds },
             audioAdvertised = audioAdvertised,
+            playlists = projectPlaylists(playlists, playlistItems, trackIds),
+        )
+    }
+
+    private class PlaylistRow(val id: String, val name: String, val kind: String, val parentId: String?)
+
+    private class PlaylistItemRow(val id: String, val playlistId: String, val assetId: String, val position: Long)
+
+    /**
+     * Server playlists as read-only [Playlist]s. Order is the explicit item `position` (never the pull order),
+     * folders only supply the crate path, and items whose asset has not synced are left out.
+     */
+    private fun projectPlaylists(playlists: List<CachedEntity>, items: List<CachedEntity>, trackIds: Set<String>): List<Playlist> {
+        val rows = playlists.mapNotNull(::parsePlaylistRow)
+        val byId = rows.associateBy { it.id }
+        val itemsByPlaylist = items.mapNotNull(::parsePlaylistItem).groupBy { it.playlistId }
+        return rows.filter { it.kind == "playlist" }
+            .map { row ->
+                Playlist(
+                    id = row.id,
+                    name = row.name,
+                    trackIds = itemsByPlaylist[row.id].orEmpty()
+                        .sortedWith(compareBy({ it.position }, { it.id }))
+                        .map { it.assetId }
+                        .filter { it in trackIds },
+                    crate = crateOf(row, byId),
+                    readOnly = true,
+                )
+            }
+            .sortedWith(compareBy({ it.crate.joinToString("/").lowercase() }, { it.name.lowercase() }, { it.id }))
+    }
+
+    private fun crateOf(row: PlaylistRow, byId: Map<String, PlaylistRow>): List<String> {
+        val names = ArrayDeque<String>()
+        val seen = HashSet<String>().apply { add(row.id) }
+        var parent = row.parentId?.let(byId::get)
+        while (parent != null && parent.kind == "folder" && seen.add(parent.id)) {
+            names.addFirst(parent.name)
+            parent = parent.parentId?.let(byId::get)
+        }
+        return names.toList()
+    }
+
+    private fun parsePlaylistRow(entity: CachedEntity): PlaylistRow? {
+        val value = parseJsonObject(entity.valueJson) ?: return null
+        val name = value.string("name") ?: return null
+        return PlaylistRow(entity.entityId, name, value.string("kind") ?: "playlist", value.string("parent_id"))
+    }
+
+    private fun parsePlaylistItem(entity: CachedEntity): PlaylistItemRow? {
+        val value = parseJsonObject(entity.valueJson) ?: return null
+        return PlaylistItemRow(
+            entity.entityId,
+            value.string("playlist_id") ?: return null,
+            value.string("asset_id") ?: return null,
+            value.long("position") ?: return null,
         )
     }
 

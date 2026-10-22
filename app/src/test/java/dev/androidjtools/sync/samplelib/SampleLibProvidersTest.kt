@@ -86,6 +86,33 @@ class SampleLibProvidersTest {
     }
 
     @Test
+    fun theServerPlaylistsFollowEveryCacheCommit() = runTest(UnconfinedTestDispatcher()) {
+        val cache = SqlLibraryCache(JdbcSqlDatabase())
+        val state = SampleLibProjectionState(cache, backgroundScope, UnconfinedTestDispatcher(testScheduler))
+        val playlists = SampleLibPlaylistProvider(state)
+        assertTrue(playlists.playlists.value.isEmpty())
+
+        cache.applyPage(
+            listOf(
+                asset("a1", "Alpha"),
+                json("playlist", "pl", """{"id":"pl","name":"Warmup","kind":"playlist","parent_id":null}"""),
+                json("playlist_item", "it", """{"id":"it","playlist_id":"pl","asset_id":"a1","position":0}"""),
+            ),
+            emptyList(),
+            CacheMeta("c1", "g", "s"),
+        )
+        advanceUntilIdle()
+        assertEquals(listOf("pl"), playlists.playlists.value.map { it.id })
+        assertEquals(listOf("a1"), playlists.playlist("pl")?.trackIds)
+        assertTrue(playlists.playlist("pl")!!.readOnly)
+        assertNull(playlists.playlist("missing"))
+
+        cache.reset()
+        advanceUntilIdle()
+        assertTrue(playlists.playlists.value.isEmpty())
+    }
+
+    @Test
     fun preparationFlowsTrackCacheCommitsIncludingRemovals() = runTest(UnconfinedTestDispatcher()) {
         val cache = SqlLibraryCache(JdbcSqlDatabase())
         val state = SampleLibProjectionState(cache, backgroundScope, UnconfinedTestDispatcher(testScheduler))

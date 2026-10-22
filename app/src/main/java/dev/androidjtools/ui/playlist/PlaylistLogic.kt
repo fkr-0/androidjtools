@@ -63,6 +63,7 @@ data class PlaylistDraft(
     val trackIds: List<String> = emptyList(),
     val smartRule: SmartRule.Group? = null,
     val importedRuleSummary: String? = null,
+    val readOnly: Boolean = false,
 ) {
     val isSmart: Boolean get() = smartRule != null || importedRuleSummary != null
 }
@@ -91,15 +92,20 @@ class LocalPlaylistIdAllocator(startAt: Long = 1L) {
     }
 }
 
-fun Playlist.toDraft(cratePath: CratePath = CratePath(emptyList())) = PlaylistDraft(
+fun Playlist.toDraft(cratePath: CratePath = CratePath(crate)) = PlaylistDraft(
     id = id,
     name = name,
     cratePath = cratePath,
     trackIds = trackIds,
     importedRuleSummary = if (smart) ruleSummary ?: "Backend smart rule" else null,
+    readOnly = readOnly,
 )
 
+const val READ_ONLY_PLAYLIST_NOTICE = "This playlist is managed on your Sample Lib server and cannot be edited here."
+
+
 fun validatePlaylistDraft(draft: PlaylistDraft, siblings: List<PlaylistDraft> = emptyList()): List<String> = buildList {
+    if (draft.readOnly) add(READ_ONLY_PLAYLIST_NOTICE)
     if (draft.name.isBlank()) add("Playlist name is required")
     if (draft.name.length > 80) add("Playlist name must be 80 characters or fewer")
     if (draft.cratePath.segments.any { it.length > 60 }) add("Crate path segments must be 60 characters or fewer")
@@ -109,16 +115,14 @@ fun validatePlaylistDraft(draft: PlaylistDraft, siblings: List<PlaylistDraft> = 
     draft.smartRule?.let { addAll(validateSmartRule(it)) }
 }
 
-fun addTracks(draft: PlaylistDraft, trackIds: Collection<String>): PlaylistDraft = draft.copy(
-    trackIds = (draft.trackIds + trackIds).distinct(),
-)
+fun addTracks(draft: PlaylistDraft, trackIds: Collection<String>): PlaylistDraft =
+    if (draft.readOnly) draft else draft.copy(trackIds = (draft.trackIds + trackIds).distinct())
 
-fun removeTrack(draft: PlaylistDraft, trackId: String): PlaylistDraft = draft.copy(
-    trackIds = draft.trackIds.filterNot { it == trackId },
-)
+fun removeTrack(draft: PlaylistDraft, trackId: String): PlaylistDraft =
+    if (draft.readOnly) draft else draft.copy(trackIds = draft.trackIds.filterNot { it == trackId })
 
 fun moveTrack(draft: PlaylistDraft, fromIndex: Int, toIndex: Int): PlaylistDraft {
-    if (fromIndex !in draft.trackIds.indices || toIndex !in draft.trackIds.indices || fromIndex == toIndex) return draft
+    if (draft.readOnly || fromIndex !in draft.trackIds.indices || toIndex !in draft.trackIds.indices || fromIndex == toIndex) return draft
     val ids = draft.trackIds.toMutableList()
     val moved = ids.removeAt(fromIndex)
     ids.add(toIndex, moved)
@@ -129,6 +133,7 @@ fun deletePlaylist(drafts: List<PlaylistDraft>, playlistId: String): Pair<List<P
     val index = drafts.indexOfFirst { it.id == playlistId }
     if (index < 0) return drafts to null
     val removed = drafts[index]
+    if (removed.readOnly) return drafts to null
     return drafts.toMutableList().apply { removeAt(index) } to PlaylistDeleteUndo(removed, index)
 }
 

@@ -74,6 +74,7 @@ class SampleLibRuntime private constructor(context: Context) {
         return device.copy(
             runtime = CompositeRuntimeProvider(device.runtime, serverLibrary, wrapperScope),
             library = CompositeLibraryProvider(serverLibrary, device.library, wrapperScope),
+            playlists = SampleLibPlaylistProvider(projection),
             preparation = SampleLibPreparationProvider(projection, wrapperScope),
             playback = ServerAwarePlayback(device.playback) { id -> playbackRefusal(projection.projection.value, id) },
             downloads = SampleLibDownloadProvider(

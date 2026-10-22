@@ -51,6 +51,10 @@ data class Playlist(
     val trackIds: List<String>,
     val smart: Boolean = false,
     val ruleSummary: String? = null,
+    /** Folder names from the root down to this playlist; empty when unfiled. */
+    val crate: List<String> = emptyList(),
+    /** True for playlists the server owns: this client has no playlist write operation to offer. */
+    val readOnly: Boolean = false,
 )
 
 enum class DownloadStatus { NOT_DOWNLOADED, QUEUED, DOWNLOADING, AVAILABLE, FAILED, CANCELLED, CORRUPT }

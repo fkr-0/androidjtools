@@ -121,6 +121,39 @@ class PlaylistLogicTest {
         assertTrue(validatePlaylistDraft(otherCrate, listOf(house)).isEmpty())
     }
 
+    @Test
+    fun `a server playlist keeps its crate and read-only flag when it becomes a draft`() {
+        val server = Playlist("p", "Warmup", listOf("a", "b"), crate = listOf("Sets", "2026"), readOnly = true)
+        val draft = server.toDraft()
+        assertEquals(listOf("Sets", "2026"), draft.cratePath.segments)
+        assertEquals(listOf("a", "b"), draft.trackIds)
+        assertTrue(draft.readOnly)
+    }
+
+    @Test
+    fun `read-only drafts cannot be changed by any membership operation`() {
+        val draft = PlaylistDraft("p", "Warmup", trackIds = listOf("a", "b"), readOnly = true)
+        assertEquals(draft, addTracks(draft, listOf("c")))
+        assertEquals(draft, removeTrack(draft, "a"))
+        assertEquals(draft, moveTrack(draft, 0, 1))
+    }
+
+    @Test
+    fun `read-only drafts cannot be deleted and say why they fail validation`() {
+        val draft = PlaylistDraft("p", "Warmup", readOnly = true)
+        val (remaining, undo) = deletePlaylist(listOf(draft), "p")
+        assertEquals(listOf(draft), remaining)
+        assertEquals(null, undo)
+        assertTrue(validatePlaylistDraft(draft).any { it.contains("Sample Lib server") })
+    }
+
+    @Test
+    fun `editable drafts are unaffected by the read-only guard`() {
+        val draft = PlaylistDraft("p", "Mine", trackIds = listOf("a"))
+        assertEquals(listOf("a", "b"), addTracks(draft, listOf("b")).trackIds)
+        assertTrue(validatePlaylistDraft(draft).isEmpty())
+    }
+
     private fun track(id: String, title: String, artist: String, bpm: Double, key: String, rating: Int, energy: Double, offline: Boolean) =
         Track(id, title, artist, "Album", 180_000, bpm, key, energy, rating, offline)
 }

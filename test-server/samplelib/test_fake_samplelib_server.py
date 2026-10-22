@@ -281,6 +281,20 @@ class AuthenticatedSampleLibFakeTests(unittest.TestCase):
         self.assertEqual(f'"{MEDIA_SHA256}"', value["etag"])
         self.assertEqual("preview://file-2", files["file-2"]["value"]["resource_uri"])
 
+    def test_library_snapshot_carries_a_folder_a_playlist_and_ordered_items_like_the_real_server(self) -> None:
+        changes = self.library_snapshot()
+        playlists = {c["entity_id"]: c for c in changes if c["entity_type"] == "playlist"}
+        self.assertEqual({"folder-sets", "playlist-warmup"}, set(playlists))
+        self.assertEqual("sample-lib.playlist/v1", playlists["playlist-warmup"]["schema"])
+        self.assertEqual("folder", playlists["folder-sets"]["value"]["kind"])
+        self.assertEqual("folder-sets", playlists["playlist-warmup"]["value"]["parent_id"])
+        items = [c for c in changes if c["entity_type"] == "playlist_item"]
+        self.assertTrue(all(c["schema"] == "sample-lib.playlist-item/v1" for c in items))
+        self.assertEqual({"id", "playlist_id", "asset_id", "position"}, set(items[0]["value"]))
+        # Pull order is the entity id order, deliberately not the position order.
+        self.assertEqual(["item-first", "item-second"], [c["entity_id"] for c in items])
+        self.assertEqual([1, 0], [c["value"]["position"] for c in items])
+
     def test_media_requires_a_credential_and_the_media_read_scope(self) -> None:
         self.pair()
         status, _, _ = self.raw("GET", "/v1/sync/media/file-1", auth=False)
