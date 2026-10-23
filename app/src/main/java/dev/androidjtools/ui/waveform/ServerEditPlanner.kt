@@ -36,6 +36,45 @@ class ServerEditPlanner(
         return editCues(aggregate) { it.create(localId = "new-cue-$positionMs", requestedPositionMs = positionMs) }
     }
 
+    /**
+     * Turns an analysis run's cue candidates into cues, all in one edit of one synced section, through the same
+     * editor-state path as a cue made by hand. The provenance says the cues came from analysis and from which run.
+     * Positions that already hold a cue are left alone. Refused (with the reason) when no single synced section
+     * covers every candidate: the edit would otherwise have to be split or silently drop some.
+     */
+    fun addCues(pointsMs: List<Long>, analysisRunId: String?): EditBuild {
+        val points = pointsMs.distinct().sorted()
+        if (points.isEmpty()) return EditBuild.Refused("There are no cue points to add.")
+        val aggregate = aggregates.firstOrNull { section -> points.all { it >= section.startMs && it < section.endMs } }
+            ?: return EditBuild.Refused(
+                if (points.any { p -> aggregates.any { p >= it.startMs && p < it.endMs } }) {
+                    "These cue points are not all in one synced section, so they cannot be added in one edit."
+                } else {
+                    "No synced section covers these cue points."
+                },
+            )
+        val ofInterval = cues.filter { it.intervalId == aggregate.intervalId }
+        val fresh = points.filter { point -> ofInterval.none { it.positionMs == point } }
+        if (fresh.isEmpty()) return EditBuild.Refused("These cue points are already cues.")
+        var editor = try {
+            CueEditorState.fromDomain(track.id, track.durationMs, aggregate, ofInterval)
+        } catch (_: IllegalArgumentException) {
+            return EditBuild.Refused("These cues cannot be edited.")
+        }
+        for (point in fresh) {
+            val result = editor.create(localId = "analysis-cue-$point", requestedPositionMs = point)
+            if (!result.accepted) return EditBuild.Refused(describe(result.error!!))
+            editor = result.editor
+        }
+        val provenance = buildMap {
+            put("source", "analysis")
+            put("surface", "analysis_cues")
+            analysisRunId?.let { put("analysis_run_id", it) }
+        }
+        val capture = Capture()
+        return capture.finish(editor.stage(newMutationId(), nowMs(), capture, "Android DJ analysis cue candidates", provenance))
+    }
+
     fun moveCue(cueId: String, positionMs: Long): EditBuild {
         val aggregate = aggregateOfCue(cueId) ?: return unavailableCue(cueId)
         return editCues(aggregate) { it.move(cueId, positionMs) }

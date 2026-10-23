@@ -165,6 +165,7 @@ class SampleLibServerEditProvider(
         return when (surface) {
             "cue_editor" -> "Cue edit"
             "loop_editor" -> "Loop edit"
+            "analysis_cues" -> "Cues from analysis"
             else -> "Edit"
         }
     }

@@ -169,6 +169,25 @@ class SampleLibServerEditProviderTest {
     }
 
     @Test
+    fun cuesMadeFromAnalysisAreNamedAsSuch() = runTest(UnconfinedTestDispatcher()) {
+        val f = fixture()
+        f.provider.stage(intent(surface = "analysis_cues"))
+        assertEquals("Cues from analysis", f.provider.edits.value.single().summary)
+    }
+
+    @Test
+    fun acceptedSuggestionsAreAnotherFamilyAndNeverShowUpAsCueOrLoopEdits() = runTest(UnconfinedTestDispatcher()) {
+        val f = fixture()
+        f.provider.stage(intent())
+        f.journal.enqueue(
+            "mutation-accept-1", "analysis_suggestion", "run-1:tempo:a1", "rev-s", "analysis_suggestion.accept",
+            """{"target_interval_id":"iv-1"}""", "{}", 2_000L,
+        )
+
+        assertEquals(listOf("mutation-0001"), f.provider.edits.value.map { it.mutationId })
+    }
+
+    @Test
     fun stagingIsRefusedWithTheReasonWhenEditingIsUnavailableAndNothingIsQueued() = runTest(UnconfinedTestDispatcher()) {
         val f = fixture(state = SyncState.AUTH_REQUIRED)
         val result = f.provider.stage(intent())

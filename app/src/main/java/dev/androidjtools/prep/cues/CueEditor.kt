@@ -172,6 +172,7 @@ data class CueEditorState private constructor(
         createdAtEpochMillis: Long,
         stager: PreparationMutationStager,
         comment: String = "Android DJ cue preparation edit",
+        provenance: Map<String, String> = mapOf("source" to "android_manual", "surface" to "cue_editor"),
     ): PreparationStageResult {
         if (!dirty) return PreparationStageResult.Rejected("no_changes", "cue editor has no staged changes")
         if (!aggregate.completeMarkerSet) {
@@ -209,7 +210,7 @@ data class CueEditorState private constructor(
                 baseRevision = aggregate.baseRevision,
                 payload = payload,
                 createdAtEpochMillis = createdAtEpochMillis,
-                provenance = mapOf("source" to "android_manual", "surface" to "cue_editor"),
+                provenance = provenance,
             ),
         )
     }

@@ -38,6 +38,60 @@ class ServerEditPlannerTest {
     private fun EditBuild.ready() = (this as EditBuild.Ready).intent
     private fun EditBuild.reason() = (this as EditBuild.Refused).reason
 
+    // ---- cue candidates from analysis ----
+
+    @Test
+    fun allCandidatesBecomeCuesInOneEditWithAnalysisProvenance() {
+        val intent = planner().addCues(listOf(2_000L, 5_000L, 8_000L), analysisRunId = "run-7").ready()
+
+        assertEquals("iv-1", intent.entityId)
+        assertEquals("r1", intent.baseRevision)
+        val added = intent.payload.markers.filter { it.id == null }
+        assertEquals(listOf(2_000L, 5_000L, 8_000L), added.map { it.positionMs })
+        assertTrue(added.all { it.markerType == "cue" })
+        assertEquals(mapOf("source" to "analysis", "surface" to "analysis_cues", "analysis_run_id" to "run-7"), intent.provenance)
+        // The existing markers, including the loop markers, are all still there.
+        assertEquals(setOf("m1", "m2", "ls", "le"), intent.payload.markers.mapNotNull { it.id }.toSet())
+    }
+
+    @Test
+    fun candidatesAtPositionsThatAlreadyHoldACueAreNotAddedTwice() {
+        val intent = planner().addCues(listOf(1_500L, 6_500L), "run-7").ready()
+        assertEquals(listOf(6_500L), intent.payload.markers.filter { it.id == null }.map { it.positionMs })
+
+        assertTrue(planner().addCues(listOf(1_500L, 3_000L), "run-7").reason().contains("already"))
+    }
+
+    @Test
+    fun withoutASyncedSectionCoveringThemTheCandidatesAreRefusedCleanly() {
+        assertTrue(planner(aggregates = emptyList()).addCues(listOf(2_000L), "run-7").reason().contains("No synced section"))
+        assertTrue(planner().addCues(listOf(9_500L), "run-7").reason().contains("No synced section"))
+    }
+
+    @Test
+    fun candidatesSpreadOverSeveralSectionsAreRefusedRatherThanSplitIntoSeveralEdits() {
+        val second = IntervalEditorStateContext("iv-2", "r2", 9_000L, 10_000L, emptyList(), completeMarkerSet = true)
+        val reason = planner(aggregates = listOf(aggregate, second)).addCues(listOf(2_000L, 9_500L), "run-7").reason()
+        assertTrue(reason, reason.contains("one synced section"))
+    }
+
+    @Test
+    fun anIncompleteMarkerSetStillRefusesCandidates() {
+        val incomplete = aggregate.copy(completeMarkerSet = false)
+        assertTrue(planner(aggregates = listOf(incomplete)).addCues(listOf(2_000L), "run-7").reason().contains("complete"))
+    }
+
+    @Test
+    fun noCandidatesIsNothingToDo() {
+        assertTrue(planner().addCues(emptyList(), "run-7").reason().contains("no cue points", ignoreCase = true))
+    }
+
+    @Test
+    fun aMissingRunIdLeavesItOutOfTheProvenance() {
+        val intent = planner().addCues(listOf(2_000L), analysisRunId = null).ready()
+        assertEquals(mapOf("source" to "analysis", "surface" to "analysis_cues"), intent.provenance)
+    }
+
     // ---- cues ----
 
     @Test
