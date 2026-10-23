@@ -58,6 +58,19 @@ def per_scheme_output(dn: str, digest: str, schemes=("V2",), number_of_signers: 
 
 
 class EvaluateTest(unittest.TestCase):
+    def test_a_branch_build_with_a_configured_pin_still_passes_when_debug_is_allowed(self):
+        """Once ANDROID_RELEASE_CERT_SHA256 is set repository-wide, branch builds (debug-signed) must not trip on it."""
+        result = vrs.evaluate(
+            apksigner_output(dn="C=US, O=Android, CN=Android Debug", digest=OTHER_FP),
+            expected_sha256=FP,
+            allow_debug=True,
+        )
+        self.assertTrue(result.debug)
+
+    def test_a_non_debug_certificate_is_still_pinned_when_debug_is_allowed(self):
+        with self.assertRaisesRegex(vrs.SignatureError, "does not match"):
+            vrs.evaluate(apksigner_output(digest=OTHER_FP), expected_sha256=FP, allow_debug=True)
+
     def test_per_scheme_signer_blocks_are_one_signer(self):
         result = vrs.evaluate(per_scheme_output("CN=Android DJ Tools", FP), expected_sha256=FP)
         self.assertEqual(result.sha256, FP)

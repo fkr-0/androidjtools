@@ -57,6 +57,10 @@ def evaluate(output: str, expected_sha256: str | None, allow_debug: bool = False
     if debug and not allow_debug:
         raise SignatureError("APK is signed with the shared Android debug certificate")
 
+    if debug:
+        # Only reachable with allow_debug: a branch build is debug-signed by design, so the release pin does not apply.
+        return SignatureResult(sha256=sha256, dn=dn, debug=True)
+
     if expected_sha256 is None:
         if not allow_debug:
             raise SignatureError("an expected release certificate fingerprint is required")
