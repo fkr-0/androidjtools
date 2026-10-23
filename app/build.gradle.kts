@@ -39,8 +39,18 @@ if (!releaseSigningConfigured && missingSigningInputs.size < releaseSigningInput
 android {
     namespace = "dev.androidjtools"
     compileSdk = 35
-    ndkVersion = "25.0.8775105"
-    System.getenv("ANDROID_NDK_HOME")?.takeIf { it.isNotBlank() }?.let { ndkPath = it }
+    val pinnedNdkVersion = "25.0.8775105"
+    ndkVersion = pinnedNdkVersion
+    // ANDROID_NDK_HOME is whatever NDK the machine ships (hosted CI images move on), and the Android Gradle plugin
+    // fails the build when that path's revision differs from ndkVersion. Honour it only when it is the pinned NDK;
+    // otherwise the plugin resolves, and if needed installs, the pinned version in the SDK.
+    System.getenv("ANDROID_NDK_HOME")
+        ?.takeIf { it.isNotBlank() }
+        ?.takeIf { home ->
+            File(home, "source.properties").takeIf(File::isFile)?.readLines().orEmpty()
+                .any { it.replace(" ", "") == "Pkg.Revision=$pinnedNdkVersion" }
+        }
+        ?.let { ndkPath = it }
 
     defaultConfig {
         applicationId = "dev.androidjtools"
