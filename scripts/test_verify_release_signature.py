@@ -24,7 +24,29 @@ def apksigner_output(dn: str = "CN=Android DJ Tools Release, O=Example", digest:
     return "\n".join(lines) + "\n"
 
 
+def ranged_output(dn: str, digest: str) -> str:
+    """Newer apksigner builds label v3 signers with their SDK range instead of a number."""
+    return "\n".join(
+        [
+            "Verifies",
+            "Verified using v2 scheme (APK Signature Scheme v2): true",
+            "Verified using v3 scheme (APK Signature Scheme v3): true",
+            "Number of signers: 1",
+            f"Signer (minSdkVersion=28, maxSdkVersion=2147483647) certificate DN: {dn}",
+            f"Signer (minSdkVersion=28, maxSdkVersion=2147483647) certificate SHA-256 digest: {digest}",
+        ]
+    ) + "\n"
+
+
 class EvaluateTest(unittest.TestCase):
+    def test_signer_labelled_with_an_sdk_range_is_still_one_signer(self):
+        result = vrs.evaluate(ranged_output("CN=Android DJ Tools", FP), expected_sha256=FP)
+        self.assertEqual(result.sha256, FP)
+
+    def test_no_signer_error_shows_what_apksigner_printed(self):
+        with self.assertRaisesRegex(vrs.SignatureError, "something unexpected"):
+            vrs.evaluate("Verifies\nsomething unexpected\n", expected_sha256=FP)
+
     def test_matching_release_certificate_passes(self):
         result = vrs.evaluate(apksigner_output(), expected_sha256=FP)
         self.assertEqual(result.sha256, FP)
