@@ -61,6 +61,28 @@ All notable changes to Android DJ Tools are documented here.
 - Smart playlists are not synced (the server has none); the Collections screen's local create and smart-filter features still only work on the in-app fixture data.
 - The Collections screen change has been built, linted and unit-tested at the logic level but NOT run on a device.
 
+### Sample Lab integration (S5: analysis suggestions)
+
+- The Suggest screen shows the tempo, key, beat-grid and cue-point suggestions a paired Sample Lib server already holds for the track you are playing, each with the tool that produced it. A confidence is shown only when the server recorded one; it is never required, and it never reorders, hides or blocks anything.
+- Accept a tempo, beat grid or key, or Dismiss it. A tempo that comes with half/double-time alternatives lets you pick which one to accept. Accepting is written to the on-device journal and delivered with the next sync like a cue edit, with the same states (waiting to send, sending, saved on server, needs your decision, not accepted). Your library shows the new tempo or key only after the next pull. A suggestion the server replaced while your accept was waiting is a conflict with exactly one action, Dismiss; the refresh shows the replacement.
+- "Add as cues" turns a run's cue-point candidates into cues in one edit through the existing cue-editing path, recorded as coming from analysis (with the analysis run). It refuses with a reason when no single synced section covers the candidates, and skips positions that already hold a cue.
+- "Analyse this track" is the only thing that ever starts analysis, and it exists only when the server says it accepts requests; otherwise a single line says the server has no analysis available. Connecting, pulling, refreshing, opening the screen or accepting never asks for analysis. "Check for results" is an ordinary refresh; the app does not poll.
+- Dismissals stay on the device (keyed by suggestion and revision, so a re-run reappears) and are removed with Forget server, together with unsent edits.
+- Servers without analysis (`analysis: []`, no `analysis_request`) behave exactly as before: the same pull, no extra screen elements besides the explanatory line.
+- Removed: the never-served `suggestions.read` / `androidjtools.analysis-candidate/v1` reader, provider and acceptance coordinator (nothing used them), replaced by the server's `sample-lib.analysis-suggestion/v1` suggestions and `analysis_suggestion.accept`.
+- Verified against the real Sample Lib server built from the S5 branch: hello capabilities, the analysis scope next to library, the suggestion shape (including a key with no confidence), accept of tempo (and an alias), key and beat grid with the library changing only after the pull, a no-op repeat, a suggestion replaced by another run (conflict, Dismiss only), cue candidates added as cues, and Forget. The fake server used by the Python tests speaks the same contract.
+
+### Known limitations (S5)
+
+- The Suggest screen, the tempo picker and the buttons are Compose code that has been built, linted and unit-tested at the logic level (presentation and the gestures behind the buttons) but NOT run on a device (adb is unavailable here); the added instrumented UI tests are only compile-checked.
+- Only tempo, key, beat-grid and cue-candidate kinds are shown; other suggestion kinds a future server sends are ignored. Stems, vocal transcripts and generic timed events are not implemented.
+- A beat grid is accepted as its tempo only: the server does not store the first-beat or downbeat offset, so it is shown but not saved. The beat-grid and cue candidates are not drawn on the waveform.
+- An asset-level suggestion is applied to the track's full-length interval; a track with no such synced section cannot accept it (the screen says so). Interval-scoped suggestions go to their own interval.
+- Cue candidates must all fall inside one synced section; otherwise nothing is added and the reason is shown rather than splitting the edit.
+- Whether "Analyse this track" is offered depends on the server having an analysis worker configured; the live tests accept both answers and do not start analysis on a server that offers it.
+- Pairing records the scopes the server granted. A connection paired before this version does not know them, tries the analysis scope once and, if the server refuses it, remembers that for the session and keeps syncing the library; it is not treated as a pairing problem.
+- The Suggest screen follows the track that is playing (otherwise the first track), like the Preparation screen.
+
 ### Release engineering
 
 - Release builds can be signed with a project-owned key supplied through `ANDROID_KEYSTORE_*` environment variables or a git-ignored `keystore.properties`; `-PrequireReleaseSigning=true` fails the build instead of falling back to the debug key. Tag CI requires it.

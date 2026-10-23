@@ -1,6 +1,6 @@
 # Sample Lab integration design
 
-Status: spec approved 2026-10-12. S1 implementation plan: `docs/superpowers/plans/2026-10-12-samplelab-s1-connect-and-read.md`. S2 (Android side) plan: `docs/superpowers/plans/2026-10-13-samplelab-s2-server-audio-android.md`. S3 (editor mutations; plan `docs/superpowers/plans/2026-10-22-samplelab-s3-editor-mutations.md`) and S4 (read-only playlists) implemented on `main` (see CHANGELOG). S5 not yet planned: it needs the server to advertise analysis first.
+Status: spec approved 2026-10-12. S1 implementation plan: `docs/superpowers/plans/2026-10-12-samplelab-s1-connect-and-read.md`. S2 (Android side) plan: `docs/superpowers/plans/2026-10-13-samplelab-s2-server-audio-android.md`. S3 (editor mutations; plan `docs/superpowers/plans/2026-10-22-samplelab-s3-editor-mutations.md`) and S4 (read-only playlists) implemented on `main` (see CHANGELOG). S5 (analysis suggestions; wire contract and plan `docs/superpowers/plans/2026-10-23-samplelab-s5-analysis-suggestions.md`) is implemented on the Android side on `main` against the server's `analysis` pull scope, `analysis_request` capability and `analysis_suggestion.accept` mutation (see CHANGELOG for what is and is not verified on a device).
 Branch: `feat/samplelab-integration`.
 
 ## Purpose
@@ -109,9 +109,15 @@ offered because no playlist mutation family is advertised.
 
 ### S5 - Analysis
 
-Wire `SampleLibAnalysisProvider` only when `suggestions.read` is advertised and
-`analysis_suggestion` is in the pull set; otherwise the Suggest destination explains why it is
-unavailable.
+Suggestions are read from the `analysis` pull scope, requested next to `library` only when the server's
+`capabilities.analysis` lists at least one kind and the credential is not known to lack `analysis.read`. They are a
+read-only view of results the server already holds: nothing pulls, opens or syncs its way into starting analysis. The
+only way analysis starts is the explicit "Analyse this track" action, offered only when `analysis_request` is exactly
+`enqueue_v1`; otherwise the Suggest screen says the server has no analysis available. `confidence` is optional and
+informational. Accepting tempo, beat grid or key is a durable `analysis_suggestion.accept`; cue candidates become
+cues through the S3 editor-state path with `source=analysis` provenance. The library changes only from pulled state.
+Dismissals are local, keyed by suggestion id and revision. The older `suggestions.read` /
+`androidjtools.analysis-candidate/v1` reader was never served by any server and has been removed.
 
 ## Error handling
 
