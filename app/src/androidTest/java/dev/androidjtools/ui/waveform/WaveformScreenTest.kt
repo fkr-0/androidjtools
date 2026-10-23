@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
@@ -63,9 +64,12 @@ class WaveformScreenTest {
         compose.onNodeWithTag("grid-bpm-input").assertExists()
         assertGridBpm("92.50")
         compose.onNodeWithTag("grid-anchor-input").assertExists()
-        compose.onNodeWithTag("grid-half-bpm").assertExists().performClick()
+        // The buttons sit in a horizontally scrolling row inside the screen's vertical scroll, and a scroll-to
+        // only moves the nearest container: bring the editor on screen first, then the button within its row.
+        compose.onNodeWithTag("waveform-grid-editor").performScrollTo()
+        compose.onNodeWithTag("grid-half-bpm").performScrollTo().performClick()
         assertGridBpm("46.25")
-        compose.onNodeWithTag("grid-double-bpm").assertExists().performClick()
+        compose.onNodeWithTag("grid-double-bpm").performScrollTo().performClick()
         assertGridBpm("92.50")
     }
 

@@ -3,10 +3,16 @@ package dev.androidjtools.ui.library
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -42,7 +48,7 @@ class LibraryScreenTest {
 
         compose.onNodeWithContentDescription("Clear search").performClick()
         compose.onNodeWithText("Filters").performClick()
-        compose.onNodeWithText("Any availability").performClick()
+        clickFilterChip("Any availability")
         compose.onNodeWithText("2 of 3 tracks").assertExists()
         compose.onNodeWithText("Dub Colony").assertIsDisplayed()
         compose.onNodeWithTag("library-track-list").performScrollToIndex(1)
@@ -64,13 +70,16 @@ class LibraryScreenTest {
         compose.onNodeWithText("3 tracks").assertIsDisplayed()
         compose.onNodeWithText("Night Bus").assertIsDisplayed()
 
+        // Slow tracks (< 100 BPM) that are streamed: both fixture slow tracks are offline, so nothing matches.
         compose.onNodeWithText("Filters").performClick()
-        compose.onNodeWithText("Any BPM").performClick()
-        compose.onNodeWithText("< 100 BPM").performClick()
-        compose.onNodeWithText("Any availability").performClick()
-        compose.onNodeWithText("Offline").performClick()
+        clickFilterChip("Any BPM")
+        compose.onNodeWithText("< 100 BPM").assertExists()
+        clickFilterChip("Any availability")
+        clickFilterChip("Offline")
+        compose.onNodeWithText("Streaming").assertExists()
         compose.onNodeWithText("No matches").assertIsDisplayed()
-        compose.onNodeWithText("Clear filters").performClick()
+        // The filter row also has a "Clear filters" button; this test is about the recovery offered by the empty state.
+        compose.onNode(hasText("Clear filters") and hasAnyAncestor(hasTestTag("library-message-state"))).performClick()
 
         compose.onNodeWithText("3 tracks").assertIsDisplayed()
         compose.onNodeWithText("Concrete Flash").assertIsDisplayed()
@@ -110,7 +119,8 @@ class LibraryScreenTest {
         compose.onNodeWithTag("library-track-list").performScrollToIndex(2)
         compose.onNodeWithTag("track-row-trk-001").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("track-artwork-trk-001").assertIsDisplayed()
-        compose.onNodeWithTag("track-metadata-trk-001")
+        // The metadata line is merged into its row's clickable details node, so it is only addressable unmerged.
+        compose.onNodeWithTag("track-metadata-trk-001", useUnmergedTree = true)
             .assertIsDisplayed()
             .assertTextContains("92.5 BPM · 8A · ★★★★ · Offline · Analyzed")
         compose.onNodeWithText("Sample Lab · Fixture Cuts").assertIsDisplayed()
@@ -326,9 +336,13 @@ class LibraryScreenTest {
     fun largePhoneWidth_usesRoomyLibraryLayout() {
         val providers = FixtureAppProviders.create(FixtureScenario.NOMINAL)
         compose.setContent {
-            AndroidDjToolsTheme {
-                Box(Modifier.width(720.dp).height(900.dp)) {
-                    LibraryScreen(providers)
+            // A 720 dp wide box only stays 720 dp wide when the window really offers it: constraints from a
+            // 411 dp phone window would squeeze it to the compact layout. 2x density makes the window 720 dp.
+            CompositionLocalProvider(LocalDensity provides Density(2f, 1f)) {
+                AndroidDjToolsTheme {
+                    Box(Modifier.width(720.dp).height(900.dp)) {
+                        LibraryScreen(providers)
+                    }
                 }
             }
         }
@@ -369,5 +383,10 @@ class LibraryScreenTest {
 
         compose.onAllNodesWithText("Play now").assertCountEquals(0)
         compose.onNodeWithText("Night Bus").assertIsDisplayed()
+    }
+
+    /** The filter chips sit in a horizontally scrolling row; on a phone the later ones start off screen. */
+    private fun clickFilterChip(label: String) {
+        compose.onNodeWithText(label).performScrollTo().performClick()
     }
 }

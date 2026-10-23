@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertAll
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.isNotEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import dev.androidjtools.core.model.SuggestionKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -145,6 +147,7 @@ class AnalysisAssistantContentTest {
 
         compose.onNodeWithTag("preview-unavailable-reason").assertIsDisplayed()
         compose.onNodeWithText("Preview unavailable: No audio on the server yet.").assertIsDisplayed()
+        scrollToCueCandidates()
         val previews = compose.onAllNodesWithText("Preview")
         assertTrue("fixture must contain Preview controls", previews.fetchSemanticsNodes().isNotEmpty())
         previews.assertAll(isNotEnabled())
@@ -155,7 +158,15 @@ class AnalysisAssistantContentTest {
         val state = AnalysisAssistantFixtures.competition()
         compose.setContent { MaterialTheme { AnalysisAssistantContent(state = state, acceptanceEnabled = true, onAction = {}) } }
 
-        compose.onAllNodesWithText("Preview").assertAll(isEnabled())
+        scrollToCueCandidates()
+        val previews = compose.onAllNodesWithText("Preview")
+        assertTrue("fixture must contain Preview controls", previews.fetchSemanticsNodes().isNotEmpty())
+        previews.assertAll(isEnabled())
         assertTrue(compose.onAllNodesWithTag("preview-unavailable-reason").fetchSemanticsNodes().isEmpty())
+    }
+
+    /** The screen is a lazy list: the candidate groups, and their Preview buttons, are not composed until scrolled to. */
+    private fun scrollToCueCandidates() {
+        compose.onNodeWithTag("analysis-screen").performScrollToNode(hasTestTag("candidate-group-CUE"))
     }
 }

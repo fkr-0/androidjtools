@@ -43,7 +43,8 @@ class MetadataQuickRatingTest {
         compose.onNodeWithText("Metadata").performClick()
         val tags = compose.onNodeWithText("Tags (namespace:value, comma separated)")
         tags.performScrollTo().performTextReplacement("mood:late-night")
-        compose.onNodeWithText("Save locally").assertIsEnabled().performClick()
+        // Save sits below the long form: scroll to it, or the click lands outside the window and does nothing.
+        compose.onNodeWithText("Save locally").performScrollTo().assertIsEnabled().performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Save locally").assertIsNotEnabled()
 

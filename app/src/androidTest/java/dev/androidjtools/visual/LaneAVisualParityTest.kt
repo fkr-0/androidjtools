@@ -39,7 +39,7 @@ class LaneAVisualParityTest {
         compose.onNodeWithTag("library-track-list").performScrollToIndex(2)
         compose.onNodeWithTag("track-row-trk-001").performScrollTo()
         compose.onNodeWithTag("track-artwork-trk-001").assertIsDisplayed()
-        compose.onNodeWithTag("track-metadata-trk-001")
+        compose.onNodeWithTag("track-metadata-trk-001", useUnmergedTree = true)
             .assertIsDisplayed()
             .assertTextContains("92.5 BPM · 8A · ★★★★ · Offline · Analyzed")
         compose.onNodeWithText("Sample Lab · Fixture Cuts").assertIsDisplayed()

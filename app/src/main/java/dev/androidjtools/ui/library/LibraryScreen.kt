@@ -909,7 +909,7 @@ private fun LibraryMessageState(
     primaryAction: Pair<String, () -> Unit>? = null,
     secondaryAction: Pair<String, () -> Unit>? = null,
 ) {
-    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().padding(24.dp).testTag("library-message-state"), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
