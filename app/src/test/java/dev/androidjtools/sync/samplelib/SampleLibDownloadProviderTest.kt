@@ -330,7 +330,10 @@ class SampleLibDownloadProviderTest {
             assertTrue(parts.isInitialized())
         } finally {
             job.cancel()
-            ioThread.shutdownNow()
+            // Let the pin that is already running on the IO thread finish its file writes: tearing the temporary folder
+            // down underneath it made the write fail on that thread, and the failure surfaced in a later test.
+            ioThread.shutdown()
+            assertTrue("offline IO thread did not finish", ioThread.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS))
         }
     }
 }
