@@ -66,9 +66,19 @@ data class ServerCapabilities(
     val pull: Set<String>,
     val mutations: Set<String>,
     val playlists: String,
+    /** The suggestion kinds the server can present (`tempo`, `key`, ...). An open vocabulary; empty on older servers. */
     val analysis: Set<String>,
     val media: Set<String>,
-)
+    /** `enqueue_v1` when the server accepts on-demand analysis requests; `unavailable`, an unknown word or null otherwise. */
+    val analysisRequest: String? = null,
+) {
+    /** Analysis may be asked for only when the server says so in exactly these words. Nothing else ever triggers it. */
+    val canRequestAnalysis: Boolean get() = analysisRequest == ANALYSIS_REQUEST_ENQUEUE_V1
+
+    companion object {
+        const val ANALYSIS_REQUEST_ENQUEUE_V1 = "enqueue_v1"
+    }
+}
 
 data class ServerLimits(
     val pullPageMax: Int,
@@ -124,7 +134,7 @@ enum class MutationOperation(val wireName: String) {
     ASSET_METADATA_PATCH("asset.metadata.patch"),
     TAG_ENSURE_ATTACH("tag.ensure_attach"),
     TAG_DETACH("tag.detach"),
-    ANALYSIS_SUGGESTION_ACCEPT("analysis.suggestion.accept"),
+    ANALYSIS_SUGGESTION_ACCEPT("analysis_suggestion.accept"),
 }
 
 data class SampleLibMutation(
@@ -161,6 +171,33 @@ data class MutationReceipt(
     val canonical: JsonObject? = null,
     val error: MutationError? = null,
     val conflict: MutationConflict? = null,
+)
+
+enum class AnalysisRequestStatus {
+    CACHED, QUEUED, RUNNING, UNAVAILABLE,
+
+    /** A word this client does not know. Shown as such, never treated as success or as an error. */
+    UNKNOWN,
+    ;
+
+    companion object {
+        fun fromWire(word: String?): AnalysisRequestStatus = when (word) {
+            "cached" -> CACHED
+            "queued" -> QUEUED
+            "running" -> RUNNING
+            "unavailable" -> UNAVAILABLE
+            else -> UNKNOWN
+        }
+    }
+}
+
+/** The server's answer to an explicit "analyse this track": nothing is computed on the device and nothing is polled. */
+data class AnalysisRequestResult(
+    val assetId: String,
+    val status: AnalysisRequestStatus,
+    val kinds: Map<String, AnalysisRequestStatus>,
+    val jobId: String?,
+    val message: String?,
 )
 
 data class PushResult(
@@ -202,6 +239,8 @@ data class SampleLibSession(
     val limits: ServerLimits,
     /** True when a known authority generation changed and only cursor=null bootstrap is safe. */
     val requiresReset: Boolean,
+    /** The scopes the server granted when this installation was paired; null when unknown (reconnects, older profiles). */
+    val grantedScopes: Set<String>? = null,
 )
 
 sealed interface MutationDelivery {
@@ -211,7 +250,13 @@ sealed interface MutationDelivery {
 
 sealed class SampleLibFailure(message: String, cause: Throwable? = null) : IOException(message, cause) {
     class PairingRejected(message: String = "Pairing was rejected") : SampleLibFailure(message)
-    class AuthRequired(message: String = "Sample Lib authorization is required or was revoked") : SampleLibFailure(message)
+    open class AuthRequired(message: String = "Sample Lib authorization is required or was revoked") : SampleLibFailure(message)
+
+    /** The credential is valid but lacks a scope (403 `scope_forbidden`). Still an auth failure for callers that do not care which. */
+    class ScopeForbidden(message: String = "The Sample Lib credential does not grant a required scope") : AuthRequired(message)
+
+    /** 404 `entity_not_found`: the server does not know the asset (or other entity) the request named. */
+    class EntityNotFound(message: String = "Sample Lib does not know the requested entity") : SampleLibFailure(message)
     class Incompatible(val requested: List<String>, val supported: List<String>) :
         SampleLibFailure("No mutually supported Sample Lib sync protocol version")
     class CapabilityUnavailable(val capability: String) :
@@ -250,4 +295,12 @@ interface SampleLibTransport {
         descriptor: ResourceDescriptor,
         offset: Long,
     ): ResourceChunk
+
+    /** `POST /v1/sync/analysis/request`. Only called after the server advertised `analysis_request == enqueue_v1`. */
+    suspend fun requestAnalysis(
+        credential: MobileCredential,
+        assetId: String,
+        kinds: List<String>?,
+        force: Boolean,
+    ): AnalysisRequestResult = throw SampleLibFailure.CapabilityUnavailable("analysis_request")
 }

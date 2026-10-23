@@ -30,6 +30,7 @@ class SampleLibClient(
             credential = paired.credential,
             principalId = paired.principalId,
             previousGeneration = null,
+            grantedScopes = paired.scopes,
         )
     }
 
@@ -101,6 +102,21 @@ class SampleLibClient(
             // case the server committed before failing its response; otherwise retry this ID.
             recoverReceiptOrKeepPending(session, mutation, unavailable.message ?: "server unavailable")
         }
+    }
+
+    /**
+     * Asks the server to analyse one asset. Never implicit: the caller is an explicit user action, and the server
+     * must have advertised `analysis_request == enqueue_v1` in this session's hello, otherwise nothing is sent.
+     */
+    suspend fun requestAnalysis(
+        session: SampleLibSession,
+        assetId: String,
+        kinds: List<String>? = null,
+        force: Boolean = false,
+    ): AnalysisRequestResult {
+        require(assetId.isNotBlank()) { "asset id must be non-empty" }
+        if (!session.capabilities.canRequestAnalysis) throw SampleLibFailure.CapabilityUnavailable("analysis_request")
+        return transport.requestAnalysis(session.credential, assetId, kinds, force)
     }
 
     suspend fun lookupReceipt(session: SampleLibSession, mutationId: String): MutationReceipt =
@@ -177,7 +193,7 @@ class SampleLibClient(
             MutationOperation.INTERVAL_EDITOR_STATE_REPLACE -> setOf("interval")
             MutationOperation.ASSET_METADATA_PATCH -> setOf("asset")
             MutationOperation.TAG_ENSURE_ATTACH, MutationOperation.TAG_DETACH -> setOf("tag_attachment")
-            MutationOperation.ANALYSIS_SUGGESTION_ACCEPT -> setOf("asset", "interval")
+            MutationOperation.ANALYSIS_SUGGESTION_ACCEPT -> setOf("analysis_suggestion")
         }
         if (mutation.entityType !in expectedTypes) {
             throw IllegalArgumentException("${mutation.operation.wireName} is invalid for ${mutation.entityType}")
@@ -216,6 +232,7 @@ class SampleLibClient(
         credential: MobileCredential,
         principalId: String?,
         previousGeneration: String?,
+        grantedScopes: Set<String>? = null,
     ): SampleLibSession = SampleLibSession(
         identity = identity,
         principalId = principalId,
@@ -224,5 +241,6 @@ class SampleLibClient(
         capabilities = capabilities,
         limits = limits,
         requiresReset = previousGeneration != null && previousGeneration != identity.authorityGeneration,
+        grantedScopes = grantedScopes,
     )
 }

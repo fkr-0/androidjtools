@@ -368,7 +368,7 @@ object ProtocolOperationPolicy {
             "interval.editor_state.replace" -> setOf("interval")
             "asset.metadata.patch" -> setOf("asset")
             "tag.detach" -> setOf("tag_attachment")
-            "analysis.suggestion.accept" -> setOf("asset", "interval")
+            "analysis_suggestion.accept" -> setOf("analysis_suggestion")
             "tag.ensure_attach" -> emptySet()
             else -> throw IllegalArgumentException("unsupported mutation operation $operation")
         }

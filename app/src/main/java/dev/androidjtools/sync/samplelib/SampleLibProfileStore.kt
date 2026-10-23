@@ -3,9 +3,11 @@ package dev.androidjtools.sync.samplelib
 import dev.androidjtools.remote.samplelib.MobileCredential
 import java.io.File
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -16,6 +18,8 @@ data class SampleLibProfile(
     val serverId: String,
     val principalId: String?,
     val installationId: String,
+    /** The scopes the server granted at pairing; null when unknown (a profile saved before they were recorded). */
+    val scopes: Set<String>? = null,
 )
 
 data class StoredSession(val profile: SampleLibProfile, val credential: MobileCredential)
@@ -85,6 +89,7 @@ class SampleLibProfileStore(private val dir: File, private val cipher: Credentia
         put("server_id", profile.serverId)
         put("principal_id", profile.principalId?.let(::JsonPrimitive) ?: JsonNull)
         put("installation_id", profile.installationId)
+        profile.scopes?.let { scopes -> put("scopes", buildJsonArray { scopes.sorted().forEach { add(JsonPrimitive(it)) } }) }
     }
 
     private fun decode(obj: JsonObject): SampleLibProfile = SampleLibProfile(
@@ -92,5 +97,6 @@ class SampleLibProfileStore(private val dir: File, private val cipher: Credentia
         serverId = obj.getValue("server_id").jsonPrimitive.content,
         principalId = obj["principal_id"]?.jsonPrimitive?.contentOrNull,
         installationId = obj.getValue("installation_id").jsonPrimitive.content,
+        scopes = (obj["scopes"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }?.toSet(),
     )
 }

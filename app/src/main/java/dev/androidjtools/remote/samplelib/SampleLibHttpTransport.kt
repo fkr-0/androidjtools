@@ -88,6 +88,7 @@ class SampleLibHttpTransport(
                 playlists = caps.string("playlists"),
                 analysis = caps.stringSet("analysis"),
                 media = caps.stringSet("media"),
+                analysisRequest = (caps["analysis_request"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
             ),
             limits = ServerLimits(
                 pullPageMax = limits.intValue("pull_page_max"),
@@ -185,6 +186,29 @@ class SampleLibHttpTransport(
         return decodeReceipt(obj.objectValue("receipt"))
     }
 
+    override suspend fun requestAnalysis(
+        credential: MobileCredential,
+        assetId: String,
+        kinds: List<String>?,
+        force: Boolean,
+    ): AnalysisRequestResult {
+        val body = buildJsonObject {
+            put("asset_id", assetId)
+            kinds?.let { put("kinds", strings(it)) }
+            put("force", force)
+        }
+        val obj = postJson("/v1/sync/analysis/request", body, credential, ambiguousOnIo = false).requireObject()
+        return AnalysisRequestResult(
+            assetId = obj.string("asset_id"),
+            status = AnalysisRequestStatus.fromWire((obj["status"] as? JsonPrimitive)?.contentOrNull),
+            kinds = (obj["kinds"] as? JsonObject).orEmpty().mapNotNull { (kind, status) ->
+                (status as? JsonPrimitive)?.contentOrNull?.let { kind to AnalysisRequestStatus.fromWire(it) }
+            }.toMap(),
+            jobId = (obj["job_id"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
+            message = (obj["message"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
+        )
+    }
+
     override suspend fun fetchResource(
         credential: MobileCredential,
         descriptor: ResourceDescriptor,
@@ -272,7 +296,9 @@ class SampleLibHttpTransport(
         val code = error?.get("code")?.jsonPrimitive?.contentOrNull
         when {
             response.code == 401 && isPairing -> throw SampleLibFailure.PairingRejected()
+            response.code == 403 && code == "scope_forbidden" -> throw SampleLibFailure.ScopeForbidden()
             response.code == 401 || response.code == 403 -> throw SampleLibFailure.AuthRequired()
+            response.code == 404 && code == "entity_not_found" -> throw SampleLibFailure.EntityNotFound()
             response.code == 404 && response.request.url.encodedPath.contains("/receipts/") -> {
                 throw SampleLibFailure.ReceiptNotFound(response.request.url.pathSegments.last())
             }

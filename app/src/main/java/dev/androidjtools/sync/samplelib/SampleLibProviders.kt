@@ -47,7 +47,7 @@ class SampleLibProjectionState(
     val projection: StateFlow<LibraryProjection> = combine(cache.changes, capabilities, downloaded, pairingRequired) { _, caps, files, repair -> Triple(caps, files, repair) }
         .map { (caps, files, repair) ->
             try {
-                val snap = cache.snapshot("asset", "interval", ASSET_FILE_ENTITY, "playlist", "playlist_item")
+                val snap = cache.snapshot("asset", "interval", ASSET_FILE_ENTITY, "playlist", "playlist_item", ANALYSIS_SUGGESTION_ENTITY)
                 val assetFiles = snap[ASSET_FILE_ENTITY].orEmpty()
                 // Until the first hello of this process the capabilities are unknown (null): cached file rows
                 // are then the evidence, so a cold start does not lock a synced library out of playback.
@@ -57,6 +57,9 @@ class SampleLibProjectionState(
                     audioBlockedReason = PAIR_AGAIN_NOTICE.takeIf { repair },
                     playlists = snap["playlist"].orEmpty(),
                     playlistItems = snap["playlist_item"].orEmpty(),
+                    // Cached rows are shown until the first hello says otherwise; a server that stopped advertising
+                    // analysis must not keep showing results it can no longer vouch for.
+                    analysisSuggestions = if (caps == null || caps.analysis.isNotEmpty()) snap[ANALYSIS_SUGGESTION_ENTITY].orEmpty() else emptyList(),
                 )
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e

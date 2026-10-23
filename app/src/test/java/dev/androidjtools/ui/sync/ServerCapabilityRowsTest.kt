@@ -39,14 +39,14 @@ class ServerCapabilityRowsTest {
         assertTrue(r.getValue("audio").detail.contains("asset_file"))
         assertTrue(r.getValue("metadata").detail.contains("asset.metadata.patch"))
         assertTrue(r.getValue("tags").detail.contains("tag.ensure_attach"))
-        assertTrue(r.getValue("analysis").detail.contains("suggestions.read"))
+        assertTrue(r.getValue("analysis").detail.contains("analysis"))
     }
 
     @Test
     fun aFutureServerThatAdvertisesAudioAndAnalysisLightsUpThoseRows() {
         val future = realServer.copy(
-            pull = realServer.pull + setOf("asset_file", "analysis_suggestion"),
-            analysis = setOf("suggestions.read"),
+            pull = realServer.pull + setOf("asset_file"),
+            analysis = setOf("tempo", "key", "beat_grid", "cue_candidates"),
             mutations = realServer.mutations + setOf("asset.metadata.patch", "tag.ensure_attach", "tag.detach"),
         )
         val r = rows(future)
@@ -54,6 +54,17 @@ class ServerCapabilityRowsTest {
         assertTrue(r.getValue("analysis").available)
         assertTrue(r.getValue("metadata").available)
         assertTrue(r.getValue("tags").available)
+    }
+
+    @Test
+    fun analysisIsAvailableFromTheAdvertisedKindsAndOnDemandAnalysisIsSaidSeparately() {
+        val readOnly = realServer.copy(analysis = setOf("tempo", "key"))
+        assertTrue(rows(readOnly).getValue("analysis").available)
+        assertTrue(rows(readOnly).getValue("analysis").detail.contains("not offered", ignoreCase = true))
+
+        val onDemand = readOnly.copy(analysisRequest = "enqueue_v1")
+        assertTrue(rows(onDemand).getValue("analysis").detail.contains("on demand", ignoreCase = true))
+        assertFalse(rows(onDemand).getValue("analysis").detail.contains("not offered", ignoreCase = true))
     }
 
     @Test

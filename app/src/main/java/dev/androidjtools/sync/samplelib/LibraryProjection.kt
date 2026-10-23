@@ -17,6 +17,10 @@ data class LibraryProjection(
     /** True when the server advertises audio, so [audio] may be streamed. A downloaded copy never needs it. */
     val audioAdvertised: Boolean = false,
     val playlists: List<Playlist> = emptyList(),
+    /** Advisory analysis results per track (asset) id, newest run first. They never feed any other field of this projection. */
+    val suggestions: Map<String, List<AnalysisSuggestionRecord>> = emptyMap(),
+    /** Per track, the interval that spans the whole track: where an asset-level suggestion is applied. Absent when there is none. */
+    private val fullSpanIntervals: Map<String, String> = emptyMap(),
     /** Cached interval entities by id, so an editor can start from the exact revision the server last sent. */
     private val intervalEntities: Map<String, CachedEntity> = emptyMap(),
     private val intervalTracks: Map<String, String> = emptyMap(),
@@ -24,6 +28,10 @@ data class LibraryProjection(
     private val trackIds: Set<String> by lazy { tracks.mapTo(HashSet()) { it.id } }
 
     fun hasTrack(id: String): Boolean = id in trackIds
+
+    fun suggestionsOf(trackId: String): List<AnalysisSuggestionRecord> = suggestions[trackId].orEmpty()
+
+    fun fullSpanIntervalOf(trackId: String): String? = fullSpanIntervals[trackId]
 
     fun trackOfInterval(intervalId: String): String? = intervalTracks[intervalId]
 
@@ -51,16 +59,19 @@ object LibraryProjector {
         audioBlockedReason: String? = null,
         playlists: List<CachedEntity> = emptyList(),
         playlistItems: List<CachedEntity> = emptyList(),
+        analysisSuggestions: List<CachedEntity> = emptyList(),
     ): LibraryProjection {
         val parsedIntervals = intervals.mapNotNull(::parseInterval)
         val byAsset = parsedIntervals.groupBy { it.assetId }
         val audio = AssetFiles.audioByAsset(assetFiles)
 
+        val fullSpanIds = HashMap<String, String>()
         val tracks = assets.mapNotNull { entity ->
             val value = parseJsonObject(entity.valueJson) ?: return@mapNotNull null
             val duration = value.long("duration_ms") ?: 0L
             val fullSpan = byAsset[entity.entityId].orEmpty()
                 .firstOrNull { duration > 0 && it.startMs == 0L && it.endMs >= duration }
+            fullSpan?.let { fullSpanIds[entity.entityId] = it.id }
             val files = audio[entity.entityId]
             val offline = files != null && downloaded[files.download.id] == files.download.sha256
             val playable = files != null && (audioAdvertised || offline)
@@ -91,6 +102,8 @@ object LibraryProjector {
             audio = audio.filterKeys { it in trackIds },
             audioAdvertised = audioAdvertised,
             playlists = projectPlaylists(playlists, playlistItems, trackIds),
+            suggestions = AnalysisSuggestions.project(analysisSuggestions, trackIds),
+            fullSpanIntervals = fullSpanIds,
             intervalEntities = intervals.associateBy { it.entityId },
             intervalTracks = parsedIntervals.associate { it.id to it.assetId },
         )

@@ -47,8 +47,9 @@ fun capabilityRows(c: ServerCapabilities?): List<CapabilityRow> {
         row(
             "analysis",
             "Analysis suggestions",
-            listOf("suggestions.read").filter { it !in c.analysis } + listOf("analysis_suggestion").filter { it !in c.pull },
-            "Suggestions are read from the server.",
+            listOf("analysis").filter { c.analysis.isEmpty() },
+            "Suggestions are read from the server (${c.analysis.sorted().joinToString(", ")}). " +
+                if (c.canRequestAnalysis) "Analysis can be requested on demand." else "Analysis on demand is not offered.",
         ),
         row(
             "audio",

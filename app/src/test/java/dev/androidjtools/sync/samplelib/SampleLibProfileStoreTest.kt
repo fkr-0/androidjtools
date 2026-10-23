@@ -32,6 +32,18 @@ class SampleLibProfileStoreTest {
     }
 
     @Test
+    fun theGrantedScopesRoundTripAndAnOlderProfileWithoutThemLoadsAsUnknown() {
+        val withScopes = profile.copy(scopes = setOf("sync.read", "analysis.read"))
+        store().save(withScopes, MobileCredential.issued(token))
+        assertEquals(setOf("sync.read", "analysis.read"), (store().load() as StoredSessionResult.Loaded).session.profile.scopes)
+
+        File(tmp.root, "samplelib/samplelib-profile.json").writeText(
+            """{"base_url":"https://samplelab.example/prefix","server_id":"server-1","principal_id":null,"installation_id":"install-1"}""",
+        )
+        assertEquals(null, (store().load() as StoredSessionResult.Loaded).session.profile.scopes)
+    }
+
+    @Test
     fun theCredentialNeverAppearsInPlaintextOnDisk() {
         store().save(profile, MobileCredential.issued(token))
         val all = File(tmp.root, "samplelib").walkTopDown().filter { it.isFile }.map { String(it.readBytes(), Charsets.ISO_8859_1) }

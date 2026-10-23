@@ -1,5 +1,6 @@
 package dev.androidjtools.sync.samplelib
 
+import dev.androidjtools.remote.samplelib.AnalysisRequestResult
 import dev.androidjtools.remote.samplelib.EntityChange
 import dev.androidjtools.remote.samplelib.HelloAccepted
 import dev.androidjtools.remote.samplelib.HelloRequest
@@ -35,11 +36,18 @@ class ScriptedTransport : SampleLibTransport {
         media = setOf("resource_uri", "content_hash", "range"),
     )
     var limits = ServerLimits(500, 100, 7_776_000, 31_536_000)
+    /** What a pairing grants. Defaults to the minimum so analysis is only pulled when a test grants `analysis.read`. */
+    var grantedScopes: Set<String> = setOf("sync.read")
     var pairFailure: Throwable? = null
     var helloFailure: Throwable? = null
     var pairCalls = 0
     var helloCalls = 0
     val pullCursors = mutableListOf<String?>()
+    /** The scope set of every pull, in order. */
+    val pullScopes = mutableListOf<Set<String>>()
+    /** When set, a pull whose scopes contain this word fails with it (a server that refuses that scope). */
+    var failScope: Pair<String, Throwable>? = null
+    var requestScript: ((assetId: String, kinds: List<String>?, force: Boolean) -> AnalysisRequestResult)? = null
     var onPull: (suspend () -> Unit)? = null
     /** Transport calls in order ("hello", "push", "pull"), so tests can prove delivery happens before the pull. */
     val calls = mutableListOf<String>()
@@ -58,7 +66,7 @@ class ScriptedTransport : SampleLibTransport {
     override suspend fun pair(request: PairingRequest): PairingResult {
         pairCalls++
         pairFailure?.let { throw it }
-        return PairingResult(serverId, "principal-1", request.installationId, MobileCredential.issued("token-secret"), setOf("sync.read"))
+        return PairingResult(serverId, "principal-1", request.installationId, MobileCredential.issued("token-secret"), grantedScopes)
     }
 
     override suspend fun hello(credential: MobileCredential, request: HelloRequest): HelloAccepted {
@@ -70,7 +78,9 @@ class ScriptedTransport : SampleLibTransport {
 
     override suspend fun pull(credential: MobileCredential, cursor: String?, scopes: Set<String>, limit: Int): PullPage {
         pullCursors += cursor
+        pullScopes += scopes
         calls += "pull"
+        failScope?.let { (scope, failure) -> if (scope in scopes) throw failure }
         onPull?.invoke()
         val next = script.removeFirstOrNull() ?: error("no scripted pull page")
         return next()
@@ -79,6 +89,11 @@ class ScriptedTransport : SampleLibTransport {
     override suspend fun push(credential: MobileCredential, clientId: String, mutations: List<SampleLibMutation>): PushResult {
         calls += "push"
         return (pushScript ?: error("push is not scripted"))(mutations)
+    }
+
+    override suspend fun requestAnalysis(credential: MobileCredential, assetId: String, kinds: List<String>?, force: Boolean): AnalysisRequestResult {
+        calls += "analysis_request"
+        return (requestScript ?: error("analysis request is not scripted"))(assetId, kinds, force)
     }
 
     override suspend fun receipt(credential: MobileCredential, mutationId: String): MutationReceipt =

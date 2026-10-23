@@ -1,6 +1,7 @@
 package dev.androidjtools.sync.samplelib
 
 import dev.androidjtools.core.model.SyncState
+import dev.androidjtools.remote.samplelib.AnalysisRequestResult
 import dev.androidjtools.remote.samplelib.MediaAuth
 import dev.androidjtools.remote.samplelib.MediaAuthProvider
 import dev.androidjtools.remote.samplelib.PairingCode
@@ -17,6 +18,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+/** The answer to an explicit "analyse this track", in words that need no further translation. */
+sealed interface AnalysisRequestOutcome {
+    data class Answered(val result: AnalysisRequestResult) : AnalysisRequestOutcome
+    data class Failed(val message: String) : AnalysisRequestOutcome
+}
+
+/** Asks the paired server to analyse an asset. Only ever invoked by a deliberate user action. */
+fun interface AnalysisRequester {
+    suspend fun requestAnalysis(assetId: String): AnalysisRequestOutcome
+}
 
 const val SAMPLE_LIB_CLIENT_ID = "android-dj-tools"
 
@@ -37,7 +49,7 @@ class SampleLibSessionManager(
     private val onLibraryDiscarded: suspend () -> Boolean = { true },
     /** Queued local edits, delivered right after connecting and before the library is pulled. */
     private val outbox: EditOutbox = EditOutbox.None,
-) : MediaAuthProvider {
+) : MediaAuthProvider, AnalysisRequester {
     private val lock = Mutex()
     private val mutableState = MutableStateFlow(SyncState.UNCONFIGURED)
     private val mutableCapabilities = MutableStateFlow<ServerCapabilities?>(null)
@@ -46,6 +58,10 @@ class SampleLibSessionManager(
 
     // The media bearer is cached in memory so playback does not touch the Keystore per request. The generation
     // counter stops a slow store load from re-caching a credential that was forgotten or rejected meanwhile.
+    // A server that refused the analysis scope for this credential is not asked again until the next pairing.
+    @Volatile
+    private var analysisScopeDenied = false
+
     private val authLock = Any()
     private var cachedAuth: MediaAuth? = null
     private var authUsable = true
@@ -127,6 +143,7 @@ class SampleLibSessionManager(
 
         val previousState = mutableState.value
         mutableError.value = null
+        analysisScopeDenied = false
         mutableState.value = SyncState.PAIRING
         val installationId = mutableProfile.value?.installationId ?: newInstallationId()
         val (client, session) = try {
@@ -152,7 +169,7 @@ class SampleLibSessionManager(
                 }
                 cache.reset()
             }
-            val saved = SampleLibProfile(baseUrl, session.identity.serverId, session.principalId, installationId)
+            val saved = SampleLibProfile(baseUrl, session.identity.serverId, session.principalId, installationId, session.grantedScopes)
             store.save(saved, session.credential)
             mutableProfile.value = saved
             syncSession(client, session)
@@ -184,6 +201,38 @@ class SampleLibSessionManager(
         }
     }
 
+    /**
+     * Asks the server to analyse [assetId], on a person's explicit request and never otherwise. A fresh hello decides
+     * whether the server still offers it; nothing is sent when it does not. The answer is not awaited: results arrive
+     * with a later pull.
+     */
+    override suspend fun requestAnalysis(assetId: String): AnalysisRequestOutcome = lock.withLock {
+        val stored = (store.load() as? StoredSessionResult.Loaded)?.session
+            ?: return@withLock AnalysisRequestOutcome.Failed("Connect to a Sample Lib server to analyse tracks.")
+        try {
+            val client = clientFactory(stored.profile.baseUrl, stored.profile.installationId)
+            val session = client.connect(stored.credential, stored.profile.serverId, null, stored.profile.principalId)
+            mutableCapabilities.value = session.capabilities
+            if (!session.capabilities.canRequestAnalysis) {
+                return@withLock AnalysisRequestOutcome.Failed("This server does not offer analysis on request.")
+            }
+            AnalysisRequestOutcome.Answered(client.requestAnalysis(session, assetId))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            AnalysisRequestOutcome.Failed(describeRequestFailure(failure))
+        }
+    }
+
+    private fun describeRequestFailure(failure: Exception): String = when (failure) {
+        is SampleLibFailure.EntityNotFound -> "The server does not know this track."
+        is SampleLibFailure.AuthRequired -> "The server rejected the stored credential. Pair again."
+        is SampleLibFailure.Offline -> "The server is unreachable. Try again when it is."
+        is SampleLibFailure.Incompatible -> "This server does not support a compatible sync protocol."
+        is SampleLibFailure.CapabilityUnavailable -> "This server does not offer analysis on request."
+        else -> "The server returned an unexpected response."
+    }
+
     private inline fun attempt(block: () -> Boolean): Boolean = try {
         block()
     } catch (cancelled: CancellationException) {
@@ -201,17 +250,30 @@ class SampleLibSessionManager(
         }
         mutableState.value = SyncState.PULLING
         val engine = SampleLibSyncEngine(client, cache)
-        var result = engine.sync(session)
+        val granted = session.grantedScopes ?: mutableProfile.value?.scopes
+        var result = syncWithAnalysisFallback(engine, session, granted)
         if (result is SyncResult.NeedsReconnect) {
             val fresh = client.connect(session.credential, session.identity.serverId, null, session.principalId)
             mutableCapabilities.value = fresh.capabilities
-            result = engine.sync(fresh)
+            result = syncWithAnalysisFallback(engine, fresh, granted)
             if (result is SyncResult.NeedsReconnect) {
                 throw SampleLibFailure.InvalidResponse("Server authority kept changing during sync")
             }
         }
         mutableError.value = null
         mutableState.value = SyncState.ONLINE_IDLE
+    }
+
+    /** The library must sync even when the credential turns out not to cover analysis: that is not a pairing problem. */
+    private suspend fun syncWithAnalysisFallback(engine: SampleLibSyncEngine, session: SampleLibSession, granted: Set<String>?): SyncResult {
+        val scopes = pullScopesFor(session.capabilities, granted, analysisScopeDenied)
+        return try {
+            engine.sync(session, scopes)
+        } catch (refused: SampleLibFailure.ScopeForbidden) {
+            if (ANALYSIS_PULL_SCOPE !in scopes) throw refused
+            analysisScopeDenied = true
+            engine.sync(session, pullScopesFor(session.capabilities, granted, analysisScopeDenied))
+        }
     }
 
     private suspend fun guarded(restoreOnCancel: SyncState, onFailure: (Exception) -> Unit, block: suspend () -> Unit) {
