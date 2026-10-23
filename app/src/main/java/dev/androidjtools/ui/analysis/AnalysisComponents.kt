@@ -20,6 +20,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +35,11 @@ fun AnalysisAssistantContent(
     acceptanceEnabled: Boolean,
     onAction: (AnalysisUiAction) -> Unit,
     modifier: Modifier = Modifier,
+    /** Why accepting is off, when it is. Shown instead of a bare disabled button. */
+    acceptDisabledReason: String? = null,
+    /** The last answer to a deliberate gesture on this screen (an analysis request, an accept, an add as cues). */
+    notice: String? = null,
+    requestInFlight: Boolean = false,
 ) {
     LazyColumn(
         modifier = modifier.testTag("analysis-screen"),
@@ -41,7 +50,7 @@ fun AnalysisAssistantContent(
                 Text("Preparation assistant", style = MaterialTheme.typography.headlineMedium)
                 Text(state.trackTitle, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Analysis is advisory. Canonical preparation changes only after a normal journal mutation receives an authoritative receipt.",
+                    "Suggestions are advisory. Nothing on the server changes until you accept one, and your library shows it after the next sync.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 if (state.offline) {
@@ -57,6 +66,8 @@ fun AnalysisAssistantContent(
                 }
             }
         }
+
+        item { RequestSection(state.request, state.trackId, notice, requestInFlight, onAction) }
 
         if (state.safetyFindings.isNotEmpty()) {
             item { SafetySection(state.safetyFindings) }
@@ -81,16 +92,15 @@ fun AnalysisAssistantContent(
             item {
                 OutlinedCard(Modifier.fillMaxWidth().testTag("analysis-empty")) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("No analysis candidates yet", style = MaterialTheme.typography.titleMedium)
-                        Text("The track remains fully usable. Run analysis when a capability is available, or keep preparing manually.")
-                        OutlinedButton(onClick = { onAction(AnalysisUiAction.Refresh(state.trackId)) }) { Text("Run analysis") }
+                        Text("No analysis suggestions yet", style = MaterialTheme.typography.titleMedium)
+                        Text("The track remains fully usable. Analysis never starts by itself; keep preparing manually.")
                     }
                 }
             }
         } else {
             state.candidateGroups.forEach { group ->
                 item(key = "group-${group.kind}") {
-                    CandidateGroupCard(group, state.offline, acceptanceEnabled, onAction, previewEnabled = state.preview.enabled)
+                    CandidateGroupCard(group, state.offline, acceptanceEnabled, onAction, previewEnabled = state.preview.enabled, acceptDisabledReason = acceptDisabledReason)
                 }
             }
         }
@@ -98,6 +108,42 @@ fun AnalysisAssistantContent(
         if (state.timelineItems.isNotEmpty()) {
             item { TimelineAnalysisCard(state.timelineItems, onAction, previewEnabled = state.preview.enabled) }
         }
+    }
+}
+
+/**
+ * The one place analysis can be started, and only when the server offered it. Otherwise a single line says why not.
+ * Nothing here runs by itself: both buttons are deliberate, and "Check for results" is an ordinary refresh.
+ */
+@Composable
+fun RequestSection(
+    request: AnalysisRequestUi,
+    trackId: String,
+    notice: String?,
+    inFlight: Boolean,
+    onAction: (AnalysisUiAction) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().testTag("analysis-request-section"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (request.offered) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { onAction(AnalysisUiAction.RequestAnalysis(trackId)) },
+                    enabled = !inFlight,
+                    modifier = Modifier.testTag("analysis-request"),
+                ) { Text(if (inFlight) "Asking the server…" else "Analyse this track") }
+                OutlinedButton(
+                    onClick = { onAction(AnalysisUiAction.Refresh(trackId)) },
+                    modifier = Modifier.testTag("analysis-check-results"),
+                ) { Text("Check for results") }
+            }
+        } else {
+            request.note?.let { Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("analysis-request-unavailable")) }
+            OutlinedButton(
+                onClick = { onAction(AnalysisUiAction.Refresh(trackId)) },
+                modifier = Modifier.testTag("analysis-check-results"),
+            ) { Text("Check for results") }
+        }
+        notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("analysis-notice")) }
     }
 }
 
@@ -182,6 +228,7 @@ fun CandidateGroupCard(
     acceptanceEnabled: Boolean,
     onAction: (AnalysisUiAction) -> Unit,
     previewEnabled: Boolean = true,
+    acceptDisabledReason: String? = null,
 ) {
     OutlinedCard(Modifier.fillMaxWidth().testTag("candidate-group-${group.kind.name}")) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -193,7 +240,7 @@ fun CandidateGroupCard(
             }
             group.candidates.forEachIndexed { index, candidate ->
                 if (index > 0) HorizontalDivider()
-                CandidateCard(candidate, offline, acceptanceEnabled, onAction, previewEnabled)
+                CandidateCard(candidate, offline, acceptanceEnabled, onAction, previewEnabled, acceptDisabledReason)
             }
         }
     }
@@ -206,7 +253,9 @@ fun CandidateCard(
     acceptanceEnabled: Boolean,
     onAction: (AnalysisUiAction) -> Unit,
     previewEnabled: Boolean = true,
+    acceptDisabledReason: String? = null,
 ) {
+    var chosenBpm by remember(candidate.id, candidate.primaryBpm) { mutableStateOf(candidate.primaryBpm) }
     Column(Modifier.testTag("candidate-${candidate.id}"), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(candidate.value, fontWeight = FontWeight.SemiBold)
@@ -214,17 +263,15 @@ fun CandidateCard(
         }
         candidate.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         Text(
-            buildString {
-                append(candidate.provenance.label)
-                candidate.confidence?.let { append(" · confidence ${"%.0f".format(it * 100)}%") }
-            },
+            // The tool always; the confidence only when the run recorded one.
+            listOfNotNull(candidate.provenance.label, candidate.confidenceLabel).joinToString(" · "),
             style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.testTag("provenance-${candidate.id}"),
         )
         Text(
             buildString {
                 append(if (candidate.stale) "STALE" else "Fresh")
-                append(" · input revision ")
-                append(candidate.inputRevision?.toString() ?: "unknown")
+                candidate.inputRevision?.let { append(" · input revision ").append(it) }
                 append(" · generated ")
                 append(candidate.generatedAt)
             },
@@ -234,24 +281,49 @@ fun CandidateCard(
         if (candidate.stale) {
             Text("Source input changed. Refresh this proposal before accepting; stale input never creates a mutation intent.", style = MaterialTheme.typography.bodySmall)
         }
+        candidate.acceptance?.let { acceptance ->
+            Text(
+                "${acceptance.label} · ${acceptance.detail}",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("acceptance-${candidate.id}"),
+            )
+        }
         when (candidate.reviewState) {
             CandidateReviewState.PROPOSED -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val tempoChoices = candidate.tempoChoices
+                if (tempoChoices.isNotEmpty() && candidate.acceptance?.onlyDismiss != true) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        tempoChoices.forEachIndexed { index, bpm ->
+                            FilterChip(
+                                selected = chosenBpm?.let { kotlin.math.abs(it - bpm) < 1e-9 } == true,
+                                onClick = { chosenBpm = bpm },
+                                label = { Text("%.2f".format(bpm)) },
+                                modifier = Modifier.testTag("tempo-choice-${candidate.id}-$index"),
+                            )
+                        }
+                    }
+                }
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (candidate.timelineStartMs != null) {
                         OutlinedButton(
                             onClick = { onAction(AnalysisUiAction.Preview(candidate.id)) },
                             enabled = previewEnabled,
                         ) { Text("Preview") }
                     }
-                    if (candidate.stale) {
-                        OutlinedButton(
+                    val onlyDismiss = candidate.acceptance?.onlyDismiss == true
+                    when {
+                        onlyDismiss -> Unit
+                        candidate.stale -> OutlinedButton(
                             onClick = { onAction(AnalysisUiAction.Refresh(candidate.trackId)) },
                             modifier = Modifier.testTag("refresh-stale-${candidate.id}"),
                         ) { Text("Refresh stale") }
-                    } else {
-                        Button(
+                        candidate.cuePointsMs.isNotEmpty() -> Button(
+                            onClick = { onAction(AnalysisUiAction.AddAsCues(candidate.id)) },
+                            modifier = Modifier.testTag("add-cues-${candidate.id}"),
+                        ) { Text("Add as cues") }
+                        else -> Button(
                             onClick = {
-                                candidate.acceptanceIntent(offline)?.let { onAction(AnalysisUiAction.QueueAcceptance(it)) }
+                                candidate.acceptanceIntent(offline, chosenBpm)?.let { onAction(AnalysisUiAction.QueueAcceptance(it)) }
                             },
                             enabled = acceptanceEnabled,
                             modifier = Modifier.testTag("accept-${candidate.id}"),
@@ -260,15 +332,16 @@ fun CandidateCard(
                     OutlinedButton(
                         onClick = { onAction(AnalysisUiAction.Reject(candidate.id)) },
                         modifier = Modifier.testTag("reject-${candidate.id}"),
-                    ) { Text("Reject") }
+                    ) { Text("Dismiss") }
                 }
-                if (!acceptanceEnabled) {
-                    Text("Review-only: journal mutation adapter is not connected yet.", style = MaterialTheme.typography.labelSmall)
+                if (!acceptanceEnabled && candidate.cuePointsMs.isEmpty()) {
+                    Text(acceptDisabledReason ?: "Accepting is not available right now.", style = MaterialTheme.typography.labelSmall)
                 }
             }
             CandidateReviewState.QUEUED -> Text("Queued in the normal mutation journal; not canonical until an authoritative receipt arrives.")
-            CandidateReviewState.ACCEPTED -> Text("Accepted · authoritative receipt confirmed. Provenance retained above.")
-            CandidateReviewState.REJECTED -> Text("Rejected locally; canonical preparation was not changed.")
+            CandidateReviewState.ACCEPTED ->
+                Text(if (candidate.acceptance != null) "Accepted. Your library shows it after the next sync." else "Already in your library.")
+            CandidateReviewState.REJECTED -> Text("Dismissed on this device; nothing on the server was changed.")
             CandidateReviewState.SUPERSEDED -> Text("Superseded by newer analysis; retained for provenance.")
         }
     }

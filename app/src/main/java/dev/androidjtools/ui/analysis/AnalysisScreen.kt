@@ -5,27 +5,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.androidjtools.core.model.SuggestionPayload
 import dev.androidjtools.core.provider.AppProviders
+import dev.androidjtools.core.provider.EditAvailability
+import dev.androidjtools.ui.waveform.ServerEditPlanner
+import java.util.UUID
+import kotlinx.coroutines.launch
 
 /**
- * Provider adapter for the preparation-assistant UI.
+ * Provider adapter for the preparation-assistant UI, for the track being played (else the first one).
  *
- * The current core provider exposes no durable journal enqueue API for suggestion acceptance.
- * Therefore the default app route is deliberately review-only for acceptance: it never calls
- * AnalysisProvider.accept(), because that would make a proposal look authoritative before a
- * normal mutation receipt. A journal integration can pass [onQueueAcceptance] once EPIC-11
- * exposes the durable sink. Reject/refresh remain advisory provider operations.
+ * Suggestions are advisory and come from the paired server. Accepting queues a journal mutation and the library shows
+ * the result after the next sync; dismissing is local. Analysis starts only from the "Analyse this track" button,
+ * which is shown only when the server offered it; nothing on this screen runs analysis by itself.
  */
 @Composable
-fun AnalysisScreen(
-    providers: AppProviders,
-    onQueueAcceptance: ((AnalysisMutationIntent) -> Unit)? = null,
-) {
+fun AnalysisScreen(providers: AppProviders) {
     val tracks by providers.library.tracks.collectAsState()
-    val track = tracks.firstOrNull()
+    val currentId by providers.playback.currentTrackId.collectAsState()
+    val track = currentId?.let { id -> tracks.firstOrNull { it.id == id } } ?: tracks.firstOrNull()
     if (track == null) {
         AnalysisAssistantContent(
             state = AnalysisAssistantFixtures.empty().copy(trackTitle = "No track available"),
@@ -39,14 +42,14 @@ fun AnalysisScreen(
     val suggestions by providers.analysis.suggestions(track.id).collectAsState()
     val capabilities by providers.analysis.capabilities.collectAsState()
     val syncState by providers.sync.state.collectAsState()
-    val pending by providers.journal.pending.collectAsState()
-    val queuedSuggestionIds = pending.mapNotNull { mutation ->
-        mutation.provenance
-            ?.takeIf { it.startsWith("suggestion:") }
-            ?.removePrefix("suggestion:")
-            ?.substringBefore(':')
-            ?.takeIf(String::isNotBlank)
-    }.toSet()
+    val acceptances by providers.analysis.acceptances.collectAsState()
+    val requestAvailability by providers.analysis.requestAvailability.collectAsState()
+    val acceptAvailability by providers.analysis.acceptAvailability.collectAsState()
+    val cues by providers.preparation.cues(track.id).collectAsState()
+    val loops by providers.preparation.loops(track.id).collectAsState()
+    val scope = rememberCoroutineScope()
+    var notice by remember(track.id) { mutableStateOf<String?>(null) }
+    var requesting by remember(track.id) { mutableStateOf(false) }
 
     val state = presentAnalysisAssistant(
         trackId = track.id,
@@ -54,33 +57,43 @@ fun AnalysisScreen(
         suggestions = suggestions,
         capabilities = capabilities,
         syncState = syncState,
-        queuedSuggestionIds = queuedSuggestionIds,
+        acceptances = acceptances,
+        request = AnalysisRequestUi.of(requestAvailability),
     ).copy(preview = previewAvailability(track))
     AnalysisAssistantContent(
         state = state,
-        acceptanceEnabled = onQueueAcceptance != null,
+        acceptanceEnabled = acceptAvailability == EditAvailability.Available,
+        acceptDisabledReason = (acceptAvailability as? EditAvailability.Unavailable)?.reason,
+        notice = notice,
+        requestInFlight = requesting,
         onAction = { action ->
             when (action) {
-                is AnalysisUiAction.QueueAcceptance -> onQueueAcceptance?.invoke(action.intent)
-                is AnalysisUiAction.Reject -> providers.analysis.reject(action.suggestionId)
-                is AnalysisUiAction.Refresh -> providers.analysis.refresh(action.trackId)
-                is AnalysisUiAction.AddAsCues, is AnalysisUiAction.RequestAnalysis -> Unit // wired below
                 is AnalysisUiAction.Preview -> {
                     if (track.playable) {
-                        val positionMs = suggestions
-                            .firstOrNull { it.id == action.suggestionId }
-                            ?.let { suggestion ->
-                                when (val payload = suggestion.payload) {
-                                    is SuggestionPayload.Point -> payload.positionMs
-                                    is SuggestionPayload.Range -> payload.startMs
-                                    is SuggestionPayload.Transcript -> payload.positionMs
-                                    else -> null
-                                }
-                            }
-                        positionMs?.let { position ->
+                        suggestions.firstOrNull { it.id == action.suggestionId }?.let(::previewPositionMs)?.let { position ->
                             providers.playback.play(track.id)
                             providers.playback.seek(position)
                         }
+                    }
+                }
+                else -> scope.launch {
+                    val asking = action is AnalysisUiAction.RequestAnalysis
+                    if (asking) requesting = true
+                    try {
+                        val said = performAnalysisAction(action, providers.analysis, providers.edits, suggestions) {
+                            ServerEditPlanner(
+                                track = track,
+                                cues = cues,
+                                loops = loops,
+                                aggregates = providers.edits.aggregates(track.id),
+                                nowMs = System::currentTimeMillis,
+                                newMutationId = { "android-" + UUID.randomUUID() },
+                            )
+                        }
+                        // Silent gestures (dismiss, refresh) leave the last sentence alone.
+                        if (said != null) notice = said
+                    } finally {
+                        if (asking) requesting = false
                     }
                 }
             }
@@ -88,4 +101,3 @@ fun AnalysisScreen(
         modifier = Modifier.fillMaxSize().padding(16.dp),
     )
 }
-
