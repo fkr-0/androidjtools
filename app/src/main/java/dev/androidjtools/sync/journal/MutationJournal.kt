@@ -6,6 +6,7 @@ import dev.androidjtools.remote.samplelib.MutationReceipt
 import dev.androidjtools.remote.samplelib.OpaqueRevision
 import dev.androidjtools.remote.samplelib.ReceiptOutcome
 import dev.androidjtools.remote.samplelib.SampleLibClient
+import dev.androidjtools.remote.samplelib.SampleLibFailure
 import dev.androidjtools.remote.samplelib.SampleLibMutation
 import dev.androidjtools.remote.samplelib.SampleLibSession
 import java.io.File
@@ -292,7 +293,16 @@ class SampleLibMutationJournalReplayer(
         val results = mutableListOf<JournalReplayRecord>()
         for (queued in journal.replayBatch(limit)) {
             val applying = journal.markApplying(queued.mutationId)
-            when (val delivery = client.pushWithRecovery(session, applying.toSampleLibMutation())) {
+            val delivery = try {
+                client.pushWithRecovery(session, applying.toSampleLibMutation())
+            } catch (unsupported: SampleLibFailure.CapabilityUnavailable) {
+                // Another operation family this server does not take (yet). Its intent stays queued for a server
+                // that does, and must not hold back the other family's edits, which touch different entities.
+                val pending = journal.markPending(applying.mutationId)
+                results += JournalReplayRecord(pending.mutationId, pending.state, pendingReason = unsupported.message)
+                continue
+            }
+            when (delivery) {
                 is MutationDelivery.Confirmed -> {
                     val receipt = delivery.receipt
                     if (receipt.outcome == ReceiptOutcome.APPLIED || receipt.outcome == ReceiptOutcome.NO_OP) {

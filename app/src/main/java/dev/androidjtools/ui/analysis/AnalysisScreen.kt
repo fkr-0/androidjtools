@@ -64,6 +64,7 @@ fun AnalysisScreen(
                 is AnalysisUiAction.QueueAcceptance -> onQueueAcceptance?.invoke(action.intent)
                 is AnalysisUiAction.Reject -> providers.analysis.reject(action.suggestionId)
                 is AnalysisUiAction.Refresh -> providers.analysis.refresh(action.trackId)
+                is AnalysisUiAction.AddAsCues, is AnalysisUiAction.RequestAnalysis -> Unit // wired below
                 is AnalysisUiAction.Preview -> {
                     if (track.playable) {
                         val positionMs = suggestions

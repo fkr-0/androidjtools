@@ -15,9 +15,9 @@ import dev.androidjtools.remote.samplelib.SampleLibSession
 import dev.androidjtools.remote.samplelib.newMediaHttpClient
 import dev.androidjtools.sync.journal.DurableMutationJournal
 import dev.androidjtools.sync.journal.FileMutationJournalStorage
+import dev.androidjtools.sync.analysis.SampleLibAnalysisProvider
 import dev.androidjtools.sync.journal.JournalEditOutbox
 import java.io.File
-import java.io.IOException
 import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +46,9 @@ class SampleLibRuntime private constructor(context: Context) {
     val journal: Lazy<DurableMutationJournal> = lazy {
         DurableMutationJournal(FileMutationJournalStorage(File(directory, "mutations.journal"))).also { it.compactAcknowledged() }
     }
+
+    /** Suggestions the person dismissed on this device. Local only, and cleared with the server they belong to. */
+    private val dismissals: SuggestionDismissals = FileSuggestionDismissals(File(directory, "dismissed-suggestions.json"))
     private val journalOutbox by lazy { JournalEditOutbox(journal.value) }
     private val outbox = object : EditOutbox {
         override fun hasPending(): Boolean = journalOutbox.hasPending()
@@ -57,14 +60,8 @@ class SampleLibRuntime private constructor(context: Context) {
         cache,
         onLibraryDiscarded = {
             withContext(Dispatchers.IO) {
-                // Unsent edits were made for the server being discarded; they must never reach another one.
-                val editsDropped = try {
-                    journal.value.clear()
-                    true
-                } catch (_: IOException) {
-                    false
-                }
-                editsDropped && clearOfflineDownloads(offline.store, offline.storage, downloadScheduler)
+                // Unsent edits and dismissals were made for the server being discarded; they must never reach another one.
+                discardServerBoundState(journal, dismissals) && clearOfflineDownloads(offline.store, offline.storage, downloadScheduler)
             }
         },
         outbox = outbox,
@@ -121,6 +118,17 @@ class SampleLibRuntime private constructor(context: Context) {
                 maxBytes = OFFLINE_QUOTA_BYTES,
                 freeSpaceBytes = { offline.root.usableSpace },
                 dispatcher = ioDispatcher,
+            ),
+            analysis = SampleLibAnalysisProvider(
+                projection = projection.projection,
+                capabilities = manager.capabilities,
+                syncState = manager.state,
+                lazyJournal = journal,
+                dismissals = dismissals,
+                requester = manager,
+                requestFlush = controller::refresh,
+                ioDispatcher = Dispatchers.IO,
+                scope = wrapperScope,
             ),
             journal = journalProvider,
             sync = SampleLibSyncProvider(manager, journalProvider.pendingCount),

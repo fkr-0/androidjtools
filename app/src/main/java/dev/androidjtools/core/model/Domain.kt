@@ -107,6 +107,7 @@ enum class SyncState {
 enum class SuggestionKind {
     BPM, KEY, CUE, LOOP, REGION, STEM, TRANSCRIPT_MARKER, RELATED_TRACK,
     LOUDNESS_WARNING, SPECTRAL_OUTLIER_WARNING, MIX_PREP,
+    BEAT_GRID,
 }
 
 enum class SuggestionDecision { PROPOSED, ACCEPTED, REJECTED, SUPERSEDED }
@@ -119,7 +120,14 @@ data class IntelligenceSource(
 )
 
 sealed interface SuggestionPayload {
-    data class Bpm(val value: Double) : SuggestionPayload
+    /** [alternatives] are the server's half/double-time aliases; choosing between them is the person's call. */
+    data class Bpm(val value: Double, val alternatives: List<Double> = emptyList()) : SuggestionPayload
+
+    /** A tempo with the position of the first beat. The downbeat offset is a display value only; the server does not store it. */
+    data class Grid(val bpm: Double, val firstBeatMs: Long, val beatCount: Int) : SuggestionPayload
+
+    /** Candidate cue positions in absolute track milliseconds, ascending. */
+    data class CuePoints(val pointsMs: List<Long>) : SuggestionPayload
     data class Key(val value: String) : SuggestionPayload
     data class Point(val positionMs: Long, val role: String, val label: String? = null) : SuggestionPayload
     data class Range(val startMs: Long, val endMs: Long, val role: String, val label: String? = null) : SuggestionPayload
@@ -141,6 +149,8 @@ data class AnalysisSuggestion(
     val inputRevision: Long? = null,
     val decision: SuggestionDecision = SuggestionDecision.PROPOSED,
     val stale: Boolean = false,
+    /** The analysis run a server suggestion came from; carried into the provenance of anything made from it. */
+    val analysisRunId: String? = null,
 )
 
 data class AnalysisCapability(
@@ -149,4 +159,6 @@ data class AnalysisCapability(
     val available: Boolean,
     val kinds: Set<SuggestionKind>,
     val detail: String? = null,
+    /** True when the capability's results may come from any source, so every result of its kinds counts as its output. */
+    val anySource: Boolean = false,
 )

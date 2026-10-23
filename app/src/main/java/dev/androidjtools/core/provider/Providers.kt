@@ -86,13 +86,60 @@ interface SyncProvider {
     val pendingMutationCount: StateFlow<Int>
 }
 
+/** Whether "Analyse this track" may be offered. It is offered only when the paired server said it accepts requests. */
+sealed interface AnalysisRequestAvailability {
+    data object Offered : AnalysisRequestAvailability
+    data class Unavailable(val reason: String) : AnalysisRequestAvailability
+}
+
+/** Where an accepted suggestion stands on its way to the server. Reuses the vocabulary of saved cue and loop edits. */
+data class SuggestionAcceptance(
+    val suggestionId: String,
+    val mutationId: String,
+    val status: ServerEditStatus,
+    val detail: String,
+)
+
+sealed interface AnalysisActionResult {
+    data class Done(val message: String) : AnalysisActionResult
+    data class Refused(val reason: String) : AnalysisActionResult
+}
+
 interface AnalysisProvider {
     val capabilities: StateFlow<List<AnalysisCapability>>
     fun suggestions(trackId: String): StateFlow<List<AnalysisSuggestion>>
     fun accept(suggestionId: String)
+
+    /** Dismisses a suggestion on this device only. */
     fun reject(suggestionId: String)
     fun refresh(trackId: String)
+
+    /** Whether the explicit "Analyse this track" action is offered. Providers without a server inherit "not offered". */
+    val requestAvailability: StateFlow<AnalysisRequestAvailability> get() = NoAnalysisRequest
+
+    /** Whether accepting can be queued, with the reason when it cannot. */
+    val acceptAvailability: StateFlow<EditAvailability> get() = NoAnalysisAccept
+
+    /** Per suggestion, the state of its latest acceptance. Absent when it was never accepted (or the intent was dismissed). */
+    val acceptances: StateFlow<Map<String, SuggestionAcceptance>> get() = NoAcceptances
+
+    /** The one way analysis ever starts: a deliberate action. Never called by a pull, a refresh or a screen opening. */
+    suspend fun requestAnalysis(trackId: String): AnalysisActionResult =
+        AnalysisActionResult.Refused((requestAvailability.value as? AnalysisRequestAvailability.Unavailable)?.reason ?: "Analysis is not available.")
+
+    /** Queues acceptance of a tempo, beat-grid or key suggestion. [bpm] picks one of a tempo's alternatives. */
+    suspend fun acceptSuggestion(suggestionId: String, bpm: Double? = null): AnalysisActionResult =
+        AnalysisActionResult.Refused("Accepting suggestions needs a connected Sample Lib server.")
+
+    /** Dismisses a suggestion (and closes a conflicted or refused acceptance of it). Local to this device. */
+    suspend fun dismissSuggestion(suggestionId: String) = reject(suggestionId)
 }
+
+private val NoAnalysisRequest: StateFlow<AnalysisRequestAvailability> =
+    MutableStateFlow<AnalysisRequestAvailability>(AnalysisRequestAvailability.Unavailable("Connect to a Sample Lib server to get analysis."))
+private val NoAnalysisAccept: StateFlow<EditAvailability> =
+    MutableStateFlow<EditAvailability>(EditAvailability.Unavailable("Connect to a Sample Lib server to accept suggestions."))
+private val NoAcceptances: StateFlow<Map<String, SuggestionAcceptance>> = MutableStateFlow(emptyMap())
 
 data class AppProviders(
     val runtime: AppRuntimeProvider,
