@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import androidx.test.platform.app.InstrumentationRegistry
 import dev.androidjtools.core.model.Track
 import dev.androidjtools.core.provider.LibraryProvider
 import dev.androidjtools.debug.DebugHarnessActivity
@@ -187,12 +188,15 @@ class PerformanceRegressionTest {
             "expected at least $MIN_FRAME_SAMPLES measured frame samples after warm-up; raw=${rawFrameMs.size}, measured=${frameMs.size}, values=$rawFrameMs",
             frameMs.size >= MIN_FRAME_SAMPLES,
         )
+        val scale = budgetScale()
+        val maxP95Ms = MAX_WAVEFORM_P95_MS * scale
+        val slowFrameMs = SLOW_FRAME_MS * scale
         val p95Ms = percentile95(frameMs)
-        val slowRatio = frameMs.count { it > SLOW_FRAME_MS }.toDouble() / frameMs.size
+        val slowRatio = frameMs.count { it > slowFrameMs }.toDouble() / frameMs.size
 
         assertTrue(
-            "waveform p95 frame ${"%.1f".format(p95Ms)} ms exceeded $MAX_WAVEFORM_P95_MS ms; raw=$rawFrameMs measured=$frameMs",
-            p95Ms <= MAX_WAVEFORM_P95_MS,
+            "waveform p95 frame ${"%.1f".format(p95Ms)} ms exceeded $maxP95Ms ms (budget $MAX_WAVEFORM_P95_MS ms x$scale); raw=$rawFrameMs measured=$frameMs",
+            p95Ms <= maxP95Ms,
         )
         assertTrue(
             "waveform slow-frame ratio ${"%.3f".format(slowRatio)} exceeded $MAX_SLOW_FRAME_RATIO",
@@ -205,12 +209,21 @@ class PerformanceRegressionTest {
             .put("warmup_frames_discarded", (rawFrameMs.size - frameMs.size).coerceAtLeast(0))
             .put("frame_samples", frameMs.size)
             .put("frame_p95_ms", p95Ms)
-            .put("slow_frame_threshold_ms", SLOW_FRAME_MS)
+            .put("budget_scale", scale)
+            .put("slow_frame_threshold_ms", slowFrameMs)
             .put("slow_frame_ratio", slowRatio)
-            .put("threshold_p95_ms", MAX_WAVEFORM_P95_MS)
+            .put("threshold_p95_ms", maxP95Ms)
             .put("threshold_slow_frame_ratio", MAX_SLOW_FRAME_RATIO)
             .put("status", "pass")
     }
+
+    /**
+     * 1 on a real device and on a developer machine. CI sets `ANDROIDJTOOLS_PERF_BUDGET_SCALE` (forwarded by
+     * app/build.gradle.kts as `perfBudgetScale`) for its software-rendered hosted emulator, which is several times slower
+     * than the machines the budgets were set on. The scale is recorded in the evidence file, never applied silently.
+     */
+    private fun budgetScale(): Double =
+        InstrumentationRegistry.getArguments().getString("perfBudgetScale")?.toDoubleOrNull()?.takeIf { it >= 1.0 } ?: 1.0
 
     private fun elapsedMs(startNs: Long): Double = (SystemClock.elapsedRealtimeNanos() - startNs) / 1_000_000.0
 

@@ -59,6 +59,10 @@ android {
         versionCode = 6
         versionName = "0.2.0-rc.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // CI declares how much slower its software-rendered emulator is than the budgets assume (see PerformanceRegressionTest).
+        System.getenv("ANDROIDJTOOLS_PERF_BUDGET_SCALE")?.takeIf { it.isNotBlank() }?.let {
+            testInstrumentationRunnerArguments["perfBudgetScale"] = it
+        }
         vectorDrawables.useSupportLibrary = true
     }
 

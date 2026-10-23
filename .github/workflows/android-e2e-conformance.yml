@@ -19,6 +19,10 @@ jobs:
     name: Complete Android instrumentation / API 35 (not full parity)
     runs-on: ubuntu-latest
     timeout-minutes: 55
+    env:
+      # The hosted 2-vCPU emulator renders in software: the waveform p95 frame measured 200-230 ms there against
+      # 34 ms on a 20-core machine with the same image. The budgets stay 1x everywhere else.
+      ANDROIDJTOOLS_PERF_BUDGET_SCALE: '7'
 
     steps:
       - name: Check out repository
