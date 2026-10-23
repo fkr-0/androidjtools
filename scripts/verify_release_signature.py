@@ -38,13 +38,16 @@ def _normalize_fingerprint(value: str) -> str:
 
 
 def evaluate(output: str, expected_sha256: str | None, allow_debug: bool = False) -> SignatureResult:
-    # apksigner labels a signer "#1", or, in newer builds, with the SDK range its v3 signature covers.
-    signer = r"Signer (?:#\d+|\([^)]*\))"
-    digests = re.findall(rf"^{signer} certificate SHA-256 digest: ([0-9a-fA-F]+)\s*$", output, re.M)
-    dns = re.findall(rf"^{signer} certificate DN: (.*)$", output, re.M)
-    if len(digests) != 1 or len(dns) != 1:
+    # apksigner labels a signer "#1", with the SDK range its v3 signature covers, or (current builds) once per
+    # verified scheme as "V2 Signer:". The same certificate may therefore be listed several times.
+    signer = r"(?:Signer (?:#\d+|\([^)]*\))|V\d(?:\.\d)? Signer:)"
+    digests = set(re.findall(rf"^{signer} certificate SHA-256 digest: ([0-9a-fA-F]+)\s*$", output, re.M))
+    dns = set(re.findall(rf"^{signer} certificate DN: (.*)$", output, re.M))
+    reported = re.search(r"^Number of signers: (\d+)\s*$", output, re.M)
+    if len(digests) != 1 or len(dns) != 1 or (reported is not None and int(reported.group(1)) != 1):
         excerpt = " | ".join(line.strip() for line in output.splitlines() if line.strip())[:600]
         raise SignatureError(f"expected exactly one signer, found {len(digests)}; apksigner printed: {excerpt}")
+    digests, dns = list(digests), list(dns)
 
     if not re.search(r"^Verified using v[23] scheme \(.*\): true\s*$", output, re.M):
         raise SignatureError("APK is not verified with signature scheme v2 or v3")

@@ -38,7 +38,43 @@ def ranged_output(dn: str, digest: str) -> str:
     ) + "\n"
 
 
+def per_scheme_output(dn: str, digest: str, schemes=("V2",), number_of_signers: int = 1) -> str:
+    """Current apksigner (hosted runners): one `Vn Signer:` block per verified scheme, no signer number."""
+    lines = [
+        "Verifies",
+        "Verified using v1 scheme (JAR signing): false",
+        f"Verified using v2 scheme (APK Signature Scheme v2): {str('V2' in schemes).lower()}",
+        f"Verified using v3 scheme (APK Signature Scheme v3): {str('V3' in schemes).lower()}",
+        "Verified using v3.1 scheme (APK Signature Scheme v3.1): false",
+        f"Number of signers: {number_of_signers}",
+    ]
+    for scheme in schemes:
+        lines += [
+            f"{scheme} Signer: certificate DN: {dn}",
+            f"{scheme} Signer: certificate SHA-256 digest: {digest}",
+            f"{scheme} Signer: certificate SHA-1 digest: {'c3' * 20}",
+        ]
+    return "\n".join(lines) + "\n"
+
+
 class EvaluateTest(unittest.TestCase):
+    def test_per_scheme_signer_blocks_are_one_signer(self):
+        result = vrs.evaluate(per_scheme_output("CN=Android DJ Tools", FP), expected_sha256=FP)
+        self.assertEqual(result.sha256, FP)
+
+    def test_the_same_certificate_listed_for_v2_and_v3_is_still_one_signer(self):
+        result = vrs.evaluate(per_scheme_output("CN=Android DJ Tools", FP, schemes=("V2", "V3")), expected_sha256=FP)
+        self.assertEqual(result.sha256, FP)
+
+    def test_two_different_certificates_are_rejected(self):
+        text = per_scheme_output("CN=A", FP) + per_scheme_output("CN=B", OTHER_FP).split("\n", 6)[6]
+        with self.assertRaisesRegex(vrs.SignatureError, "exactly one signer"):
+            vrs.evaluate(text, expected_sha256=FP)
+
+    def test_a_reported_signer_count_above_one_is_rejected(self):
+        with self.assertRaisesRegex(vrs.SignatureError, "exactly one signer"):
+            vrs.evaluate(per_scheme_output("CN=A", FP, number_of_signers=2), expected_sha256=FP)
+
     def test_signer_labelled_with_an_sdk_range_is_still_one_signer(self):
         result = vrs.evaluate(ranged_output("CN=Android DJ Tools", FP), expected_sha256=FP)
         self.assertEqual(result.sha256, FP)
