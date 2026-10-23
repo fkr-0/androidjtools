@@ -15,9 +15,13 @@ for image in \
   04-suggestions.png \
   05-sync.png
 do
-  adb exec-out run-as dev.androidjtools.debug cat "files/ui-screenshots/${image}" \
-    > "artifacts/ui-screenshots/${image}"
+  # Stage the file in a shell-readable place on the device and use `adb pull`, which is byte-exact. Streaming it
+  # through `adb exec-out` returned bytes that were not a valid PNG on the hosted runner.
+  adb shell "run-as dev.androidjtools.debug cat files/ui-screenshots/${image} > /data/local/tmp/${image}"
+  adb pull "/data/local/tmp/${image}" "artifacts/ui-screenshots/${image}"
+  adb shell rm -f "/data/local/tmp/${image}"
   test -s "artifacts/ui-screenshots/${image}"
+  head -c 16 "artifacts/ui-screenshots/${image}" | od -An -tx1
 done
 
 python3 - <<'PY'
