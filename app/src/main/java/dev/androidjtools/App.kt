@@ -32,7 +32,7 @@ import androidx.navigation.compose.rememberNavController
 import dev.androidjtools.core.provider.AppProviders
 import dev.androidjtools.live.LivePerformanceController
 import dev.androidjtools.playback.PlayerQueueController
-import dev.androidjtools.sync.samplelib.ServerSessionController
+import dev.androidjtools.core.provider.ServerSessionController
 import dev.androidjtools.ui.analysis.AnalysisScreen
 import dev.androidjtools.ui.collections.CollectionsScreen
 import dev.androidjtools.ui.library.LibraryScreen

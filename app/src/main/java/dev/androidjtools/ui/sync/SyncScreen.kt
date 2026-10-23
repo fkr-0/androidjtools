@@ -30,7 +30,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.core.provider.AppProviders
-import dev.androidjtools.sync.samplelib.ServerSessionController
+import dev.androidjtools.core.provider.ServerSessionController
 
 @Composable
 fun SyncScreen(providers: AppProviders, server: ServerSessionController? = null) {

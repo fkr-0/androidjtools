@@ -1,6 +1,8 @@
 package dev.androidjtools.sync.samplelib
 
 import dev.androidjtools.core.model.SyncState
+import dev.androidjtools.core.provider.ServerCapabilityInfo
+import dev.androidjtools.core.provider.ServerSessionController
 import dev.androidjtools.remote.samplelib.ServerCapabilities
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -18,16 +20,14 @@ interface SyncScheduler {
     fun cancel()
 }
 
-/** What the Sync screen needs; implemented by [SampleLibSessionController] and by test fakes. */
-interface ServerSessionController {
-    val state: StateFlow<SyncState>
-    val capabilities: StateFlow<ServerCapabilities?>
-    val error: StateFlow<String?>
-    val serverUrl: StateFlow<String?>
-    fun pair(baseUrl: String, code: String)
-    fun refresh()
-    fun forget()
-}
+fun ServerCapabilities.toInfo() = ServerCapabilityInfo(
+    pull = pull,
+    mutations = mutations,
+    playlists = playlists,
+    analysis = analysis,
+    media = media,
+    canRequestAnalysis = canRequestAnalysis,
+)
 
 class SampleLibSessionController(
     private val manager: SampleLibSessionManager,
@@ -35,7 +35,9 @@ class SampleLibSessionController(
     private val scheduler: SyncScheduler,
 ) : ServerSessionController {
     override val state: StateFlow<SyncState> = manager.state
-    override val capabilities: StateFlow<ServerCapabilities?> = manager.capabilities
+    override val capabilities: StateFlow<ServerCapabilityInfo?> = manager.capabilities
+        .map { it?.toInfo() }
+        .stateIn(scope, SharingStarted.Eagerly, manager.capabilities.value?.toInfo())
     override val error: StateFlow<String?> = manager.error
     override val serverUrl: StateFlow<String?> = manager.profile
         .map { it?.baseUrl }

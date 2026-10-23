@@ -14,7 +14,8 @@ import androidx.compose.ui.test.performTextInput
 import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.fixture.FixtureAppProviders
 import dev.androidjtools.remote.samplelib.ServerCapabilities
-import dev.androidjtools.sync.samplelib.ServerSessionController
+import dev.androidjtools.core.provider.ServerSessionController
+import dev.androidjtools.sync.samplelib.toInfo
 import dev.androidjtools.ui.theme.AndroidDjToolsTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +29,7 @@ class SyncScreenServerTest {
 
     private class FakeController : ServerSessionController {
         override val state = MutableStateFlow(SyncState.UNCONFIGURED)
-        override val capabilities = MutableStateFlow<ServerCapabilities?>(null)
+        override val capabilities = MutableStateFlow<dev.androidjtools.core.provider.ServerCapabilityInfo?>(null)
         override val error = MutableStateFlow<String?>(null)
         val savedUrl = MutableStateFlow<String?>(null)
         override val serverUrl: StateFlow<String?> = savedUrl
@@ -76,7 +77,7 @@ class SyncScreenServerTest {
             playlists = "unsupported_until_canonical_playlist_migration",
             analysis = emptySet(),
             media = emptySet(),
-        )
+        ).toInfo()
         show(controller)
         // The rows live in a LazyColumn, so later rows are not composed until scrolled to.
         compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("sync-error"))

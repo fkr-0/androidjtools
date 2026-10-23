@@ -1,7 +1,7 @@
 package dev.androidjtools.ui.sync
 
 import dev.androidjtools.core.model.SyncState
-import dev.androidjtools.remote.samplelib.ServerCapabilities
+import dev.androidjtools.core.provider.ServerCapabilityInfo
 
 data class CapabilityRow(val id: String, val label: String, val available: Boolean, val detail: String)
 
@@ -15,7 +15,7 @@ private fun row(id: String, label: String, missing: List<String>, availableDetai
     }
 
 /** One row per feature, derived only from what the server advertised in `hello`. */
-fun capabilityRows(c: ServerCapabilities?): List<CapabilityRow> {
+fun capabilityRows(c: ServerCapabilityInfo?): List<CapabilityRow> {
     if (c == null) {
         return listOf(
             "library" to "Library metadata",

@@ -2,6 +2,7 @@ package dev.androidjtools.ui.sync
 
 import dev.androidjtools.core.model.SyncState
 import dev.androidjtools.remote.samplelib.ServerCapabilities
+import dev.androidjtools.sync.samplelib.toInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,7 +18,7 @@ class ServerCapabilityRowsTest {
         media = setOf("resource_uri", "content_hash", "range"),
     )
 
-    private fun rows(c: ServerCapabilities?) = capabilityRows(c).associateBy { it.id }
+    private fun rows(c: ServerCapabilities?) = capabilityRows(c?.toInfo()).associateBy { it.id }
 
     @Test
     fun theRealServerSupportsLibraryPlaylistsAndEditorButNotTheRest() {
