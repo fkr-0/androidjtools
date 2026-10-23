@@ -103,5 +103,32 @@ class AdbDeviceCompatibilityTests(unittest.TestCase):
         self.assertEqual("/sdk/adb", adb)
 
 
+class InstrumentationCommandTests(unittest.TestCase):
+    def instrumentation_command(self) -> list[str]:
+        commands: list[list[str]] = []
+
+        def fake_run(command, env):
+            commands.append(command)
+            return {"command": command, "exit_code": 0, "duration_seconds": 0.0}
+
+        with patch.object(runner, "run", side_effect=fake_run), patch.object(
+            runner, "adb_devices", return_value=(["emulator-5554"], [], None, "/sdk/adb")
+        ), patch.object(
+            runner, "pull_performance_evidence", return_value=(True, {"status": "pass"})
+        ), patch.object(runner, "write_result"), patch.object(
+            runner.sys, "argv", ["run_ui_e2e.py", "--skip-host", "--require-device"]
+        ):
+            self.assertEqual(0, runner.main())
+        return next(command for command in commands if ":app:connectedDebugAndroidTest" in command)
+
+    def test_the_app_stays_installed_so_the_performance_evidence_can_be_pulled(self):
+        # connectedDebugAndroidTest uninstalls the app when it finishes; the evidence lives in the app's private
+        # files, and `exec-out run-as` then prints "unknown package" with exit code 0, which is not JSON.
+        self.assertIn(
+            "-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true",
+            self.instrumentation_command(),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

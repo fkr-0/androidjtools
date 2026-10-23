@@ -282,6 +282,9 @@ def main() -> int:
         [
             "./gradlew",
             ":app:connectedDebugAndroidTest",
+            # The task uninstalls the app when it finishes, and the performance evidence is pulled from the app's
+            # private files afterwards.
+            "-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true",
             "--no-daemon",
             "--console=plain",
         ],
