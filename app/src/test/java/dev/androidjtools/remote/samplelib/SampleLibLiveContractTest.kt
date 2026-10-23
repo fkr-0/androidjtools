@@ -21,6 +21,19 @@ import dev.androidjtools.sync.journal.JournalMutationState
 import dev.androidjtools.sync.journal.JournalReceiptOutcome
 import dev.androidjtools.sync.journal.JournalSnapshot
 import dev.androidjtools.sync.journal.MutationJournalStorage
+import dev.androidjtools.core.provider.AnalysisActionResult
+import dev.androidjtools.core.provider.AnalysisRequestAvailability
+import dev.androidjtools.core.provider.ServerEditStatus
+import dev.androidjtools.sync.analysis.SampleLibAnalysisProvider
+import dev.androidjtools.sync.samplelib.ANALYSIS_SUGGESTION_ENTITY
+import dev.androidjtools.sync.samplelib.AnalysisSuggestionRecord
+import dev.androidjtools.sync.samplelib.AnalysisSuggestions
+import dev.androidjtools.sync.samplelib.CachedEntity
+import dev.androidjtools.sync.samplelib.InMemorySuggestionDismissals
+import dev.androidjtools.sync.samplelib.SuggestionData
+import dev.androidjtools.sync.samplelib.SuggestionWireKind
+import dev.androidjtools.ui.waveform.EditBuild
+import dev.androidjtools.ui.waveform.ServerEditPlanner
 import dev.androidjtools.sync.samplelib.AssetFiles
 import dev.androidjtools.sync.samplelib.LibraryProjection
 import dev.androidjtools.sync.samplelib.SampleLibServerEditProvider
@@ -54,6 +67,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -83,11 +97,16 @@ class SampleLibLiveContractTest {
     private fun requireLive() =
         assumeTrue("set SAMPLE_LIB_LIVE_URL and SAMPLE_LIB_LIVE_PAIRING_CODE to run", baseUrl.isNotBlank() && pairingCode.isNotBlank())
 
-    private suspend fun pullAll(client: SampleLibClient, session: SampleLibSession, cursor: String? = null): Pair<List<EntityChange>, PullPage> {
+    private suspend fun pullAll(
+        client: SampleLibClient,
+        session: SampleLibSession,
+        cursor: String? = null,
+        scopes: Set<String> = setOf("library"),
+    ): Pair<List<EntityChange>, PullPage> {
         val changes = mutableListOf<EntityChange>()
         var next = cursor
         while (true) {
-            val page = client.pull(session, next, setOf("library"), 100)
+            val page = client.pull(session, next, scopes, 100)
             changes += page.changes
             next = page.nextCursor
             if (!page.hasMore) return changes to page
@@ -534,6 +553,392 @@ class SampleLibLiveContractTest {
         } finally {
             db.close()
             dir.deleteRecursively()
+        }
+    }
+
+    // ---- S5: analysis suggestions against the real server ----
+    //
+    // Assumptions about the server (see scripts/seed_live_samplelib.py, which persists the runs):
+    //  - hello advertises analysis [tempo, key, beat_grid, cue_candidates] and analysis_suggestion.accept; analysis_request
+    //    is "enqueue_v1" or "unavailable" (it depends on a configured worker, so both are accepted);
+    //  - the "analysis" pull scope needs analysis.read (granted by pairing) and is not part of "library";
+    //  - five seeded tracks asset-{analysis,accept-a,accept-b,replace,cues} each have a full-length interval
+    //    interval-<name> and the three runs described in the seed; suggestion ids are "<run>:<kind>:<asset id>";
+    //  - tempo alternatives are bpm/2 and bpm*2; the key run records no confidence; tempo carries the candidate's 0.7;
+    //  - an accept of a value the interval already holds is a no_op; its receipt's entity_revision is the suggestion's
+    //    revision and the interval's new revision is canonical.revision (the app reads neither);
+    //  - POST /v1/analysis/runs persists a completed run that replaces the suggestion (new id, old id tombstoned).
+
+    private inner class AnalysisHarness {
+        val dir: File = Files.createTempDirectory("samplelib-live-analysis").toFile()
+        val db = JdbcSqlDatabase()
+        val cache = SqlLibraryCache(db)
+        val journal = DurableMutationJournal(MemoryJournalStorage())
+        val manager = SampleLibSessionManager(SampleLibProfileStore(dir, FakeCipher()), cache, outbox = JournalEditOutbox(journal))
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val projection = MutableStateFlow(LibraryProjection.EMPTY)
+        val dismissals = InMemorySuggestionDismissals()
+        var flushes = 0
+        val provider = SampleLibAnalysisProvider(
+            projection = projection,
+            capabilities = manager.capabilities,
+            syncState = manager.state,
+            lazyJournal = lazyOf(journal),
+            dismissals = dismissals,
+            requester = manager,
+            requestFlush = { flushes++ },
+            ioDispatcher = Dispatchers.Unconfined,
+            scope = scope,
+        )
+
+        fun library(): LibraryProjection = LibraryProjector.project(
+            cache.entities("asset"), cache.entities("interval"),
+            analysisSuggestions = if (manager.capabilities.value?.analysis.orEmpty().isNotEmpty()) cache.entities(ANALYSIS_SUGGESTION_ENTITY) else emptyList(),
+        ).also { projection.value = it }
+
+        suspend fun pair() {
+            manager.pair(baseUrl, pairingCode)
+            assertEquals(manager.error.value, SyncState.ONLINE_IDLE, manager.state.value)
+            library()
+        }
+
+        /** The user's refresh: deliver the journal, then pull; the projection follows the cache only. */
+        suspend fun refresh(): LibraryProjection {
+            manager.refresh()
+            assertEquals(manager.error.value, SyncState.ONLINE_IDLE, manager.state.value)
+            return library()
+        }
+
+        fun suggestion(track: String, kind: SuggestionWireKind): AnalysisSuggestionRecord =
+            library().suggestionsOf("asset-$track").single { it.kind == kind }
+
+        fun trackOf(name: String) = library().tracks.single { it.id == "asset-$name" }
+
+        fun close() {
+            scope.cancel()
+            db.close()
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun helloAdvertisesTheAnalysisKindsTheAcceptOperationAndSaysWhetherAnalysisCanBeRequested() = runBlocking {
+        requireLive()
+        val session = client().pair(PairingCode.entered(pairingCode))
+        val caps = session.capabilities
+
+        assertTrue("kinds: ${caps.analysis}", caps.analysis.containsAll(setOf("tempo", "key", "beat_grid", "cue_candidates")))
+        assertTrue("analysis_suggestion.accept" in caps.mutations)
+        assertTrue("analysis_request: ${caps.analysisRequest}", caps.analysisRequest == "enqueue_v1" || caps.analysisRequest == "unavailable")
+        assertEquals(caps.analysisRequest == "enqueue_v1", caps.canRequestAnalysis)
+        assertTrue("pairing grants analysis.read: ${session.grantedScopes}", session.grantedScopes.orEmpty().contains("analysis.read"))
+    }
+
+    @Test
+    fun theAnalysisScopeCarriesSuggestionsInTheDocumentedShapeAndTheLibraryScopeDoesNot() = runBlocking {
+        requireLive()
+        val client = client()
+        val session = client.pair(PairingCode.entered(pairingCode))
+
+        val (library, _) = pullAll(client, session)
+        assertTrue("the library scope carries no suggestions", library.none { it.entityType == "analysis_suggestion" })
+
+        val (both, _) = pullAll(client, session, scopes = setOf("library", "analysis"))
+        assertTrue(both.any { it.entityType == "interval" })
+        val raw = both.filter { it.entityType == "analysis_suggestion" && it.value.getValue("asset_id").jsonPrimitive.content == "asset-analysis" }
+        assertEquals(4, raw.size)
+        raw.forEach {
+            assertEquals("sample-lib.analysis-suggestion/v1", it.schema)
+            assertTrue(it.revision.value.isNotBlank())
+            assertEquals(it.entityId, it.value.getValue("id").jsonPrimitive.content)
+        }
+
+        val byKind = raw.mapNotNull { AnalysisSuggestions.parse(CachedEntity(it.entityType, it.entityId, it.revision.value, it.schema, it.value.toString())) }
+            .associateBy { it.kind }
+        assertEquals(4, byKind.size)
+        assertEquals("analysis-tempo:tempo:asset-analysis", byKind.getValue(SuggestionWireKind.TEMPO).id)
+        assertEquals(SuggestionData.Tempo(128.0, listOf(64.0, 256.0)), byKind.getValue(SuggestionWireKind.TEMPO).data)
+        assertEquals(0.7, byKind.getValue(SuggestionWireKind.TEMPO).confidence!!, 1e-9)
+        assertEquals("tempo-candidates", byKind.getValue(SuggestionWireKind.TEMPO).tool)
+        assertEquals("analysis-tempo", byKind.getValue(SuggestionWireKind.TEMPO).analysisRunId)
+        assertNull("asset-level, not interval-scoped", byKind.getValue(SuggestionWireKind.TEMPO).intervalId)
+        assertEquals(SuggestionData.BeatGrid(128.0, 100L, listOf(100L, 569L, 1038L, 1507L)), byKind.getValue(SuggestionWireKind.BEAT_GRID).data)
+        assertEquals(SuggestionData.Key("A minor", "A", "minor"), byKind.getValue(SuggestionWireKind.KEY).data)
+        assertNull("the run recorded no key confidence", byKind.getValue(SuggestionWireKind.KEY).confidence)
+        assertEquals(SuggestionData.CueCandidates(listOf(1000L, 2500L, 4000L)), byKind.getValue(SuggestionWireKind.CUE_CANDIDATES).data)
+        assertNotNull(byKind.getValue(SuggestionWireKind.TEMPO).createdAt)
+    }
+
+    @Test
+    fun suggestionsAreCachedAndProjectedPerTrackAndTheLibraryItselfIsUntouched() = runBlocking {
+        requireLive()
+        val h = AnalysisHarness()
+        try {
+            h.pair()
+
+            val suggestions = h.provider.suggestions("asset-analysis").value
+            assertEquals(4, suggestions.size)
+            assertTrue(h.library().suggestionsOf("asset-1").isEmpty())
+            assertNull("a suggestion never changes the library", h.trackOf("analysis").bpm)
+            assertNull(h.trackOf("analysis").key)
+            assertEquals("interval-analysis", h.library().fullSpanIntervalOf("asset-analysis"))
+            assertNull(suggestions.single { it.kind == dev.androidjtools.core.model.SuggestionKind.KEY }.confidence)
+            assertTrue(h.provider.capabilities.value.all { it.available })
+        } finally {
+            h.close()
+        }
+    }
+
+    @Test
+    fun analysisCanOnlyBeRequestedAsAdvertisedAndCachedResultsStartNothing() = runBlocking {
+        requireLive()
+        val h = AnalysisHarness()
+        try {
+            h.pair()
+            val offered = h.manager.capabilities.value!!.canRequestAnalysis
+
+            assertEquals(
+                if (offered) AnalysisRequestAvailability.Offered else AnalysisRequestAvailability.Unavailable("This server cannot analyse tracks on request."),
+                h.provider.requestAvailability.value,
+            )
+            val result = h.provider.requestAnalysis("asset-analysis")
+            if (offered) {
+                // Every kind of this track is already persisted, so the server answers cached and starts no job.
+                assertTrue(result.toString(), (result as AnalysisActionResult.Done).message.contains("already exist"))
+            } else {
+                assertTrue("the app asks nothing of a server that did not offer it", result is AnalysisActionResult.Refused)
+            }
+
+            // The route itself, called directly: unavailable is a normal answer, not an error; an unknown asset is a typed 404.
+            val transport = SampleLibHttpTransport(baseUrl)
+            val credential = (h.manager.mediaAuth() != null).let { client().pair(PairingCode.entered(pairingCode)).credential }
+            // Results that already exist are answered cached whatever the mode: nothing needs a provider.
+            val direct = transport.requestAnalysis(credential, "asset-analysis", null, force = false)
+            assertEquals(AnalysisRequestStatus.CACHED, direct.status)
+            assertTrue(direct.kinds.values.all { it == AnalysisRequestStatus.CACHED } && direct.jobId == null)
+            if (!offered) {
+                // A track nothing was computed for, on a server with no worker: unavailable is a normal 200 answer with
+                // a message. (Not asked when the server does offer it: that would genuinely queue analysis.)
+                val none = transport.requestAnalysis(credential, "asset-2", null, force = false)
+                assertEquals(AnalysisRequestStatus.UNAVAILABLE, none.status)
+                assertTrue(none.message.orEmpty().isNotBlank())
+            }
+            try {
+                transport.requestAnalysis(credential, "no-such-asset", null, force = false)
+                fail("an unknown asset must be a typed failure")
+            } catch (expected: SampleLibFailure.EntityNotFound) {
+            }
+        } finally {
+            h.close()
+        }
+    }
+
+    @Test
+    fun acceptingATempoIsDeliveredAndTheLibraryChangesOnlyAfterThePullThenAnAliasCanBeChosen() = runBlocking {
+        requireLive()
+        val h = AnalysisHarness()
+        try {
+            h.pair()
+            val tempo = h.suggestion("accept-a", SuggestionWireKind.TEMPO)
+
+            val queued = h.provider.acceptSuggestion(tempo.id)
+
+            assertTrue(queued.toString(), queued is AnalysisActionResult.Done)
+            assertEquals(ServerEditStatus.PENDING, h.provider.acceptances.value.getValue(tempo.id).status)
+            assertNull("queued is not effective", h.library().tracks.single { it.id == "asset-accept-a" }.bpm)
+
+            val after = h.refresh()
+
+            val mutation = h.journal.all().single { it.operation == "analysis_suggestion.accept" }
+            assertEquals(JournalReceiptOutcome.APPLIED, mutation.receipt?.outcome)
+            assertEquals("analysis_suggestion", mutation.entityType)
+            assertEquals(128.0, after.tracks.single { it.id == "asset-accept-a" }.bpm!!, 1e-9)
+            assertEquals(ServerEditStatus.SAVED, h.provider.acceptances.value.getValue(tempo.id).status)
+            assertEquals(dev.androidjtools.core.model.SuggestionDecision.ACCEPTED, h.provider.suggestions("asset-accept-a").value.single { it.id == tempo.id }.decision)
+
+            // The half-time alias, chosen by the person.
+            assertTrue(h.provider.acceptSuggestion(tempo.id, 64.0) is AnalysisActionResult.Done)
+            val chosen = h.refresh()
+            assertEquals(64.0, chosen.tracks.single { it.id == "asset-accept-a" }.bpm!!, 1e-9)
+            assertEquals(2, h.journal.all().count { it.operation == "analysis_suggestion.accept" })
+
+            // A value outside the options never leaves the device.
+            assertTrue(h.provider.acceptSuggestion(tempo.id, 99.0) is AnalysisActionResult.Refused)
+        } finally {
+            h.close()
+        }
+    }
+
+    @Test
+    fun aKeyAndABeatGridAreAcceptedAndRepeatingAnAlreadyAppliedValueIsANoOp() = runBlocking {
+        requireLive()
+        val h = AnalysisHarness()
+        try {
+            h.pair()
+            val key = h.suggestion("accept-b", SuggestionWireKind.KEY)
+            val grid = h.suggestion("accept-b", SuggestionWireKind.BEAT_GRID)
+            val tempo = h.suggestion("accept-b", SuggestionWireKind.TEMPO)
+
+            assertTrue(h.provider.acceptSuggestion(key.id) is AnalysisActionResult.Done)
+            assertTrue(h.provider.acceptSuggestion(grid.id) is AnalysisActionResult.Done)
+            val after = h.refresh()
+
+            assertEquals("A minor", after.tracks.single { it.id == "asset-accept-b" }.key)
+            assertEquals(128.0, after.tracks.single { it.id == "asset-accept-b" }.bpm!!, 1e-9)
+            assertEquals(ServerEditStatus.SAVED, h.provider.acceptances.value.getValue(key.id).status)
+            assertEquals(ServerEditStatus.SAVED, h.provider.acceptances.value.getValue(grid.id).status)
+
+            // The beat grid already set bpm 128: accepting the tempo changes nothing.
+            assertTrue(h.provider.acceptSuggestion(tempo.id) is AnalysisActionResult.Done)
+            h.refresh()
+            val noOp = h.journal.all().single { it.entityId == tempo.id }
+            assertEquals(JournalReceiptOutcome.NO_OP, noOp.receipt?.outcome)
+        } finally {
+            h.close()
+        }
+    }
+
+    @Test
+    fun aSuggestionTheServerReplacedIsAConflictWithOnlyDismissAndTheReplacementAppearsAfterTheRefresh() = runBlocking {
+        requireLive()
+        val h = AnalysisHarness()
+        try {
+            h.pair()
+            val old = h.suggestion("replace", SuggestionWireKind.TEMPO)
+            assertTrue(h.provider.acceptSuggestion(old.id) is AnalysisActionResult.Done)
+
+            // Another client re-ran tempo analysis for this track before our accept was delivered.
+            val newRunId = postCompletedTempoRun("asset-replace", bpm = 140)
+
+            h.refresh()
+
+            val conflicted = h.journal.all().single { it.entityId == old.id }
+            assertEquals(JournalMutationState.CONFLICT, conflicted.state)
+            assertEquals("suggestion_changed", conflicted.receipt?.conflict?.code)
+            assertEquals(ServerEditStatus.CONFLICT, h.provider.acceptances.value[old.id]?.status ?: ServerEditStatus.CONFLICT)
+            assertNull("nothing was applied", h.trackOf("replace").bpm)
+            // The refresh already carried the replacement: new id, old id tombstoned.
+            assertTrue(h.library().suggestionsOf("asset-replace").none { it.id == old.id })
+            val replacement = h.library().suggestionsOf("asset-replace").single { it.kind == SuggestionWireKind.TEMPO }
+            assertEquals("$newRunId:tempo:asset-replace", replacement.id)
+            assertEquals(SuggestionData.Tempo(140.0, listOf(70.0, 280.0)), replacement.data)
+
+            h.provider.dismissSuggestion(old.id) // the old record is gone from the projection, so only the journal entry matters
+            assertEquals(JournalMutationState.CONFLICT, h.journal.mutation(conflicted.mutationId)?.state)
+        } finally {
+            h.close()
+        }
+    }
+
+    @Test
+    fun aConflictedAcceptIsDismissedWhileTheOldSuggestionIsStillShownAndTheReplacementIsNotHidden() = runBlocking {
+        requireLive()
+        val h = AnalysisHarness()
+        try {
+            h.pair()
+            val old = h.suggestion("replace", SuggestionWireKind.KEY)
+            // Record the conflict directly so the old suggestion is still in the projection when it is dismissed.
+            assertTrue(h.provider.acceptSuggestion(old.id) is AnalysisActionResult.Done)
+            val id = h.journal.all().single { it.entityId == old.id }.mutationId
+            h.journal.markApplying(id)
+            h.journal.recordReceipt(
+                dev.androidjtools.sync.journal.JournalReceipt(
+                    id, JournalReceiptOutcome.CONFLICT,
+                    conflict = dev.androidjtools.sync.journal.JournalConflict("suggestion_changed", "analysis_suggestion", null, null, null),
+                ),
+            )
+            assertEquals(ServerEditStatus.CONFLICT, h.provider.acceptances.value.getValue(old.id).status)
+
+            h.provider.dismissSuggestion(old.id)
+
+            assertEquals(JournalMutationState.RESOLVED, h.journal.mutation(id)?.state)
+            assertTrue(h.provider.suggestions("asset-replace").value.none { it.id == old.id })
+            assertEquals("a refresh was asked for", 2, h.flushes)
+        } finally {
+            h.close()
+        }
+    }
+
+    @Test
+    fun cueCandidatesBecomeCuesInOneEditorStateEditAndAreNotAddedTwice() = runBlocking {
+        requireLive()
+        val h = AnalysisHarness()
+        try {
+            h.pair()
+            val candidates = h.suggestion("cues", SuggestionWireKind.CUE_CANDIDATES)
+            val points = (candidates.data as SuggestionData.CueCandidates).pointsMs
+
+            fun planner(library: LibraryProjection) = ServerEditPlanner(
+                track = library.tracks.single { it.id == "asset-cues" },
+                cues = library.cues["asset-cues"].orEmpty(),
+                loops = library.loops["asset-cues"].orEmpty(),
+                aggregates = library.aggregatesOfTrack("asset-cues"),
+                nowMs = System::currentTimeMillis,
+                newMutationId = { "android-live-" + UUID.randomUUID() },
+            )
+
+            val build = planner(h.library()).addCues(points, candidates.analysisRunId) as EditBuild.Ready
+            assertEquals("analysis", build.intent.provenance["source"])
+            assertEquals("cues-chop", build.intent.provenance["analysis_run_id"])
+            assertTrue(JournalMutationStager(h.journal).stage(build.intent) is PreparationStageResult.Queued)
+            val after = h.refresh()
+
+            assertEquals(JournalReceiptOutcome.APPLIED, h.journal.mutation(build.intent.mutationId)?.receipt?.outcome)
+            assertEquals(points, after.cues.getValue("asset-cues").map { it.positionMs }.sorted())
+            assertEquals(points.size, after.cues.getValue("asset-cues").size)
+
+            assertTrue((planner(after).addCues(points, candidates.analysisRunId) as EditBuild.Refused).reason.contains("already"))
+        } finally {
+            h.close()
+        }
+    }
+
+    @Test
+    fun forgettingTheServerLeavesNoAcceptanceOrSuggestionBehind() = runBlocking {
+        requireLive()
+        val h = AnalysisHarness()
+        try {
+            h.pair()
+            h.provider.acceptSuggestion(h.suggestion("accept-b", SuggestionWireKind.KEY).id)
+            h.provider.dismissSuggestion(h.suggestion("accept-b", SuggestionWireKind.TEMPO).id)
+            assertTrue(h.dismissals.keys.value.isNotEmpty())
+
+            val cleared = dev.androidjtools.sync.samplelib.discardServerBoundState(lazyOf(h.journal), h.dismissals)
+            h.manager.forget()
+
+            assertTrue(cleared)
+            assertTrue(h.journal.all().isEmpty())
+            assertTrue(h.dismissals.keys.value.isEmpty())
+            assertTrue(h.cache.entities(ANALYSIS_SUGGESTION_ENTITY).isEmpty())
+        } finally {
+            h.close()
+        }
+    }
+
+    /** Another client (or a worker) persists a newer completed tempo run; returns the new run id. */
+    private fun postCompletedTempoRun(assetId: String, bpm: Int): String {
+        val body = buildJsonObject {
+            put("asset_id", assetId)
+            put("tool_name", "tempo-candidates")
+            put("operation", "mir.tempo_candidates")
+            put("status", "completed")
+            put("output_json", buildJsonObject {
+                put("candidates", buildJsonArray {
+                    add(buildJsonObject {
+                        put("bpm", bpm)
+                        put("confidence", 0.6)
+                        put("beat_times_ms", buildJsonArray { add(JsonPrimitive(50)); add(JsonPrimitive(500)) })
+                    })
+                })
+            })
+        }
+        val request = Request.Builder()
+            .url("$baseUrl/v1/analysis/runs")
+            .post(okhttp3.RequestBody.create("application/json".toMediaTypeOrNull(), body.toString()))
+            .build()
+        okhttp3.OkHttpClient().newCall(request).execute().use { response ->
+            assertTrue("POST /v1/analysis/runs: ${response.code}", response.isSuccessful)
+            return kotlinx.serialization.json.Json.parseToJsonElement(response.body!!.string()).jsonObject.getValue("id").jsonPrimitive.content
         }
     }
 }
