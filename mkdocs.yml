@@ -14,7 +14,8 @@ nav:
   - Home: index.md
   - Release signing: release/signing.md
   - Release keystore manual: release/keystore-manual.md
-  - Release v0.2.0-rc.1: release/v0.2.0-rc.1.md
+  - Release v0.2.0-rc.2: release/v0.2.0-rc.2.md
+  - Release v0.2.0-rc.1 (not tagged): release/v0.2.0-rc.1.md
   - Release v0.1.3: release/v0.1.3.md
   - Release v0.1.1: release/v0.1.1.md
   - Release v0.1.0: release/v0.1.0.md

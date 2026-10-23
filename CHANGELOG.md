@@ -4,6 +4,10 @@ All notable changes to Android DJ Tools are documented here.
 
 ## Unreleased
 
+## 0.2.0-rc.2 - 2026-10-23
+
+Second release candidate for the 0.2.x line and the first signed with the project release key. `0.2.0-rc.1` was prepared but never tagged; its content ships here together with the Sample Lab integration (S1-S5) and release signing.
+
 ### Sample Lab integration (S1: connect and read)
 
 - Pair with a Sample Lib server from the Sync screen; the server's library, cues and loops are synced into a local cache and shown in the Library. The Sync screen lists which server capabilities (library, playlists, editing, analysis, audio) are and are not available, and why.

@@ -46,8 +46,8 @@ android {
         applicationId = "dev.androidjtools"
         minSdk = 28
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.2.0-rc.1"
+        versionCode = 6
+        versionName = "0.2.0-rc.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
